@@ -1,0 +1,34 @@
+{
+  "name": "@t3tools/tui",
+  "version": "0.0.1",
+  "private": true,
+  "bin": {
+    "t1": "./dist/index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/index.tsx",
+    "dev:headless": "T3CODE_HEADLESS=1 bun run src/index.tsx",
+    "build": "tsdown src/index.tsx --format esm --out-dir dist",
+    "start": "bun run dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.1.90",
+    "@opentui/react": "^0.1.90",
+    "@t3tools/client-core": "workspace:*",
+    "@t3tools/contracts": "workspace:*",
+    "@t3tools/shared": "workspace:*",
+    "react": "^19.0.0",
+    "react-devtools-core": "^7.0.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "^19.0.0",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
