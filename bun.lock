@@ -72,22 +72,23 @@
       },
     },
     "apps/tui": {
-      "name": "@t3tools/tui",
+      "name": "t1code",
       "version": "0.0.1",
       "bin": {
-        "t1": "./dist/index.js",
+        "t1code": "./bin/t1code.js",
+        "t1": "./bin/t1code.js",
       },
       "dependencies": {
         "@opentui/core": "^0.1.90",
         "@opentui/react": "^0.1.90",
-        "@t3tools/client-core": "workspace:*",
-        "@t3tools/contracts": "workspace:*",
-        "@t3tools/shared": "workspace:*",
         "react": "^19.0.0",
         "react-devtools-core": "^7.0.1",
         "ws": "^8.18.0",
       },
       "devDependencies": {
+        "@t3tools/client-core": "workspace:*",
+        "@t3tools/contracts": "workspace:*",
+        "@t3tools/shared": "workspace:*",
         "@types/node": "catalog:",
         "@types/react": "^19.0.0",
         "tsdown": "catalog:",
@@ -97,7 +98,7 @@
     },
     "apps/web": {
       "name": "@t3tools/web",
-      "version": "0.0.13",
+      "version": "0.0.14",
       "dependencies": {
         "@base-ui/react": "^1.2.0",
         "@dnd-kit/core": "^6.3.1",
@@ -785,8 +786,6 @@
     "@t3tools/scripts": ["@t3tools/scripts@workspace:scripts"],
 
     "@t3tools/shared": ["@t3tools/shared@workspace:packages/shared"],
-
-    "@t3tools/tui": ["@t3tools/tui@workspace:apps/tui"],
 
     "@t3tools/web": ["@t3tools/web@workspace:apps/web"],
 
@@ -1859,6 +1858,8 @@
     "sumchecker": ["sumchecker@3.0.1", "", { "dependencies": { "debug": "^4.1.0" } }, "sha512-MvjXzkz/BOfyVDkG0oFOtBxHX2u3gKbMHIF/dXblZsgD3BWOFLmHovIpZY7BykJdAjcqRCBi1WYBNdEC9yI7vg=="],
 
     "svgo": ["svgo@4.0.1", "", { "dependencies": { "commander": "^11.1.0", "css-select": "^5.1.0", "css-tree": "^3.0.1", "css-what": "^6.1.0", "csso": "^5.0.5", "picocolors": "^1.1.1", "sax": "^1.5.0" }, "bin": "./bin/svgo.js" }, "sha512-XDpWUOPC6FEibaLzjfe0ucaV0YrOjYotGJO1WpF0Zd+n6ZGEQUsSugaoLq9QkEZtAfQIxT42UChcssDVPP3+/w=="],
+
+    "t1code": ["t1code@workspace:apps/tui"],
 
     "t3": ["t3@workspace:apps/server"],
 

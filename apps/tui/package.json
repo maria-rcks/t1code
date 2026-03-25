@@ -1,30 +1,45 @@
 {
-  "name": "@t3tools/tui",
+  "name": "t1code",
   "version": "0.0.1",
-  "private": true,
-  "bin": {
-    "t1": "./dist/index.js"
+  "description": "Terminal-first T3 Code fork with an OpenTUI client",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maria-rcks/t1code",
+    "directory": "apps/tui"
   },
+  "bin": {
+    "t1": "./bin/t1code.js",
+    "t1code": "./bin/t1code.js"
+  },
+  "files": [
+    "bin",
+    "dist"
+  ],
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "bun run src/index.tsx",
     "dev:headless": "T3CODE_HEADLESS=1 bun run src/index.tsx",
-    "build": "tsdown src/index.tsx --format esm --out-dir dist",
-    "start": "bun run dist/index.js",
+    "build": "tsdown --config tsdown.config.ts && node scripts/bundle-server-dist.mjs",
+    "prepack": "bun run build",
+    "start": "node dist/index.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@opentui/core": "^0.1.90",
     "@opentui/react": "^0.1.90",
-    "@t3tools/client-core": "workspace:*",
-    "@t3tools/contracts": "workspace:*",
-    "@t3tools/shared": "workspace:*",
     "react": "^19.0.0",
     "react-devtools-core": "^7.0.1",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@t3tools/client-core": "workspace:*",
+    "@t3tools/contracts": "workspace:*",
+    "@t3tools/shared": "workspace:*",
     "@types/node": "catalog:",
     "@types/react": "^19.0.0",
     "tsdown": "catalog:",

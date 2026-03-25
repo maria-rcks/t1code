@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { randomBytes } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import net from "node:net";
@@ -67,6 +68,7 @@ const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const TUI_APP_DIR = path.resolve(THIS_DIR, "..");
 const REPO_ROOT = path.resolve(TUI_APP_DIR, "../..");
 const SERVER_APP_DIR = path.resolve(REPO_ROOT, "apps/server");
+const BUNDLED_SERVER_ENTRY = path.resolve(THIS_DIR, "server", "index.mjs");
 
 function readBooleanEnv(value: string | undefined): boolean | undefined {
   if (!value) return undefined;
@@ -189,6 +191,9 @@ function resolveServerEntry(env: NodeJS.ProcessEnv = process.env): {
   command: string;
   args: string[];
 } {
+  if (fs.existsSync(BUNDLED_SERVER_ENTRY)) {
+    return { command: process.execPath, args: [BUNDLED_SERVER_ENTRY] };
+  }
   const builtEntry = path.join(SERVER_APP_DIR, "dist", "index.mjs");
   return env.NODE_ENV === "production"
     ? { command: process.execPath, args: [builtEntry] }
@@ -240,7 +245,7 @@ export async function startServerSupervisor(
         "--no-browser",
       ],
       {
-        cwd: REPO_ROOT,
+        cwd: process.cwd(),
         env: {
           ...stripLegacyT3Env(env),
           T3CODE_MODE: "tui",
