@@ -34,8 +34,14 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.77",
+    "@effect/platform-node": "https://pkg.pr.new/Effect-TS/effect-smol/@effect/platform-node@8881a9b",
     "@opentui/core": "^0.1.90",
     "@opentui/react": "^0.1.90",
+    "@pierre/diffs": "^1.1.0-beta.16",
+    "effect": "https://pkg.pr.new/Effect-TS/effect-smol/effect@8881a9b",
+    "node-pty": "^1.1.0",
+    "open": "^10.1.0",
     "react": "^19.0.0",
     "react-devtools-core": "^7.0.1",
     "ws": "^8.18.0"
@@ -51,6 +57,7 @@
     "vitest": "catalog:"
   },
   "engines": {
-    "bun": ">=1.3.9"
+    "bun": ">=1.3.9",
+    "node": "^22.16 || ^23.11 || >=24.10"
   }
 }

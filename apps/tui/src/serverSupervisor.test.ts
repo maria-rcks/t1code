@@ -49,7 +49,7 @@ describe("startServerSupervisor", () => {
     ).toThrow("T3CODE_TUI_ATTACH_ONLY requires T3CODE_AUTH_TOKEN.");
   });
 
-  it("prefers T1 env values and ignores stale T3 port state", async () => {
+  it("uses the configured T3CODE port and injects normalized child env", async () => {
     const children: FakeChildProcess[] = [];
     const spawnImpl = vi.fn(() => {
       const child = new FakeChildProcess();
@@ -70,16 +70,16 @@ describe("startServerSupervisor", () => {
       },
     );
 
-    expect(server.port).toBe(43111);
-    expect(server.wsUrl).toBe("ws://127.0.0.1:43111/?token=token-1");
+    expect(server.port).toBe(49999);
+    expect(server.wsUrl).toBe("ws://127.0.0.1:49999/?token=token-1");
     expect(spawnImpl).toHaveBeenCalledTimes(1);
     expect((spawnImpl as any).mock.calls[0][0]).toBe("bun");
-    expect((spawnImpl as any).mock.calls[0][1]).toContain("43111");
+    expect((spawnImpl as any).mock.calls[0][1]).toContain("49999");
     expect((spawnImpl as any).mock.calls[0][1]).toContain("--auto-bootstrap-project-from-cwd");
     expect((spawnImpl as any).mock.calls[0][2].env.T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD).toBe(
       "true",
     );
-    expect((spawnImpl as any).mock.calls[0][2].env.T3CODE_PORT).toBeUndefined();
+    expect((spawnImpl as any).mock.calls[0][2].env.T3CODE_PORT).toBe("49999");
 
     server.stop();
     expect(children[0]?.kill).toHaveBeenCalledWith("SIGTERM");
@@ -134,6 +134,27 @@ describe("startServerSupervisor", () => {
 
     server.stop();
     expect(children[0]?.kill).toHaveBeenCalledWith("SIGTERM");
+  });
+
+  it("uses node for packaged production server launches", async () => {
+    const spawnImpl = vi.fn(() => new FakeChildProcess() as unknown as ChildProcess);
+
+    const server = await startServerSupervisor(
+      { homeDir: "/tmp/.t1", authToken: "token-5" },
+      {
+        spawnImpl,
+        reservePort: async () => 43115,
+        waitUntilReady: async () => undefined,
+        env: {
+          NODE_ENV: "production",
+        },
+      },
+    );
+
+    expect((spawnImpl as any).mock.calls[0][0]).toMatch(/(^|\/)node$/);
+    expect((spawnImpl as any).mock.calls[0][1][0]).toContain("/apps/server/dist/index.mjs");
+
+    server.stop();
   });
 
   it("restarts the child after an unexpected exit", async () => {

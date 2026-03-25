@@ -70,6 +70,14 @@ const REPO_ROOT = path.resolve(TUI_APP_DIR, "../..");
 const SERVER_APP_DIR = path.resolve(REPO_ROOT, "apps/server");
 const BUNDLED_SERVER_ENTRY = path.resolve(THIS_DIR, "server", "index.mjs");
 
+function resolveBundledServerCommand(env: NodeJS.ProcessEnv): string {
+  const configured = env.T3CODE_NODE_BIN?.trim();
+  if (configured) {
+    return configured;
+  }
+  return process.versions.bun !== undefined ? "node" : process.execPath;
+}
+
 function readBooleanEnv(value: string | undefined): boolean | undefined {
   if (!value) return undefined;
   const normalized = value.trim().toLowerCase();
@@ -191,12 +199,13 @@ function resolveServerEntry(env: NodeJS.ProcessEnv = process.env): {
   command: string;
   args: string[];
 } {
+  const bundledServerCommand = resolveBundledServerCommand(env);
   if (fs.existsSync(BUNDLED_SERVER_ENTRY)) {
-    return { command: process.execPath, args: [BUNDLED_SERVER_ENTRY] };
+    return { command: bundledServerCommand, args: [BUNDLED_SERVER_ENTRY] };
   }
   const builtEntry = path.join(SERVER_APP_DIR, "dist", "index.mjs");
   return env.NODE_ENV === "production"
-    ? { command: process.execPath, args: [builtEntry] }
+    ? { command: bundledServerCommand, args: [builtEntry] }
     : { command: "bun", args: ["run", path.join(SERVER_APP_DIR, "src/index.ts")] };
 }
 

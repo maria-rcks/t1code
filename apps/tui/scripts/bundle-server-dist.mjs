@@ -8,7 +8,9 @@ const tuiRoot = path.resolve(scriptDir, "..");
 const repoRoot = path.resolve(tuiRoot, "../..");
 const serverRoot = path.resolve(repoRoot, "apps/server");
 const serverDistSource = path.resolve(serverRoot, "dist");
+const serverStandaloneDistSource = path.resolve(serverRoot, "dist-standalone");
 const serverDistTarget = path.resolve(tuiRoot, "dist/server");
+const serverClientSource = path.resolve(serverDistSource, "client");
 
 function run(command, args, cwd) {
   return new Promise((resolve, reject) => {
@@ -33,6 +35,8 @@ function run(command, args, cwd) {
 }
 
 await run("bun", ["run", "build"], serverRoot);
+await run("bun", ["tsdown", "--config", "tsdown.standalone.config.ts"], serverRoot);
 await fs.rm(serverDistTarget, { recursive: true, force: true });
 await fs.mkdir(path.dirname(serverDistTarget), { recursive: true });
-await fs.cp(serverDistSource, serverDistTarget, { recursive: true });
+await fs.cp(serverStandaloneDistSource, serverDistTarget, { recursive: true });
+await fs.cp(serverClientSource, path.resolve(serverDistTarget, "client"), { recursive: true });
