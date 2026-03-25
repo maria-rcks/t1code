@@ -37,6 +37,7 @@
   "dependencies": {
     "@opentui/core": "^0.1.90",
     "@opentui/react": "^0.1.90",
+    "node-pty": "^1.1.0",
     "react": "^19.0.0",
     "react-devtools-core": "^7.0.1",
     "web-tree-sitter": "0.25.10",

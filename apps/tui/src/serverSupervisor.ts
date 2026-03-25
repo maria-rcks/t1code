@@ -75,7 +75,7 @@ function resolveBundledServerCommand(env: NodeJS.ProcessEnv): string {
   if (configured) {
     return configured;
   }
-  return process.versions.bun !== undefined ? "node" : process.execPath;
+  return process.execPath;
 }
 
 function readBooleanEnv(value: string | undefined): boolean | undefined {
