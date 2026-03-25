@@ -1,4 +1,4 @@
-import { ProjectId, type ModelSelection, type ThreadId } from "@t3tools/contracts";
+import { ProjectId, type ThreadId } from "@t3tools/contracts";
 import { type ChatMessage, type Thread } from "../types";
 import { randomUUID } from "~/lib/utils";
 import { type ComposerImageAttachment, type DraftThreadState } from "../composerDraftStore";
@@ -17,7 +17,7 @@ export const LastInvokedScriptByProjectSchema = Schema.Record(ProjectId, Schema.
 export function buildLocalDraftThread(
   threadId: ThreadId,
   draftThread: DraftThreadState,
-  fallbackModelSelection: ModelSelection,
+  fallbackModel: string,
   error: string | null,
 ): Thread {
   return {
@@ -25,7 +25,7 @@ export function buildLocalDraftThread(
     codexThreadId: null,
     projectId: draftThread.projectId,
     title: "New thread",
-    modelSelection: fallbackModelSelection,
+    model: fallbackModel,
     runtimeMode: draftThread.runtimeMode,
     interactionMode: draftThread.interactionMode,
     session: null,
@@ -159,4 +159,35 @@ export function buildExpiredTerminalContextToastCopy(
     title: `${noun} omitted from message`,
     description: "Re-add it if you want that terminal output included.",
   };
+}
+
+export function shouldShowTimelineWorkingIndicator(options: {
+  isWorking: boolean;
+  isConnecting: boolean;
+  isSendBusy: boolean;
+  sessionRunning: boolean;
+}): boolean {
+  if (!options.isWorking) {
+    return false;
+  }
+  if (options.isConnecting) {
+    return false;
+  }
+  if (options.isSendBusy && !options.sessionRunning) {
+    return false;
+  }
+  return true;
+}
+
+export function composerBusyLabel(options: {
+  isConnecting: boolean;
+  sendPhase: SendPhase;
+}): string {
+  if (options.isConnecting) {
+    return "Connecting";
+  }
+  if (options.sendPhase === "preparing-worktree") {
+    return "Preparing worktree";
+  }
+  return "Sending";
 }

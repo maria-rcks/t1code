@@ -7,12 +7,9 @@ import {
   DEFAULT_RUNTIME_MODE,
   OrchestrationGetTurnDiffInput,
   OrchestrationLatestTurn,
-  ProjectCreatedPayload,
-  ProjectMetaUpdatedPayload,
   OrchestrationProposedPlan,
   OrchestrationSession,
   ProjectCreateCommand,
-  ThreadMetaUpdatedPayload,
   ThreadTurnStartCommand,
   ThreadCreatedPayload,
   ThreadTurnDiff,
@@ -22,8 +19,6 @@ import {
 const decodeTurnDiffInput = Schema.decodeUnknownEffect(OrchestrationGetTurnDiffInput);
 const decodeThreadTurnDiff = Schema.decodeUnknownEffect(ThreadTurnDiff);
 const decodeProjectCreateCommand = Schema.decodeUnknownEffect(ProjectCreateCommand);
-const decodeProjectCreatedPayload = Schema.decodeUnknownEffect(ProjectCreatedPayload);
-const decodeProjectMetaUpdatedPayload = Schema.decodeUnknownEffect(ProjectMetaUpdatedPayload);
 const decodeThreadTurnStartCommand = Schema.decodeUnknownEffect(ThreadTurnStartCommand);
 const decodeThreadTurnStartRequestedPayload = Schema.decodeUnknownEffect(
   ThreadTurnStartRequestedPayload,
@@ -32,7 +27,6 @@ const decodeOrchestrationLatestTurn = Schema.decodeUnknownEffect(OrchestrationLa
 const decodeOrchestrationProposedPlan = Schema.decodeUnknownEffect(OrchestrationProposedPlan);
 const decodeOrchestrationSession = Schema.decodeUnknownEffect(OrchestrationSession);
 const decodeThreadCreatedPayload = Schema.decodeUnknownEffect(ThreadCreatedPayload);
-const decodeThreadMetaUpdatedPayload = Schema.decodeUnknownEffect(ThreadMetaUpdatedPayload);
 
 it.effect("parses turn diff input when fromTurnCount <= toTurnCount", () =>
   Effect.gen(function* () {
@@ -81,52 +75,14 @@ it.effect("trims branded ids and command string fields at decode boundaries", ()
       projectId: " project-1 ",
       title: " Project Title ",
       workspaceRoot: " /tmp/workspace ",
-      defaultModelSelection: {
-        provider: "codex",
-        model: " gpt-5.2 ",
-      },
+      defaultModel: " gpt-5.2 ",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
     assert.strictEqual(parsed.commandId, "cmd-1");
     assert.strictEqual(parsed.projectId, "project-1");
     assert.strictEqual(parsed.title, "Project Title");
     assert.strictEqual(parsed.workspaceRoot, "/tmp/workspace");
-    assert.deepStrictEqual(parsed.defaultModelSelection, {
-      provider: "codex",
-      model: "gpt-5.2",
-    });
-  }),
-);
-
-it.effect("decodes historical project.created payloads with a default provider", () =>
-  Effect.gen(function* () {
-    const parsed = yield* decodeProjectCreatedPayload({
-      projectId: "project-1",
-      title: "Project Title",
-      workspaceRoot: "/tmp/workspace",
-      defaultModelSelection: {
-        provider: "codex",
-        model: "gpt-5.4",
-      },
-      scripts: [],
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(parsed.defaultModelSelection?.provider, "codex");
-  }),
-);
-
-it.effect("decodes project.meta-updated payloads with explicit default provider", () =>
-  Effect.gen(function* () {
-    const parsed = yield* decodeProjectMetaUpdatedPayload({
-      projectId: "project-1",
-      defaultModelSelection: {
-        provider: "claudeAgent",
-        model: "claude-opus-4-6",
-      },
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(parsed.defaultModelSelection?.provider, "claudeAgent");
+    assert.strictEqual(parsed.defaultModel, "gpt-5.2");
   }),
 );
 
@@ -160,7 +116,7 @@ it.effect("decodes thread.turn.start defaults for provider and runtime mode", ()
       },
       createdAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.modelSelection, undefined);
+    assert.strictEqual(parsed.provider, undefined);
     assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
     assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
   }),
@@ -178,14 +134,11 @@ it.effect("preserves explicit provider and runtime mode in thread.turn.start", (
         text: "hello",
         attachments: [],
       },
-      modelSelection: {
-        provider: "codex",
-        model: "gpt-5.4",
-      },
+      provider: "codex",
       runtimeMode: "full-access",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.modelSelection?.provider, "codex");
+    assert.strictEqual(parsed.provider, "codex");
     assert.strictEqual(parsed.runtimeMode, "full-access");
     assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
   }),
@@ -197,10 +150,7 @@ it.effect("decodes thread.created runtime mode for historical events", () =>
       threadId: "thread-1",
       projectId: "project-1",
       title: "Thread title",
-      modelSelection: {
-        provider: "codex",
-        model: "gpt-5.4",
-      },
+      model: "gpt-5.4",
       interactionMode: "default",
       branch: null,
       worktreePath: null,
@@ -209,21 +159,6 @@ it.effect("decodes thread.created runtime mode for historical events", () =>
     });
 
     assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
-    assert.strictEqual(parsed.modelSelection.provider, "codex");
-  }),
-);
-
-it.effect("decodes thread.meta-updated payloads with explicit provider", () =>
-  Effect.gen(function* () {
-    const parsed = yield* decodeThreadMetaUpdatedPayload({
-      threadId: "thread-1",
-      modelSelection: {
-        provider: "claudeAgent",
-        model: "claude-opus-4-6",
-      },
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    });
-    assert.strictEqual(parsed.modelSelection?.provider, "claudeAgent");
   }),
 );
 
@@ -239,19 +174,19 @@ it.effect("accepts provider-scoped model options in thread.turn.start", () =>
         text: "hello",
         attachments: [],
       },
-      modelSelection: {
-        provider: "codex",
-        model: "gpt-5.3-codex",
-        options: {
+      provider: "codex",
+      model: "gpt-5.3-codex",
+      modelOptions: {
+        codex: {
           reasoningEffort: "high",
           fastMode: true,
         },
       },
       createdAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.modelSelection?.provider, "codex");
-    assert.strictEqual(parsed.modelSelection?.options?.reasoningEffort, "high");
-    assert.strictEqual(parsed.modelSelection?.options?.fastMode, true);
+    assert.strictEqual(parsed.provider, "codex");
+    assert.strictEqual(parsed.modelOptions?.codex?.reasoningEffort, "high");
+    assert.strictEqual(parsed.modelOptions?.codex?.fastMode, true);
   }),
 );
 
@@ -289,7 +224,7 @@ it.effect(
         messageId: "msg-1",
         createdAt: "2026-01-01T00:00:00.000Z",
       });
-      assert.strictEqual(parsed.modelSelection, undefined);
+      assert.strictEqual(parsed.provider, undefined);
       assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
       assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
       assert.strictEqual(parsed.sourceProposedPlan, undefined);

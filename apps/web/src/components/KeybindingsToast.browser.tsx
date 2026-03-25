@@ -64,10 +64,7 @@ function createMinimalSnapshot(): OrchestrationReadModel {
         id: PROJECT_ID,
         title: "Project",
         workspaceRoot: "/repo/project",
-        defaultModelSelection: {
-          provider: "codex",
-          model: "gpt-5",
-        },
+        defaultModel: "gpt-5",
         scripts: [],
         createdAt: NOW_ISO,
         updatedAt: NOW_ISO,
@@ -79,10 +76,7 @@ function createMinimalSnapshot(): OrchestrationReadModel {
         id: THREAD_ID,
         projectId: PROJECT_ID,
         title: "Test thread",
-        modelSelection: {
-          provider: "codex",
-          model: "gpt-5",
-        },
+        model: "gpt-5",
         interactionMode: "default",
         runtimeMode: "full-access",
         branch: "main",

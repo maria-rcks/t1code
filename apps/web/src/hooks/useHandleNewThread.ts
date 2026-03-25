@@ -1,6 +1,7 @@
 import { DEFAULT_RUNTIME_MODE, type ProjectId, ThreadId } from "@t3tools/contracts";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useCallback } from "react";
+import { inferProviderForModel } from "@t3tools/shared/model";
 import {
   type DraftThreadEnvMode,
   type DraftThreadState,
@@ -12,6 +13,8 @@ import { useStore } from "../store";
 export function useHandleNewThread() {
   const projects = useStore((store) => store.projects);
   const threads = useStore((store) => store.threads);
+  const stickyModel = useComposerDraftStore((store) => store.stickyModel);
+  const stickyModelOptions = useComposerDraftStore((store) => store.stickyModelOptions);
   const navigate = useNavigate();
   const routeThreadId = useParams({
     strict: false,
@@ -38,7 +41,9 @@ export function useHandleNewThread() {
         clearProjectDraftThreadId,
         getDraftThread,
         getDraftThreadByProjectId,
-        applyStickyState,
+        setModel,
+        setModelOptions,
+        setProvider,
         setDraftThreadContext,
         setProjectDraftThreadId,
       } = useComposerDraftStore.getState();
@@ -97,7 +102,13 @@ export function useHandleNewThread() {
           envMode: options?.envMode ?? "local",
           runtimeMode: DEFAULT_RUNTIME_MODE,
         });
-        applyStickyState(threadId);
+        if (stickyModel) {
+          setProvider(threadId, inferProviderForModel(stickyModel));
+          setModel(threadId, stickyModel);
+        }
+        if (Object.keys(stickyModelOptions).length > 0) {
+          setModelOptions(threadId, stickyModelOptions);
+        }
 
         await navigate({
           to: "/$threadId",
@@ -105,7 +116,7 @@ export function useHandleNewThread() {
         });
       })();
     },
-    [navigate, routeThreadId],
+    [navigate, routeThreadId, stickyModel, stickyModelOptions],
   );
 
   return {

@@ -6,7 +6,7 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { QueryClient, useQueryClient } from "@tanstack/react-query";
 import { Throttler } from "@tanstack/react-pacer";
 
@@ -36,6 +36,8 @@ export const Route = createRootRouteWithContext<{
 });
 
 function RootRouteView() {
+  const threadsHydrated = useStore((store) => store.threadsHydrated);
+
   if (!readNativeApi()) {
     return (
       <div className="flex h-screen flex-col bg-background text-foreground">
@@ -52,8 +54,20 @@ function RootRouteView() {
     <ToastProvider>
       <AnchoredToastProvider>
         <EventRouter />
-        <DesktopProjectBootstrap />
-        <Outlet />
+        {threadsHydrated ? (
+          <>
+            <DesktopProjectBootstrap />
+            <Outlet />
+          </>
+        ) : (
+          <div className="flex h-screen flex-col bg-background text-foreground">
+            <div className="flex flex-1 items-center justify-center">
+              <p className="text-sm text-muted-foreground">
+                Syncing latest {APP_DISPLAY_NAME} state...
+              </p>
+            </div>
+          </div>
+        )}
       </AnchoredToastProvider>
     </ToastProvider>
   );
@@ -131,6 +145,7 @@ function errorDetails(error: unknown): string {
 }
 
 function EventRouter() {
+  const resetServerReadModel = useStore((store) => store.resetServerReadModel);
   const syncServerReadModel = useStore((store) => store.syncServerReadModel);
   const setProjectExpanded = useStore((store) => store.setProjectExpanded);
   const removeOrphanedTerminalStates = useTerminalStateStore(
@@ -143,6 +158,10 @@ function EventRouter() {
   const handledBootstrapThreadIdRef = useRef<string | null>(null);
 
   pathnameRef.current = pathname;
+
+  useLayoutEffect(() => {
+    resetServerReadModel();
+  }, [resetServerReadModel]);
 
   useEffect(() => {
     const api = readNativeApi();
@@ -301,6 +320,7 @@ function EventRouter() {
       });
     });
     subscribed = true;
+    void syncSnapshot();
     return () => {
       disposed = true;
       needsProviderInvalidation = false;

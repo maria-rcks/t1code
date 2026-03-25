@@ -252,7 +252,6 @@ function SettingsRouteView() {
   const changedSettingLabels = [
     ...(theme !== "system" ? ["Theme"] : []),
     ...(settings.timestampFormat !== defaults.timestampFormat ? ["Time format"] : []),
-    ...(settings.diffWordWrap !== defaults.diffWordWrap ? ["Diff line wrapping"] : []),
     ...(settings.enableAssistantStreaming !== defaults.enableAssistantStreaming
       ? ["Assistant output"]
       : []),
@@ -260,7 +259,7 @@ function SettingsRouteView() {
     ...(settings.confirmThreadDelete !== defaults.confirmThreadDelete
       ? ["Delete confirmation"]
       : []),
-    ...(isGitTextGenerationModelDirty ? ["Git writing model"] : []),
+    ...(isGitTextGenerationModelDirty ? ["Text generation model"] : []),
     ...(settings.customCodexModels.length > 0 || settings.customClaudeModels.length > 0
       ? ["Custom models"]
       : []),
@@ -502,34 +501,6 @@ function SettingsRouteView() {
               />
 
               <SettingsRow
-                title="Diff line wrapping"
-                description="Set the default wrap state when the diff panel opens. The in-panel wrap toggle only affects the current diff session."
-                resetAction={
-                  settings.diffWordWrap !== defaults.diffWordWrap ? (
-                    <SettingResetButton
-                      label="diff line wrapping"
-                      onClick={() =>
-                        updateSettings({
-                          diffWordWrap: defaults.diffWordWrap,
-                        })
-                      }
-                    />
-                  ) : null
-                }
-                control={
-                  <Switch
-                    checked={settings.diffWordWrap}
-                    onCheckedChange={(checked) =>
-                      updateSettings({
-                        diffWordWrap: Boolean(checked),
-                      })
-                    }
-                    aria-label="Wrap diff lines by default"
-                  />
-                }
-              />
-
-              <SettingsRow
                 title="Assistant output"
                 description="Show token-by-token output while a response is in progress."
                 resetAction={
@@ -630,12 +601,12 @@ function SettingsRouteView() {
 
             <SettingsSection title="Models">
               <SettingsRow
-                title="Git writing model"
+                title="Text generation model"
                 description="Used for generated commit messages, PR titles, and branch names."
                 resetAction={
                   isGitTextGenerationModelDirty ? (
                     <SettingResetButton
-                      label="git writing model"
+                      label="text generation model"
                       onClick={() =>
                         updateSettings({
                           textGenerationModel: defaults.textGenerationModel,

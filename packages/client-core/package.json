@@ -1,0 +1,56 @@
+{
+  "name": "@t3tools/client-core",
+  "version": "0.0.13",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    },
+    "./ids": {
+      "import": "./src/ids.ts",
+      "types": "./src/ids.ts"
+    },
+    "./nativeApi": {
+      "import": "./src/nativeApi.ts",
+      "types": "./src/nativeApi.ts"
+    },
+    "./pendingUserInput": {
+      "import": "./src/pendingUserInput.ts",
+      "types": "./src/pendingUserInput.ts"
+    },
+    "./proposedPlan": {
+      "import": "./src/proposedPlan.ts",
+      "types": "./src/proposedPlan.ts"
+    },
+    "./sessionLogic": {
+      "import": "./src/sessionLogic.ts",
+      "types": "./src/sessionLogic.ts"
+    },
+    "./types": {
+      "import": "./src/types.ts",
+      "types": "./src/types.ts"
+    },
+    "./wsTransport": {
+      "import": "./src/wsTransport.ts",
+      "types": "./src/wsTransport.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@t3tools/contracts": "workspace:*",
+    "@t3tools/shared": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

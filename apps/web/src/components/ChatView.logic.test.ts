@@ -1,7 +1,12 @@
 import { ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vitest";
 
-import { buildExpiredTerminalContextToastCopy, deriveComposerSendState } from "./ChatView.logic";
+import {
+  buildExpiredTerminalContextToastCopy,
+  composerBusyLabel,
+  deriveComposerSendState,
+  shouldShowTimelineWorkingIndicator,
+} from "./ChatView.logic";
 
 describe("deriveComposerSendState", () => {
   it("treats expired terminal pills as non-sendable content", () => {
@@ -65,5 +70,49 @@ describe("buildExpiredTerminalContextToastCopy", () => {
       title: "Expired terminal contexts omitted from message",
       description: "Re-add it if you want that terminal output included.",
     });
+  });
+});
+
+describe("shouldShowTimelineWorkingIndicator", () => {
+  it("hides the timeline spinner while the composer already shows send progress", () => {
+    expect(
+      shouldShowTimelineWorkingIndicator({
+        isWorking: true,
+        isConnecting: false,
+        isSendBusy: true,
+        sessionRunning: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("shows the timeline spinner once the turn is actively running", () => {
+    expect(
+      shouldShowTimelineWorkingIndicator({
+        isWorking: true,
+        isConnecting: false,
+        isSendBusy: true,
+        sessionRunning: true,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("composerBusyLabel", () => {
+  it("returns connecting copy before other send states", () => {
+    expect(
+      composerBusyLabel({
+        isConnecting: true,
+        sendPhase: "sending-turn",
+      }),
+    ).toBe("Connecting");
+  });
+
+  it("returns worktree-specific copy during worktree preparation", () => {
+    expect(
+      composerBusyLabel({
+        isConnecting: false,
+        sendPhase: "preparing-worktree",
+      }),
+    ).toBe("Preparing worktree");
   });
 });

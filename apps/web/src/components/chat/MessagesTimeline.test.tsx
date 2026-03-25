@@ -96,48 +96,4 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("lucide-terminal");
     expect(markup).toContain("yoo what&#x27;s ");
   });
-
-  it("renders context compaction entries in the normal work log", async () => {
-    const { MessagesTimeline } = await import("./MessagesTimeline");
-    const markup = renderToStaticMarkup(
-      <MessagesTimeline
-        hasMessages
-        isWorking={false}
-        activeTurnInProgress={false}
-        activeTurnStartedAt={null}
-        scrollContainer={null}
-        timelineEntries={[
-          {
-            id: "entry-1",
-            kind: "work",
-            createdAt: "2026-03-17T19:12:28.000Z",
-            entry: {
-              id: "work-1",
-              createdAt: "2026-03-17T19:12:28.000Z",
-              label: "Context compacted",
-              tone: "info",
-            },
-          },
-        ]}
-        completionDividerBeforeEntryId={null}
-        completionSummary={null}
-        turnDiffSummaryByAssistantMessageId={new Map()}
-        nowIso="2026-03-17T19:12:30.000Z"
-        expandedWorkGroups={{}}
-        onToggleWorkGroup={() => {}}
-        onOpenTurnDiff={() => {}}
-        revertTurnCountByUserMessageId={new Map()}
-        onRevertUserMessage={() => {}}
-        isRevertingCheckpoint={false}
-        onImageExpand={() => {}}
-        markdownCwd={undefined}
-        resolvedTheme="light"
-        timestampFormat="locale"
-        workspaceRoot={undefined}
-      />,
-    );
-
-    expect(markup).toContain("Context compacted");
-    expect(markup).toContain("Work log");
-  });
 });

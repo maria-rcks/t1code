@@ -26,166 +26,26 @@ export const ProviderModelOptions = Schema.Struct({
 });
 export type ProviderModelOptions = typeof ProviderModelOptions.Type;
 
-export type EffortOption = {
-  readonly value: string;
-  readonly label: string;
-  readonly isDefault?: true;
-};
-
-export type ModelCapabilities = {
-  readonly reasoningEffortLevels: readonly EffortOption[];
-  readonly supportsFastMode: boolean;
-  readonly supportsThinkingToggle: boolean;
-  readonly promptInjectedEffortLevels: readonly string[];
-};
-
-type ModelDefinition = {
+type ModelOption = {
   readonly slug: string;
   readonly name: string;
-  readonly capabilities: ModelCapabilities;
 };
 
-/**
- * TODO: This should not be a static array, each provider
- * should return its own model list over the WS API.
- */
 export const MODEL_OPTIONS_BY_PROVIDER = {
   codex: [
-    {
-      slug: "gpt-5.4",
-      name: "GPT-5.4",
-      capabilities: {
-        reasoningEffortLevels: [
-          { value: "xhigh", label: "Extra High" },
-          { value: "high", label: "High", isDefault: true },
-          { value: "medium", label: "Medium" },
-          { value: "low", label: "Low" },
-        ],
-        supportsFastMode: true,
-        supportsThinkingToggle: false,
-        promptInjectedEffortLevels: [],
-      },
-    },
-    {
-      slug: "gpt-5.4-mini",
-      name: "GPT-5.4 Mini",
-      capabilities: {
-        reasoningEffortLevels: [
-          { value: "xhigh", label: "Extra High" },
-          { value: "high", label: "High", isDefault: true },
-          { value: "medium", label: "Medium" },
-          { value: "low", label: "Low" },
-        ],
-        supportsFastMode: true,
-        supportsThinkingToggle: false,
-        promptInjectedEffortLevels: [],
-      },
-    },
-    {
-      slug: "gpt-5.3-codex",
-      name: "GPT-5.3 Codex",
-      capabilities: {
-        reasoningEffortLevels: [
-          { value: "xhigh", label: "Extra High" },
-          { value: "high", label: "High", isDefault: true },
-          { value: "medium", label: "Medium" },
-          { value: "low", label: "Low" },
-        ],
-        supportsFastMode: true,
-        supportsThinkingToggle: false,
-        promptInjectedEffortLevels: [],
-      },
-    },
-    {
-      slug: "gpt-5.3-codex-spark",
-      name: "GPT-5.3 Codex Spark",
-      capabilities: {
-        reasoningEffortLevels: [
-          { value: "xhigh", label: "Extra High" },
-          { value: "high", label: "High", isDefault: true },
-          { value: "medium", label: "Medium" },
-          { value: "low", label: "Low" },
-        ],
-        supportsFastMode: true,
-        supportsThinkingToggle: false,
-        promptInjectedEffortLevels: [],
-      },
-    },
-    {
-      slug: "gpt-5.2-codex",
-      name: "GPT-5.2 Codex",
-      capabilities: {
-        reasoningEffortLevels: [
-          { value: "xhigh", label: "Extra High" },
-          { value: "high", label: "High", isDefault: true },
-          { value: "medium", label: "Medium" },
-          { value: "low", label: "Low" },
-        ],
-        supportsFastMode: true,
-        supportsThinkingToggle: false,
-        promptInjectedEffortLevels: [],
-      },
-    },
-    {
-      slug: "gpt-5.2",
-      name: "GPT-5.2",
-      capabilities: {
-        reasoningEffortLevels: [
-          { value: "xhigh", label: "Extra High" },
-          { value: "high", label: "High", isDefault: true },
-          { value: "medium", label: "Medium" },
-          { value: "low", label: "Low" },
-        ],
-        supportsFastMode: true,
-        supportsThinkingToggle: false,
-        promptInjectedEffortLevels: [],
-      },
-    },
+    { slug: "gpt-5.4", name: "GPT-5.4" },
+    { slug: "gpt-5.4-mini", name: "GPT-5.4 Mini" },
+    { slug: "gpt-5.3-codex", name: "GPT-5.3 Codex" },
+    { slug: "gpt-5.3-codex-spark", name: "GPT-5.3 Codex Spark" },
+    { slug: "gpt-5.2-codex", name: "GPT-5.2 Codex" },
+    { slug: "gpt-5.2", name: "GPT-5.2" },
   ],
   claudeAgent: [
-    {
-      slug: "claude-opus-4-6",
-      name: "Claude Opus 4.6",
-      capabilities: {
-        reasoningEffortLevels: [
-          { value: "low", label: "Low" },
-          { value: "medium", label: "Medium" },
-          { value: "high", label: "High", isDefault: true },
-          { value: "max", label: "Max" },
-          { value: "ultrathink", label: "Ultrathink" },
-        ],
-        supportsFastMode: true,
-        supportsThinkingToggle: false,
-        promptInjectedEffortLevels: ["ultrathink"],
-      },
-    },
-    {
-      slug: "claude-sonnet-4-6",
-      name: "Claude Sonnet 4.6",
-      capabilities: {
-        reasoningEffortLevels: [
-          { value: "low", label: "Low" },
-          { value: "medium", label: "Medium" },
-          { value: "high", label: "High", isDefault: true },
-          { value: "ultrathink", label: "Ultrathink" },
-        ],
-        supportsFastMode: false,
-        supportsThinkingToggle: false,
-        promptInjectedEffortLevels: ["ultrathink"],
-      },
-    },
-    {
-      slug: "claude-haiku-4-5",
-      name: "Claude Haiku 4.5",
-      capabilities: {
-        reasoningEffortLevels: [],
-        supportsFastMode: false,
-        supportsThinkingToggle: true,
-        promptInjectedEffortLevels: [],
-      },
-    },
+    { slug: "claude-opus-4-6", name: "Claude Opus 4.6" },
+    { slug: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
+    { slug: "claude-haiku-4-5", name: "Claude Haiku 4.5" },
   ],
-} as const satisfies Record<ProviderKind, readonly ModelDefinition[]>;
+} as const satisfies Record<ProviderKind, readonly ModelOption[]>;
 export type ModelOptionsByProvider = typeof MODEL_OPTIONS_BY_PROVIDER;
 
 type BuiltInModelSlug = (typeof MODEL_OPTIONS_BY_PROVIDER)[ProviderKind][number]["slug"];
@@ -203,6 +63,7 @@ export const DEFAULT_GIT_TEXT_GENERATION_MODEL = "gpt-5.4-mini" as const;
 
 export const MODEL_SLUG_ALIASES_BY_PROVIDER: Record<ProviderKind, Record<string, ModelSlug>> = {
   codex: {
+    "gpt-5-codex": "gpt-5.4",
     "5.4": "gpt-5.4",
     "5.3": "gpt-5.3-codex",
     "gpt-5.3": "gpt-5.3-codex",
@@ -225,18 +86,12 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER: Record<ProviderKind, Record<string,
   },
 };
 
-// ── Model capabilities index ──────────────────────────────────────────
+export const REASONING_EFFORT_OPTIONS_BY_PROVIDER = {
+  codex: CODEX_REASONING_EFFORT_OPTIONS,
+  claudeAgent: CLAUDE_CODE_EFFORT_OPTIONS,
+} as const satisfies Record<ProviderKind, readonly ProviderReasoningEffort[]>;
 
-export const MODEL_CAPABILITIES_INDEX = Object.fromEntries(
-  Object.entries(MODEL_OPTIONS_BY_PROVIDER).map(([provider, models]) => [
-    provider,
-    Object.fromEntries(models.map((m) => [m.slug, m.capabilities])),
-  ]),
-) as unknown as Record<ProviderKind, Record<string, ModelCapabilities>>;
-
-// ── Provider display names ────────────────────────────────────────────
-
-export const PROVIDER_DISPLAY_NAMES: Record<ProviderKind, string> = {
-  codex: "Codex",
-  claudeAgent: "Claude",
-};
+export const DEFAULT_REASONING_EFFORT_BY_PROVIDER = {
+  codex: "high",
+  claudeAgent: "high",
+} as const satisfies Record<ProviderKind, ProviderReasoningEffort>;

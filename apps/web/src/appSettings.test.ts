@@ -113,16 +113,6 @@ describe("timestamp format defaults", () => {
   });
 });
 
-describe("sidebar sort defaults", () => {
-  it("defaults project sorting to updated_at", () => {
-    expect(DEFAULT_SIDEBAR_PROJECT_SORT_ORDER).toBe("updated_at");
-  });
-
-  it("defaults thread sorting to updated_at", () => {
-    expect(DEFAULT_SIDEBAR_THREAD_SORT_ORDER).toBe("updated_at");
-  });
-});
-
 describe("provider-specific custom models", () => {
   it("includes provider-specific custom slugs in non-codex model lists", () => {
     const claudeOptions = getAppModelOptions("claudeAgent", ["claude/custom-opus"]);
@@ -257,9 +247,9 @@ describe("AppSettingsSchema", () => {
       defaultThreadEnvMode: "local",
       confirmThreadDelete: false,
       enableAssistantStreaming: false,
+      timestampFormat: DEFAULT_TIMESTAMP_FORMAT,
       sidebarProjectSortOrder: DEFAULT_SIDEBAR_PROJECT_SORT_ORDER,
       sidebarThreadSortOrder: DEFAULT_SIDEBAR_THREAD_SORT_ORDER,
-      timestampFormat: DEFAULT_TIMESTAMP_FORMAT,
       customCodexModels: [],
       customClaudeModels: [],
     });

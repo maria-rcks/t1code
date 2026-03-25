@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { TrimmedNonEmptyString } from "./baseSchemas";
+import { ProviderModelOptions } from "./model";
 import {
   ApprovalRequestId,
   EventId,
@@ -10,7 +11,6 @@ import {
 } from "./baseSchemas";
 import {
   ChatAttachment,
-  ModelSelection,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PROVIDER_SEND_TURN_MAX_INPUT_CHARS,
   ProviderApprovalDecision,
@@ -51,7 +51,8 @@ export const ProviderSessionStartInput = Schema.Struct({
   threadId: ThreadId,
   provider: Schema.optional(ProviderKind),
   cwd: Schema.optional(TrimmedNonEmptyString),
-  modelSelection: Schema.optional(ModelSelection),
+  model: Schema.optional(TrimmedNonEmptyString),
+  modelOptions: Schema.optional(ProviderModelOptions),
   resumeCursor: Schema.optional(Schema.Unknown),
   approvalPolicy: Schema.optional(ProviderApprovalPolicy),
   sandboxMode: Schema.optional(ProviderSandboxMode),
@@ -68,7 +69,8 @@ export const ProviderSendTurnInput = Schema.Struct({
   attachments: Schema.optional(
     Schema.Array(ChatAttachment).check(Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_ATTACHMENTS)),
   ),
-  modelSelection: Schema.optional(ModelSelection),
+  model: Schema.optional(TrimmedNonEmptyString),
+  modelOptions: Schema.optional(ProviderModelOptions),
   interactionMode: Schema.optional(ProviderInteractionMode),
 });
 export type ProviderSendTurnInput = typeof ProviderSendTurnInput.Type;

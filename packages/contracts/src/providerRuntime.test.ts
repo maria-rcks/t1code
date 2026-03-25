@@ -139,29 +139,4 @@ describe("ProviderRuntimeEvent", () => {
       }),
     ).toThrow();
   });
-
-  it("decodes normalized thread token usage snapshots", () => {
-    const parsed = decodeRuntimeEvent({
-      type: "thread.token-usage.updated",
-      eventId: "event-token-usage-1",
-      provider: "claudeAgent",
-      createdAt: "2026-02-28T00:00:04.000Z",
-      threadId: "thread-1",
-      payload: {
-        usage: {
-          usedTokens: 31251,
-          maxTokens: 200000,
-          toolUses: 25,
-          durationMs: 43567,
-        },
-      },
-    });
-
-    expect(parsed.type).toBe("thread.token-usage.updated");
-    if (parsed.type !== "thread.token-usage.updated") {
-      throw new Error("expected thread.token-usage.updated");
-    }
-    expect(parsed.payload.usage.maxTokens).toBe(200000);
-    expect(parsed.payload.usage.usedTokens).toBe(31251);
-  });
 });

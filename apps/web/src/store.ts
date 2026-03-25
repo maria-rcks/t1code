@@ -1,11 +1,16 @@
 import { Fragment, type ReactNode, createElement, useEffect } from "react";
 import {
+  DEFAULT_MODEL_BY_PROVIDER,
   type ProviderKind,
   ThreadId,
   type OrchestrationReadModel,
   type OrchestrationSessionStatus,
 } from "@t3tools/contracts";
-import { resolveModelSlugForProvider } from "@t3tools/shared/model";
+import {
+  inferProviderForModel,
+  resolveModelSlug,
+  resolveModelSlugForProvider,
+} from "@t3tools/shared/model";
 import { create } from "zustand";
 import { type ChatMessage, type Project, type Thread } from "./types";
 import { Debouncer } from "@tanstack/react-pacer";
@@ -132,24 +137,14 @@ function mapProjectsFromReadModel(
       id: project.id,
       name: project.title,
       cwd: project.workspaceRoot,
-      defaultModelSelection:
-        existing?.defaultModelSelection ??
-        (project.defaultModelSelection
-          ? {
-              ...project.defaultModelSelection,
-              model: resolveModelSlugForProvider(
-                project.defaultModelSelection.provider,
-                project.defaultModelSelection.model,
-              ),
-            }
-          : null),
+      model:
+        existing?.model ??
+        resolveModelSlug(project.defaultModel ?? DEFAULT_MODEL_BY_PROVIDER.codex),
       expanded:
         existing?.expanded ??
         (persistedExpandedProjectCwds.size > 0
           ? persistedExpandedProjectCwds.has(project.workspaceRoot)
           : true),
-      createdAt: project.createdAt,
-      updatedAt: project.updatedAt,
       scripts: project.scripts.map((script) => ({ ...script })),
     } satisfies Project;
   });
@@ -197,6 +192,16 @@ function toLegacyProvider(providerName: string | null): ProviderKind {
     return providerName;
   }
   return "codex";
+}
+
+function inferProviderForThreadModel(input: {
+  readonly model: string;
+  readonly sessionProviderName: string | null;
+}): ProviderKind {
+  if (input.sessionProviderName === "codex" || input.sessionProviderName === "claudeAgent") {
+    return input.sessionProviderName;
+  }
+  return inferProviderForModel(input.model);
 }
 
 function resolveWsHttpOrigin(): string {
@@ -248,13 +253,13 @@ export function syncServerReadModel(state: AppState, readModel: OrchestrationRea
         codexThreadId: null,
         projectId: thread.projectId,
         title: thread.title,
-        modelSelection: {
-          ...thread.modelSelection,
-          model: resolveModelSlugForProvider(
-            thread.modelSelection.provider,
-            thread.modelSelection.model,
-          ),
-        },
+        model: resolveModelSlugForProvider(
+          inferProviderForThreadModel({
+            model: thread.model,
+            sessionProviderName: thread.session?.providerName ?? null,
+          }),
+          thread.model,
+        ),
         runtimeMode: thread.runtimeMode,
         interactionMode: thread.interactionMode,
         session: thread.session
@@ -299,7 +304,6 @@ export function syncServerReadModel(state: AppState, readModel: OrchestrationRea
         })),
         error: thread.session?.lastError ?? null,
         createdAt: thread.createdAt,
-        updatedAt: thread.updatedAt,
         latestTurn: thread.latestTurn,
         lastVisitedAt: existing?.lastVisitedAt ?? thread.updatedAt,
         branch: thread.branch,
@@ -321,6 +325,18 @@ export function syncServerReadModel(state: AppState, readModel: OrchestrationRea
     projects,
     threads,
     threadsHydrated: true,
+  };
+}
+
+export function resetServerReadModel(state: AppState): AppState {
+  if (state.projects.length === 0 && state.threads.length === 0 && !state.threadsHydrated) {
+    return state;
+  }
+  return {
+    ...state,
+    projects: [],
+    threads: [],
+    threadsHydrated: false,
   };
 }
 
@@ -424,6 +440,7 @@ export function setThreadBranch(
 // ── Zustand store ────────────────────────────────────────────────────
 
 interface AppStore extends AppState {
+  resetServerReadModel: () => void;
   syncServerReadModel: (readModel: OrchestrationReadModel) => void;
   markThreadVisited: (threadId: ThreadId, visitedAt?: string) => void;
   markThreadUnread: (threadId: ThreadId) => void;
@@ -436,6 +453,7 @@ interface AppStore extends AppState {
 
 export const useStore = create<AppStore>((set) => ({
   ...readPersistedState(),
+  resetServerReadModel: () => set((state) => resetServerReadModel(state)),
   syncServerReadModel: (readModel) => set((state) => syncServerReadModel(state, readModel)),
   markThreadVisited: (threadId, visitedAt) =>
     set((state) => markThreadVisited(state, threadId, visitedAt)),
