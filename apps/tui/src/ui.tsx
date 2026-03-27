@@ -183,6 +183,8 @@ type SidebarSortMenuItem = {
   selected: boolean;
   onSelect: () => void;
 };
+
+const EMPTY_PENDING_USER_INPUT_ANSWERS: Readonly<Record<string, PendingUserInputDraftAnswer>> = {};
 type T1Api = ReturnType<typeof createTransportNativeApi>["api"];
 type ThreadReadModel = OrchestrationReadModel["threads"][number];
 type ProjectReadModel = OrchestrationReadModel["projects"][number];
@@ -2836,14 +2838,23 @@ export function App({
   const workEntries = activeThread
     ? deriveWorkLogEntries(activeThread.activities, activeThread.latestTurn?.turnId ?? undefined)
     : [];
-  const approvals = activeThread ? derivePendingApprovals(activeThread.activities) : [];
-  const userInputs = activeThread ? derivePendingUserInputs(activeThread.activities) : [];
+  const approvals = useMemo(
+    () => (activeThread ? derivePendingApprovals(activeThread.activities) : []),
+    [activeThread],
+  );
+  const userInputs = useMemo(
+    () => (activeThread ? derivePendingUserInputs(activeThread.activities) : []),
+    [activeThread],
+  );
   const activePendingApproval = approvals[0] ?? null;
   const activePendingUserInput = userInputs[0] ?? null;
-  const activePendingUserInputAnswers =
-    (activePendingUserInput
-      ? pendingUserInputAnswersByRequestId[activePendingUserInput.requestId]
-      : undefined) ?? {};
+  const activePendingUserInputAnswers = useMemo(
+    () =>
+      (activePendingUserInput
+        ? pendingUserInputAnswersByRequestId[activePendingUserInput.requestId]
+        : undefined) ?? EMPTY_PENDING_USER_INPUT_ANSWERS,
+    [activePendingUserInput, pendingUserInputAnswersByRequestId],
+  );
   const activePendingQuestionIndex = activePendingUserInput
     ? (pendingUserInputQuestionIndexByRequestId[activePendingUserInput.requestId] ?? 0)
     : 0;
@@ -3080,6 +3091,7 @@ export function App({
     gitTextGenerationModelOptions,
     selectedCustomModelProvider,
     settingsSelectKind,
+    updateAppSettings,
   ]);
   const sidebarSortItems = useMemo<SidebarSortMenuItem[]>(
     () => [
@@ -3797,6 +3809,7 @@ export function App({
     activePendingProgress?.activeQuestion?.id,
     activePendingUserInput,
     activePendingUserInput?.requestId,
+    activePendingUserInputAnswers,
   ]);
 
   useEffect(() => {

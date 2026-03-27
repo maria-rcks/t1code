@@ -12,6 +12,7 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 const SERVER_ENTRY = path.join(REPO_ROOT, "apps/server/src/index.ts");
 const TUI_ENTRY = path.join(REPO_ROOT, "apps/tui/src/index.tsx");
+const MAX_STARTUP_ERROR_LINES = 10;
 
 function resolveTuiPaths(env: NodeJS.ProcessEnv = process.env): {
   homeDir: string;
@@ -30,6 +31,55 @@ function wait(ms: number): Promise<void> {
 function appendLogLine(stream: fs.WriteStream, event: string, details?: Record<string, unknown>) {
   const suffix = details ? ` ${JSON.stringify(details)}` : "";
   stream.write(`${new Date().toISOString()} ${event}${suffix}\n`);
+}
+
+function ensureDependenciesInstalled(repoRoot: string) {
+  if (fs.existsSync(path.join(repoRoot, "node_modules"))) {
+    return;
+  }
+
+  throw new Error(
+    `Dependencies are not installed. Run \`bun install\` in ${repoRoot} before starting the TUI.`,
+  );
+}
+
+function recordStartupError(buffer: Array<string>, chunk: string) {
+  const lines = chunk
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
+    return;
+  }
+
+  buffer.push(...lines);
+  if (buffer.length > MAX_STARTUP_ERROR_LINES) {
+    buffer.splice(0, buffer.length - MAX_STARTUP_ERROR_LINES);
+  }
+}
+
+function formatStartupFailureMessage(options: {
+  exitCode: number;
+  host: string;
+  port: number;
+  logPath: string;
+  recentErrors: ReadonlyArray<string>;
+  timedOut?: boolean;
+}): string {
+  const { exitCode, host, port, logPath, recentErrors, timedOut = false } = options;
+  const lastError = recentErrors.at(-1);
+  const recentErrorSummary = lastError ? ` Last server error: ${lastError}` : "";
+  const installHint =
+    lastError && /cannot find module|module not found/iu.test(lastError)
+      ? " Dependencies may not be installed. Run `bun install` from the repo root and try again."
+      : "";
+
+  if (timedOut) {
+    return `Timed out waiting for T3 server on ${host}:${port}.${recentErrorSummary}${installHint} See ${logPath} for full logs.`;
+  }
+
+  return `T3 server exited before becoming ready (${exitCode}).${recentErrorSummary}${installHint} See ${logPath} for full logs.`;
 }
 
 async function reserveLoopbackPort(): Promise<number> {
@@ -59,12 +109,24 @@ async function waitForPort(
   port: number,
   child: ChildProcess,
   timeoutMs: number,
+  options: {
+    logPath: string;
+    recentErrors: ReadonlyArray<string>;
+  },
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
-      throw new Error(`T3 server exited before becoming ready (${child.exitCode}).`);
+      throw new Error(
+        formatStartupFailureMessage({
+          exitCode: child.exitCode,
+          host,
+          port,
+          logPath: options.logPath,
+          recentErrors: options.recentErrors,
+        }),
+      );
     }
 
     const isReady = await new Promise<boolean>((resolve) => {
@@ -85,8 +147,19 @@ async function waitForPort(
     await wait(100);
   }
 
-  throw new Error(`Timed out waiting for T3 server on ${host}:${port}.`);
+  throw new Error(
+    formatStartupFailureMessage({
+      exitCode: child.exitCode ?? 0,
+      host,
+      port,
+      logPath: options.logPath,
+      recentErrors: options.recentErrors,
+      timedOut: true,
+    }),
+  );
 }
+
+ensureDependenciesInstalled(REPO_ROOT);
 
 const paths = resolveTuiPaths();
 const host = process.env.T3CODE_HOST?.trim() || "127.0.0.1";
@@ -110,7 +183,9 @@ const serverEnv: NodeJS.ProcessEnv = {
 };
 
 await fs.promises.mkdir(paths.configHomeDir, { recursive: true });
-const logStream = fs.createWriteStream(path.join(paths.configHomeDir, "tui.log"), {
+const logPath = path.join(paths.configHomeDir, "tui.log");
+const startupErrors: Array<string> = [];
+const logStream = fs.createWriteStream(logPath, {
   flags: "a",
 });
 
@@ -144,10 +219,12 @@ server.stdout?.on("data", (chunk) => {
   appendLogLine(logStream, "dev-tui.server.stdout", { chunk: String(chunk).trimEnd() });
 });
 server.stderr?.on("data", (chunk) => {
-  appendLogLine(logStream, "dev-tui.server.stderr", { chunk: String(chunk).trimEnd() });
+  const output = String(chunk).trimEnd();
+  appendLogLine(logStream, "dev-tui.server.stderr", { chunk: output });
+  recordStartupError(startupErrors, output);
 });
 
-await waitForPort(host, port, server, 10_000);
+await waitForPort(host, port, server, 10_000, { logPath, recentErrors: startupErrors });
 
 const tui = spawn("bun", ["--silent", "--watch", "run", TUI_ENTRY], {
   cwd: REPO_ROOT,

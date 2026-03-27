@@ -1,8 +1,14 @@
 # Quick start
 
 ```bash
+# Install dependencies
+bun install
+
 # Development (with hot reload)
 bun run dev
+
+# Terminal UI development
+bun run dev:tui
 
 # Desktop development
 bun run dev:desktop
