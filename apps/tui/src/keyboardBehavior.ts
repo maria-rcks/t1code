@@ -129,6 +129,8 @@ export function isCtrlC(input: {
 export function shouldClearComposerOnCtrlC(input: {
   readonly keyName: string | undefined;
   readonly ctrl: boolean | undefined;
+  readonly composerFocused: boolean;
+  readonly hasComposerText: boolean;
 }): boolean {
-  return isCtrlC(input);
+  return isCtrlC(input) && input.composerFocused && input.hasComposerText;
 }

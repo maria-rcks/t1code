@@ -17,8 +17,32 @@ describe("keyboardBehavior", () => {
       shouldClearComposerOnCtrlC({
         keyName: "c",
         ctrl: true,
+        composerFocused: true,
+        hasComposerText: true,
       }),
     ).toBe(true);
+  });
+
+  it("does not clear the composer when it is not focused", () => {
+    expect(
+      shouldClearComposerOnCtrlC({
+        keyName: "c",
+        ctrl: true,
+        composerFocused: false,
+        hasComposerText: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("does not clear the composer when the draft is empty", () => {
+    expect(
+      shouldClearComposerOnCtrlC({
+        keyName: "c",
+        ctrl: true,
+        composerFocused: true,
+        hasComposerText: false,
+      }),
+    ).toBe(false);
   });
 
   it("documents the updated quit flow", () => {

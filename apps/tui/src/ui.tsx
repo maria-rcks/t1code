@@ -3857,35 +3857,43 @@ export function App({
     setStatus("Composer cleared");
   }, [activePendingProgress, activePendingUserInput]);
 
-  const handleInterruptRequest = useCallback(() => {
-    if (confirmDialog?.confirmLabel === "Quit") {
-      const action = confirmDialog.onConfirm;
-      setConfirmDialog(null);
-      void action();
-      return;
-    }
-    const composerFocused =
-      focusArea === "composer" && !imagePasteInFlight && !activePendingApproval;
-    const composerValue = composerRef.current?.plainText ?? composerValueRef.current;
-    if (composerFocused && composerValue.length > 0) {
-      clearComposerDraft();
-      return;
-    }
-    requestAppExit();
-  }, [
-    activePendingApproval,
-    clearComposerDraft,
-    confirmDialog,
-    focusArea,
-    imagePasteInFlight,
-    requestAppExit,
-  ]);
+  function isComposerFocused(): boolean {
+    return focusArea === "composer" && !imagePasteInFlight && !activePendingApproval;
+  }
 
   useEffect(() => {
     if (interruptRequestToken > 0) {
-      handleInterruptRequest();
+      if (confirmDialog?.confirmLabel === "Quit") {
+        const action = confirmDialog.onConfirm;
+        setConfirmDialog(null);
+        void action();
+        return;
+      }
+      const composerValue = composerRef.current?.plainText ?? composerValueRef.current ?? composer;
+      if (
+        shouldClearComposerOnCtrlC({
+          keyName: "c",
+          ctrl: true,
+          composerFocused:
+            focusArea === "composer" && !imagePasteInFlight && !activePendingApproval,
+          hasComposerText: composerValue.length > 0,
+        })
+      ) {
+        clearComposerDraft();
+        return;
+      }
+      requestAppExit();
     }
-  }, [handleInterruptRequest, interruptRequestToken]);
+  }, [
+    activePendingApproval,
+    clearComposerDraft,
+    composer,
+    confirmDialog,
+    focusArea,
+    imagePasteInFlight,
+    interruptRequestToken,
+    requestAppExit,
+  ]);
 
   function applyComposerPathMention(entry: ProjectEntry) {
     const trigger = detectTrailingComposerPathTrigger(readComposerValue());
@@ -4868,7 +4876,7 @@ export function App({
       closeSidebarContextMenu();
       return;
     }
-    if (ctrlCPressed && !hasDismissibleLayer) {
+    if (ctrlCPressed && !hasDismissibleLayer && !isComposerFocused()) {
       key.preventDefault();
       requestAppExit();
       return;
@@ -6851,6 +6859,7 @@ export function App({
     activePendingProgress !== null
       ? activePendingProgress.canAdvance
       : composer.trim().length > 0 || composerMentions.length > 0 || composerAttachments.length > 0;
+  const composerIsFocused = isComposerFocused();
   const composerPrimaryAction = resolveComposerPrimaryAction({
     activeThreadIsRunning,
     hasSendableContent: composerHasSendableContent,
@@ -6876,7 +6885,7 @@ export function App({
             : COMPOSER_PLACEHOLDER;
   const composerPathTrigger = detectTrailingComposerPathTrigger(composer);
   const showPathSuggestions =
-    focusArea === "composer" &&
+    composerIsFocused &&
     !activePendingUserInput &&
     !activePendingApproval &&
     composerPathTrigger !== null &&
@@ -9168,9 +9177,7 @@ export function App({
                       <textarea
                         key={composerResetKey}
                         ref={composerRef}
-                        focused={
-                          focusArea === "composer" && !imagePasteInFlight && !activePendingApproval
-                        }
+                        focused={composerIsFocused}
                         initialValue={composer}
                         onKeyDown={(key) => {
                           if (imagePasteInFlight || activePendingApproval) {
@@ -9178,25 +9185,29 @@ export function App({
                             return;
                           }
                           syncComposerValueRefSoon();
+                          const composerValue = readComposerValue();
                           if (
                             shouldClearComposerOnCtrlC({
                               keyName: key.name,
                               ctrl: key.ctrl,
+                              composerFocused: true,
+                              hasComposerText: composerValue.length > 0,
                             })
                           ) {
                             key.preventDefault();
-                            if (readComposerValue().length > 0) {
-                              clearComposerDraft();
-                            } else {
-                              requestAppExit();
-                            }
+                            clearComposerDraft();
+                            return;
+                          }
+                          if (isCtrlC({ keyName: key.name, ctrl: key.ctrl })) {
+                            key.preventDefault();
+                            requestAppExit();
                             return;
                           }
                           if (
                             !activePendingUserInput &&
                             (composerAttachments.length > 0 || composerMentions.length > 0) &&
                             (key.name === "backspace" || key.name === "delete") &&
-                            readComposerValue().length === 0
+                            composerValue.length === 0
                           ) {
                             key.preventDefault();
                             if (composerAttachmentDeleteArmed) {
