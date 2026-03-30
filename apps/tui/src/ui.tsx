@@ -161,6 +161,7 @@ import {
   resolveProjectExpansionOnRowPress,
 } from "./sidebarProjects";
 import { DEFAULT_THREAD_TITLE, truncateTitleForDisplay } from "./threadTitle";
+import { isThreadSessionActivelyWorking } from "./threadSessionState";
 import {
   DRAFT_THREAD_ID_PREFIX,
   isDraftThreadId,
@@ -3178,11 +3179,7 @@ export function App({
   const activeProjectId = selectedProjectId ?? sortedProjects[0]?.id;
   const activeProject = sortedProjects.find((project) => project.id === activeProjectId) ?? null;
   const hasPulsingThreadStatus = useMemo(
-    () =>
-      allThreads.some((thread) => {
-        const status = thread.session?.status;
-        return status === "running" || status === "starting";
-      }),
+    () => allThreads.some((thread) => isThreadSessionActivelyWorking(thread.session)),
     [allThreads],
   );
   const threadsByProject = useMemo(() => {
@@ -3233,7 +3230,7 @@ export function App({
   const activeThread = activeDraftThread
     ? null
     : (threads.find((thread) => thread.id === activeThreadId) ?? null);
-  const activeThreadIsRunning = activeThread?.session?.status === "running";
+  const activeThreadIsRunning = isThreadSessionActivelyWorking(activeThread?.session ?? null);
   const activeThreadBranch = activeThread?.branch ?? activeDraftThread?.branch ?? null;
   const activeWorktreePath = activeThread?.worktreePath ?? activeDraftThread?.worktreePath ?? null;
   const activeThreadGitSyncKey = resolveThreadGitSyncKey(activeThread);
@@ -3317,7 +3314,7 @@ export function App({
   const latestTurnSettled = Boolean(
     activeThread?.latestTurn?.startedAt &&
     activeThread.latestTurn.completedAt &&
-    activeThread.session?.status !== "running",
+    !activeThreadIsRunning,
   );
   const showPlanFollowUpPrompt =
     userInputs.length === 0 &&
