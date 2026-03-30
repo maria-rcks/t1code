@@ -43,9 +43,24 @@ const runtimePtyAdapterLoaders = {
   node: () => import("./terminal/Layers/NodePTY"),
 } satisfies Record<string, () => Promise<RuntimePtyAdapterLoader>>;
 
+export function resolveRuntimePtyAdapterRuntime(input?: {
+  platform?: NodeJS.Platform;
+  bunVersion?: string;
+}): keyof typeof runtimePtyAdapterLoaders {
+  const platform = input?.platform ?? process.platform;
+  const bunVersion = input?.bunVersion ?? process.versions.bun;
+
+  // Bun's built-in PTY implementation does not support Windows yet.
+  if (platform === "win32") {
+    return "node";
+  }
+
+  return bunVersion !== undefined ? "bun" : "node";
+}
+
 const makeRuntimePtyAdapterLayer = () =>
   Effect.gen(function* () {
-    const runtime = process.versions.bun !== undefined ? "bun" : "node";
+    const runtime = resolveRuntimePtyAdapterRuntime();
     const loader = runtimePtyAdapterLoaders[runtime];
     const ptyAdapterModule = yield* Effect.promise<RuntimePtyAdapterLoader>(loader);
     return ptyAdapterModule.layer;
