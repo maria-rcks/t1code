@@ -11,6 +11,7 @@ const serverDistSource = path.resolve(serverRoot, "dist");
 const serverDistTarget = path.resolve(tuiRoot, "dist/server");
 const serverClientSource = path.resolve(serverDistSource, "client");
 const nodePtyTarget = path.resolve(serverDistTarget, "node_modules/node-pty");
+const serverBundleExternalModules = ["node-pty", "ws"];
 const nodePtyRuntimeEntries = [
   "LICENSE",
   "README.md",
@@ -94,8 +95,7 @@ await run(
     "--format=esm",
     "--splitting",
     "--packages=bundle",
-    "--external",
-    "node-pty",
+    ...serverBundleExternalModules.flatMap((moduleName) => ["--external", moduleName]),
     "--outdir",
     serverDistTarget,
   ],
