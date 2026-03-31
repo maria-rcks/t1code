@@ -4520,12 +4520,9 @@ export function App({
     if (!scrollbox) {
       return;
     }
-    scrollbox.scrollTo({
-      x: scrollbox.scrollLeft,
-      y: scrollbox.scrollHeight,
-    });
+    const nextScrollTop = Math.max(scrollbox.scrollHeight - scrollbox.viewport.height, 0);
+    scrollbox.scrollTop = nextScrollTop;
     setShowScrollToBottom(false);
-    setFocusArea("timeline");
     scheduleTimelineScrollStateSync();
   }, [scheduleTimelineScrollStateSync]);
 
@@ -6371,6 +6368,7 @@ export function App({
           attachments: [],
           createdAt,
         };
+        scrollTimelineToBottom();
         setPendingSends((current) => [
           ...current,
           {
@@ -6383,7 +6381,6 @@ export function App({
             visibleUntil: Date.now() + SEND_PLACEHOLDER_MIN_DURATION_MS,
           },
         ]);
-        scrollTimelineToBottom();
 
         try {
           await persistThreadSettingsForNextTurn({
@@ -6541,6 +6538,7 @@ export function App({
         attachments: pendingAttachments.map(cloneDraftAttachment),
         createdAt,
       };
+      scrollTimelineToBottom();
       setPendingSends((current) => [
         ...current,
         {
@@ -6553,7 +6551,6 @@ export function App({
           visibleUntil: Date.now() + SEND_PLACEHOLDER_MIN_DURATION_MS,
         },
       ]);
-      scrollTimelineToBottom();
 
       try {
         if (activeThread) {
