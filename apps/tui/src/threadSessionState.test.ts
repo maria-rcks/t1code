@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isThreadSessionActivelyWorking } from "./threadSessionState";
+import { isThreadActivelyWorking, isThreadSessionActivelyWorking } from "./threadSessionState";
 
 describe("threadSessionState", () => {
   it("treats startup states as actively working", () => {
@@ -19,5 +19,23 @@ describe("threadSessionState", () => {
     expect(isThreadSessionActivelyWorking({ status: "ready", activeTurnId: null })).toBe(false);
     expect(isThreadSessionActivelyWorking({ status: "stopped", activeTurnId: null })).toBe(false);
     expect(isThreadSessionActivelyWorking(null)).toBe(false);
+  });
+
+  it("treats threads with a running latest turn as actively working", () => {
+    expect(
+      isThreadActivelyWorking({
+        session: { status: "ready", activeTurnId: null },
+        latestTurn: { state: "running", completedAt: null },
+      }),
+    ).toBe(true);
+  });
+
+  it("ignores settled latest turns", () => {
+    expect(
+      isThreadActivelyWorking({
+        session: { status: "ready", activeTurnId: null },
+        latestTurn: { state: "completed", completedAt: "2026-03-31T00:00:00.000Z" },
+      }),
+    ).toBe(false);
   });
 });

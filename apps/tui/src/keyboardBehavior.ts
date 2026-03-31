@@ -73,12 +73,25 @@ export const KEYBINDING_GUIDE_SECTIONS: readonly KeybindingGuideSection[] = [
         action: "Send the current message",
       },
       {
-        shortcut: "Shift+Enter",
+        shortcut: "Shift+Enter / Ctrl+J",
         action: "Insert a newline",
       },
       {
         shortcut: "Ctrl+C",
         action: "Clear the current draft",
+      },
+      {
+        shortcut: "Ctrl+Shift+A",
+        action: "Select all text in the composer",
+      },
+      {
+        shortcut: "Ctrl+Shift+C",
+        action: "Copy the current composer selection",
+      },
+      {
+        shortcut: "Esc",
+        action: "Stop the active turn",
+        note: "Only when a turn is active and no dialog or overlay is open.",
       },
       {
         shortcut: "Delete twice",
@@ -126,11 +139,63 @@ export function isCtrlC(input: {
   return input.ctrl === true && input.keyName === "c";
 }
 
+export function isCtrlA(input: {
+  readonly keyName: string | undefined;
+  readonly ctrl: boolean | undefined;
+  readonly shift?: boolean | undefined;
+}): boolean {
+  return input.ctrl === true && input.shift !== true && input.keyName === "a";
+}
+
+export function isCtrlShiftA(input: {
+  readonly keyName: string | undefined;
+  readonly ctrl: boolean | undefined;
+  readonly shift?: boolean | undefined;
+}): boolean {
+  return input.ctrl === true && input.shift === true && input.keyName === "a";
+}
+
+export function isCtrlShiftC(input: {
+  readonly keyName: string | undefined;
+  readonly ctrl: boolean | undefined;
+  readonly shift?: boolean | undefined;
+}): boolean {
+  return input.ctrl === true && input.shift === true && input.keyName === "c";
+}
+
+export function shouldSelectAllComposerOnCtrlShiftA(input: {
+  readonly keyName: string | undefined;
+  readonly ctrl: boolean | undefined;
+  readonly shift?: boolean | undefined;
+  readonly composerFocused: boolean;
+}): boolean {
+  return isCtrlShiftA(input) && input.composerFocused;
+}
+
+export function shouldCopyComposerSelectionOnCtrlShiftC(input: {
+  readonly keyName: string | undefined;
+  readonly ctrl: boolean | undefined;
+  readonly shift?: boolean | undefined;
+  readonly composerFocused: boolean;
+  readonly hasSelection: boolean;
+}): boolean {
+  return isCtrlShiftC(input) && input.composerFocused && input.hasSelection;
+}
+
 export function shouldClearComposerOnCtrlC(input: {
   readonly keyName: string | undefined;
   readonly ctrl: boolean | undefined;
+  readonly shift?: boolean | undefined;
   readonly composerFocused: boolean;
   readonly hasComposerText: boolean;
 }): boolean {
-  return isCtrlC(input) && input.composerFocused && input.hasComposerText;
+  return isCtrlC(input) && input.shift !== true && input.composerFocused && input.hasComposerText;
+}
+
+export function shouldInterruptComposerOnEscape(input: {
+  readonly keyName: string | undefined;
+  readonly hasDismissibleLayer: boolean;
+  readonly showStopAction: boolean;
+}): boolean {
+  return input.keyName === "escape" && !input.hasDismissibleLayer && input.showStopAction;
 }

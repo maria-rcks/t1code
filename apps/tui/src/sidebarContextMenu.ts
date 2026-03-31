@@ -2,6 +2,7 @@ import type { OrchestrationReadModel } from "@t3tools/contracts";
 
 export type SidebarContextMenuActionId =
   | "rename"
+  | "generate-title"
   | "mark-unread"
   | "copy-path"
   | "copy-thread-id"
@@ -29,6 +30,7 @@ type ThreadReadModel = OrchestrationReadModel["threads"][number];
 export function buildThreadContextMenuItems(): readonly SidebarContextMenuItem[] {
   return [
     { id: "rename", label: "Rename thread" },
+    { id: "generate-title", label: "Generate title" },
     { id: "mark-unread", label: "Mark unread" },
     { id: "copy-path", label: "Copy Path" },
     { id: "copy-thread-id", label: "Copy Thread ID" },

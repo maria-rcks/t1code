@@ -3,6 +3,16 @@ type ThreadSessionLike = {
   activeTurnId?: string | null | undefined;
 };
 
+type ThreadLatestTurnLike = {
+  state?: string | null | undefined;
+  completedAt?: string | null | undefined;
+};
+
+type ThreadLike = {
+  session?: ThreadSessionLike | null | undefined;
+  latestTurn?: ThreadLatestTurnLike | null | undefined;
+};
+
 export function isThreadSessionActivelyWorking(session: ThreadSessionLike | null): boolean {
   if (!session) {
     return false;
@@ -13,4 +23,16 @@ export function isThreadSessionActivelyWorking(session: ThreadSessionLike | null
   }
 
   return session.status === "running" && session.activeTurnId !== null;
+}
+
+export function isThreadActivelyWorking(thread: ThreadLike | null): boolean {
+  if (!thread) {
+    return false;
+  }
+
+  if (isThreadSessionActivelyWorking(thread.session ?? null)) {
+    return true;
+  }
+
+  return thread.latestTurn?.state === "running" && thread.latestTurn.completedAt == null;
 }

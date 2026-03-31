@@ -709,6 +709,7 @@ export default function Sidebar() {
       const clicked = await api.contextMenu.show(
         [
           { id: "rename", label: "Rename thread" },
+          { id: "generate-title", label: "Generate title" },
           { id: "mark-unread", label: "Mark unread" },
           { id: "copy-path", label: "Copy Path" },
           { id: "copy-thread-id", label: "Copy Thread ID" },
@@ -726,6 +727,20 @@ export default function Sidebar() {
 
       if (clicked === "mark-unread") {
         markThreadUnread(threadId);
+        return;
+      }
+      if (clicked === "generate-title") {
+        await api.orchestration.dispatchCommand({
+          type: "thread.title.generate",
+          commandId: crypto.randomUUID() as never,
+          threadId,
+          createdAt: new Date().toISOString(),
+        });
+        toastManager.add({
+          type: "info",
+          title: "Generating title",
+          description: "Retrying title generation from the first user message.",
+        });
         return;
       }
       if (clicked === "copy-path") {

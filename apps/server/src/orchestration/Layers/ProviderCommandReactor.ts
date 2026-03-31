@@ -37,7 +37,8 @@ type ProviderIntentEvent = Extract<
       | "thread.turn-interrupt-requested"
       | "thread.approval-response-requested"
       | "thread.user-input-response-requested"
-      | "thread.session-stop-requested";
+      | "thread.session-stop-requested"
+      | "thread.title-generation-requested";
   }
 >;
 
@@ -168,7 +169,8 @@ const make = Effect.gen(function* () {
       | "provider.turn.interrupt.failed"
       | "provider.approval.respond.failed"
       | "provider.user-input.respond.failed"
-      | "provider.session.stop.failed";
+      | "provider.session.stop.failed"
+      | "provider.thread.title.generate.failed";
     readonly summary: string;
     readonly detail: string;
     readonly turnId: TurnId | null;
@@ -492,8 +494,10 @@ const make = Effect.gen(function* () {
     readonly messageId: string;
     readonly messageText: string;
     readonly attachments?: ReadonlyArray<ChatAttachment>;
+    readonly createdAt: string;
+    readonly force?: boolean;
   }) {
-    if (input.title.trim() !== DEFAULT_THREAD_TITLE) {
+    if (!input.force && input.title.trim() !== DEFAULT_THREAD_TITLE) {
       return;
     }
 
@@ -523,16 +527,37 @@ const make = Effect.gen(function* () {
       })
       .pipe(
         Effect.catch((error) =>
-          Effect.logWarning("provider command reactor failed to generate thread title", {
-            threadId: input.threadId,
-            cwd,
-            reason: error.message,
+          Effect.gen(function* () {
+            yield* Effect.logWarning("provider command reactor failed to generate thread title", {
+              threadId: input.threadId,
+              cwd,
+              reason: error.message,
+            });
+            yield* appendProviderFailureActivity({
+              threadId: input.threadId,
+              kind: "provider.thread.title.generate.failed",
+              summary: "Thread title generation failed",
+              detail: error.message,
+              turnId: null,
+              createdAt: input.createdAt,
+            });
           }),
         ),
         Effect.flatMap((generated) => {
           if (!generated) return Effect.void;
           if (!generated.title.trim() || generated.title === input.title) {
-            return Effect.void;
+            if (!input.force) {
+              return Effect.void;
+            }
+            return appendProviderFailureActivity({
+              threadId: input.threadId,
+              kind: "provider.thread.title.generate.failed",
+              summary: "Thread title generation failed",
+              detail:
+                "The generated title was empty or identical to the current thread title. Try again after refining the first user message.",
+              turnId: null,
+              createdAt: input.createdAt,
+            });
           }
           return orchestrationEngine.dispatch({
             type: "thread.meta.update",
@@ -591,6 +616,7 @@ const make = Effect.gen(function* () {
       title: thread.title,
       messageId: message.id,
       messageText: message.text,
+      createdAt: event.payload.createdAt,
       ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
     }).pipe(Effect.forkScoped);
 
@@ -643,6 +669,40 @@ const make = Effect.gen(function* () {
 
     // Orchestration turn ids are not provider turn ids, so interrupt by session.
     yield* providerService.interruptTurn({ threadId: event.payload.threadId });
+  });
+
+  const processThreadTitleGenerationRequested = Effect.fnUntraced(function* (
+    event: Extract<ProviderIntentEvent, { type: "thread.title-generation-requested" }>,
+  ) {
+    const thread = yield* resolveThread(event.payload.threadId);
+    if (!thread) {
+      return;
+    }
+
+    const firstUserMessage = thread.messages.find((entry) => entry.role === "user");
+    if (!firstUserMessage) {
+      yield* appendProviderFailureActivity({
+        threadId: event.payload.threadId,
+        kind: "provider.thread.title.generate.failed",
+        summary: "Thread title generation failed",
+        detail: "This thread has no user message to summarize yet.",
+        turnId: null,
+        createdAt: event.payload.createdAt,
+      });
+      return;
+    }
+
+    yield* maybeGenerateThreadTitleForFirstTurn({
+      threadId: event.payload.threadId,
+      title: thread.title,
+      messageId: firstUserMessage.id,
+      messageText: firstUserMessage.text,
+      createdAt: event.payload.createdAt,
+      force: true,
+      ...(firstUserMessage.attachments !== undefined
+        ? { attachments: firstUserMessage.attachments }
+        : {}),
+    });
   });
 
   const processApprovalResponseRequested = Effect.fnUntraced(function* (
@@ -787,6 +847,9 @@ const make = Effect.gen(function* () {
         case "thread.turn-interrupt-requested":
           yield* processTurnInterruptRequested(event);
           return;
+        case "thread.title-generation-requested":
+          yield* processThreadTitleGenerationRequested(event);
+          return;
         case "thread.approval-response-requested":
           yield* processApprovalResponseRequested(event);
           return;
@@ -820,6 +883,7 @@ const make = Effect.gen(function* () {
         event.type !== "thread.runtime-mode-set" &&
         event.type !== "thread.turn-start-requested" &&
         event.type !== "thread.turn-interrupt-requested" &&
+        event.type !== "thread.title-generation-requested" &&
         event.type !== "thread.approval-response-requested" &&
         event.type !== "thread.user-input-response-requested" &&
         event.type !== "thread.session-stop-requested"

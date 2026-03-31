@@ -17,6 +17,7 @@ describe("sidebarContextMenu", () => {
   it("matches the web thread context menu items", () => {
     expect(buildThreadContextMenuItems()).toEqual([
       { id: "rename", label: "Rename thread" },
+      { id: "generate-title", label: "Generate title" },
       { id: "mark-unread", label: "Mark unread" },
       { id: "copy-path", label: "Copy Path" },
       { id: "copy-thread-id", label: "Copy Thread ID" },

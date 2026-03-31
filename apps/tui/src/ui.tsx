@@ -121,7 +121,14 @@ import {
   type ResolvedComposerImageAttachment,
 } from "./composerSubmit";
 import { saveClipboardImageToFile } from "./clipboardImage";
-import { KEYBINDING_GUIDE_SECTIONS, isCtrlC, shouldClearComposerOnCtrlC } from "./keyboardBehavior";
+import {
+  KEYBINDING_GUIDE_SECTIONS,
+  isCtrlC,
+  isCtrlShiftA,
+  shouldClearComposerOnCtrlC,
+  shouldCopyComposerSelectionOnCtrlShiftC,
+  shouldInterruptComposerOnEscape,
+} from "./keyboardBehavior";
 import { createT1Logger } from "./log";
 import { resolveUserMessageBubbleWidth } from "./messageLayout";
 import {
@@ -163,7 +170,7 @@ import {
   resolveProjectExpansionOnRowPress,
 } from "./sidebarProjects";
 import { DEFAULT_THREAD_TITLE, truncateTitleForDisplay } from "./threadTitle";
-import { isThreadSessionActivelyWorking } from "./threadSessionState";
+import { isThreadActivelyWorking } from "./threadSessionState";
 import {
   DRAFT_THREAD_ID_PREFIX,
   isDraftThreadId,
@@ -210,7 +217,9 @@ type T1Api = ReturnType<typeof createTransportNativeApi>["api"];
 type ThreadReadModel = OrchestrationReadModel["threads"][number];
 type ProjectReadModel = OrchestrationReadModel["projects"][number];
 type TuiServerConfig = ServerConfig | null;
-type DraftComposerImageAttachment = ResolvedComposerImageAttachment & { localPath?: string };
+type DraftComposerImageAttachment = ResolvedComposerImageAttachment & {
+  localPath?: string;
+};
 type ComposerMention = {
   type: "path";
   path: string;
@@ -226,6 +235,19 @@ type PendingSendPreview = {
   attachments: ComposerImageAttachment[];
   createdAt: string;
   visibleUntil: number;
+};
+type InterruptedTurnRecovery = {
+  threadId: string;
+  turnId: string;
+  messageId: string;
+  text: string;
+  mentions: ComposerMention[];
+  attachments: DraftComposerImageAttachment[];
+  createdAt: string;
+};
+type SuppressedInterruptedTurnState = {
+  turnId: string;
+  messageId: string;
 };
 type DraftThreadState = {
   id: string;
@@ -259,6 +281,7 @@ const SIDEBAR_THREAD_SORT_LABELS: Record<SidebarThreadSortOrder, string> = {
   created_at: "Created at",
 };
 const SELECTION_COPY_TOAST_MESSAGE = "Copied to clipboard";
+const EMPTY_SUPPRESSED_INTERRUPTED_TURNS: readonly SuppressedInterruptedTurnState[] = [];
 
 type ComposerPathTrigger = {
   query: string;
@@ -591,7 +614,11 @@ function buildMessageMarkdownSyntax(palette: typeof PALETTE) {
     "punctuation.delimiter": { fg: RGBA.fromHex(palette.muted) },
     "punctuation.special": { fg: RGBA.fromHex(palette.subtle) },
     "markup.heading": { fg: RGBA.fromHex(palette.text), bold: true },
-    "markup.heading.1": { fg: RGBA.fromHex(palette.text), bold: true, underline: true },
+    "markup.heading.1": {
+      fg: RGBA.fromHex(palette.text),
+      bold: true,
+      underline: true,
+    },
     "markup.heading.2": { fg: RGBA.fromHex(palette.text), bold: true },
     "markup.heading.3": { fg: RGBA.fromHex(palette.text), bold: true },
     "markup.bold": { fg: RGBA.fromHex(palette.text), bold: true },
@@ -599,9 +626,18 @@ function buildMessageMarkdownSyntax(palette: typeof PALETTE) {
     "markup.italic": { fg: RGBA.fromHex(palette.text), italic: true },
     "markup.list": { fg: RGBA.fromHex(palette.muted) },
     "markup.quote": { fg: RGBA.fromHex(palette.muted), italic: true },
-    "markup.raw": { fg: RGBA.fromHex("#9bd1ff"), bg: RGBA.fromHex(palette.surfaceAlt) },
-    "markup.raw.block": { fg: RGBA.fromHex("#9bd1ff"), bg: RGBA.fromHex(palette.surfaceAlt) },
-    "markup.raw.inline": { fg: RGBA.fromHex("#9bd1ff"), bg: RGBA.fromHex(palette.surfaceAlt) },
+    "markup.raw": {
+      fg: RGBA.fromHex("#9bd1ff"),
+      bg: RGBA.fromHex(palette.surfaceAlt),
+    },
+    "markup.raw.block": {
+      fg: RGBA.fromHex("#9bd1ff"),
+      bg: RGBA.fromHex(palette.surfaceAlt),
+    },
+    "markup.raw.inline": {
+      fg: RGBA.fromHex("#9bd1ff"),
+      bg: RGBA.fromHex(palette.surfaceAlt),
+    },
     "markup.link": { fg: RGBA.fromHex("#7fb7ff"), underline: true },
     "markup.link.label": { fg: RGBA.fromHex("#b7d7ff"), underline: true },
     "markup.link.url": { fg: RGBA.fromHex("#7fb7ff"), underline: true },
@@ -1053,7 +1089,10 @@ function replaceComposerTextRange(
   return `${text.slice(0, safeStart)}${replacement}${text.slice(safeEnd)}`;
 }
 
-function stripMentionTokensFromText(input: string): { mentions: ComposerMention[]; body: string } {
+function stripMentionTokensFromText(input: string): {
+  mentions: ComposerMention[];
+  body: string;
+} {
   const mentions: ComposerMention[] = [];
   let cursor = 0;
   let output = "";
@@ -1625,7 +1664,10 @@ export function MessageMarkdown({
   );
 }
 
-function summarizeDiffPatch(patch: string): { addedLines: number; removedLines: number } {
+function summarizeDiffPatch(patch: string): {
+  addedLines: number;
+  removedLines: number;
+} {
   let addedLines = 0;
   let removedLines = 0;
 
@@ -1971,7 +2013,10 @@ const TIMELINE_SCROLL_BOTTOM_THRESHOLD_ROWS = 4;
 
 function isAvailableModelProviderOption(
   option: (typeof PROVIDER_OPTIONS)[number],
-): option is (typeof PROVIDER_OPTIONS)[number] & { value: ProviderKind; available: true } {
+): option is (typeof PROVIDER_OPTIONS)[number] & {
+  value: ProviderKind;
+  available: true;
+} {
   return option.available;
 }
 
@@ -2259,7 +2304,10 @@ function ToolbarButton(props: {
       {props.icon ? (
         <text
           content={props.icon}
-          style={{ fg: props.iconColor ?? foreground, marginRight: props.label ? 1 : 0 }}
+          style={{
+            fg: props.iconColor ?? foreground,
+            marginRight: props.label ? 1 : 0,
+          }}
         />
       ) : null}
       {props.label ? <text content={props.label} style={{ fg: foreground }} /> : null}
@@ -2311,7 +2359,12 @@ function FooterDivider() {
   return (
     <text
       content="│"
-      style={{ fg: PALETTE.border, marginLeft: 0, marginRight: 1, flexShrink: 0 }}
+      style={{
+        fg: PALETTE.border,
+        marginLeft: 0,
+        marginRight: 1,
+        flexShrink: 0,
+      }}
     />
   );
 }
@@ -2693,6 +2746,7 @@ export function App({
   );
   const [composerAttachmentDeleteArmed, setComposerAttachmentDeleteArmed] = useState(false);
   const [composerResetKey, setComposerResetKey] = useState(0);
+  const [, setComposerSelectionPaintTick] = useState(0);
   const composerRef = useRef<TextareaRenderable | null>(null);
   const composerValueRef = useRef("");
   const deferredComposerSyncRef = useRef(createDeferredComposerSyncState());
@@ -2704,6 +2758,13 @@ export function App({
   const sendInFlightRef = useRef(false);
   const interruptInFlightRef = useRef(false);
   const [pendingSends, setPendingSends] = useState<PendingSendPreview[]>([]);
+  const [lastSubmittedByThreadId, setLastSubmittedByThreadId] = useState<
+    Readonly<Record<string, InterruptedTurnRecovery>>
+  >({});
+  const lastSubmittedByThreadIdRef = useRef<Readonly<Record<string, InterruptedTurnRecovery>>>({});
+  const [suppressedInterruptedTurnsByThreadId, setSuppressedInterruptedTurnsByThreadId] = useState<
+    Readonly<Record<string, readonly SuppressedInterruptedTurnState[]>>
+  >({});
   const [sendAnimationTick, setSendAnimationTick] = useState(0);
   const [sidebarPulseTick, setSidebarPulseTick] = useState(0);
   const [projectPathDraft, setProjectPathDraft] = useState("");
@@ -2745,9 +2806,10 @@ export function App({
     () => new Set(),
   );
   const [overlayMenu, setOverlayMenu] = useState<OverlayMenu>(null);
-  const [overlayAnchor, setOverlayAnchor] = useState<{ x: number | null; y: number | null } | null>(
-    null,
-  );
+  const [overlayAnchor, setOverlayAnchor] = useState<{
+    x: number | null;
+    y: number | null;
+  } | null>(null);
   const [sidebarContextMenu, setSidebarContextMenu] = useState<SidebarContextMenuState | null>(
     null,
   );
@@ -2835,6 +2897,10 @@ export function App({
   }, [draftThreadsByProjectId]);
 
   useEffect(() => {
+    lastSubmittedByThreadIdRef.current = lastSubmittedByThreadId;
+  }, [lastSubmittedByThreadId]);
+
+  useEffect(() => {
     composerDraftsByThreadIdRef.current = composerDraftsByThreadId;
   }, [composerDraftsByThreadId]);
 
@@ -2905,22 +2971,6 @@ export function App({
         if (prefs.threadLastVisitedAtById) {
           setLocallyVisitedThreads(prefs.threadLastVisitedAtById);
         }
-        if (prefs.draftThreadsByProjectId) {
-          setDraftThreadsByProjectId(
-            Object.fromEntries(
-              Object.entries(prefs.draftThreadsByProjectId).map(([projectId, draftThread]) => [
-                projectId,
-                {
-                  id: draftThread.id,
-                  projectId: draftThread.projectId,
-                  branch: draftThread.branch ?? null,
-                  worktreePath: draftThread.worktreePath ?? null,
-                  envMode: draftThread.envMode ?? "local",
-                },
-              ]),
-            ),
-          );
-        }
         if (prefs.composerDraftsByThreadId) {
           setComposerDraftsByThreadId(
             Object.fromEntries(
@@ -2929,7 +2979,9 @@ export function App({
                 {
                   text: draft.text,
                   mentions: (draft.mentions ?? []).map(cloneComposerMention),
-                  attachments: draft.attachments.map((attachment) => ({ ...attachment })),
+                  attachments: draft.attachments.map((attachment) => ({
+                    ...attachment,
+                  })),
                 },
               ]),
             ),
@@ -2940,7 +2992,12 @@ export function App({
           setFocusArea("settings");
         }
         if (prefs.appSettings) {
-          setAppSettings(normalizeAppSettings({ ...DEFAULT_APP_SETTINGS, ...prefs.appSettings }));
+          setAppSettings(
+            normalizeAppSettings({
+              ...DEFAULT_APP_SETTINGS,
+              ...prefs.appSettings,
+            }),
+          );
           setOpenInstallProviders({
             codex: Boolean(prefs.appSettings.codexBinaryPath || prefs.appSettings.codexHomePath),
             claudeAgent: Boolean(prefs.appSettings.claudeBinaryPath),
@@ -3139,7 +3196,7 @@ export function App({
       diffView,
       ...(draftModelOptions ? { draftModelOptions } : {}),
       ...(selectedProjectId ? { selectedProjectId } : {}),
-      ...(selectedThreadId ? { selectedThreadId } : {}),
+      ...(selectedThreadId && !isDraftThreadId(selectedThreadId) ? { selectedThreadId } : {}),
       ...(expandedProjectIds.size > 0 ? { expandedProjectIds: [...expandedProjectIds] } : {}),
       ...(locallyUnreadThreadIds.size > 0
         ? { locallyUnreadThreadIds: [...locallyUnreadThreadIds] }
@@ -3147,7 +3204,6 @@ export function App({
       ...(Object.keys(locallyVisitedThreads).length > 0
         ? { threadLastVisitedAtById: locallyVisitedThreads }
         : {}),
-      ...(Object.keys(draftThreadsByProjectId).length > 0 ? { draftThreadsByProjectId } : {}),
       ...(Object.keys(composerDraftsByThreadId).length > 0 ? { composerDraftsByThreadId } : {}),
       appSettings,
     } satisfies TuiPrefs;
@@ -3161,7 +3217,6 @@ export function App({
     draftModelOptions,
     draftProvider,
     draftRuntimeMode,
-    draftThreadsByProjectId,
     locallyUnreadThreadIds,
     locallyVisitedThreads,
     logger,
@@ -3195,7 +3250,7 @@ export function App({
   const activeProjectId = selectedProjectId ?? sortedProjects[0]?.id;
   const activeProject = sortedProjects.find((project) => project.id === activeProjectId) ?? null;
   const hasPulsingThreadStatus = useMemo(
-    () => allThreads.some((thread) => isThreadSessionActivelyWorking(thread.session)),
+    () => allThreads.some((thread) => isThreadActivelyWorking(thread)),
     [allThreads],
   );
   const threadsByProject = useMemo(() => {
@@ -3246,7 +3301,7 @@ export function App({
   const activeThread = activeDraftThread
     ? null
     : (threads.find((thread) => thread.id === activeThreadId) ?? null);
-  const activeThreadIsRunning = isThreadSessionActivelyWorking(activeThread?.session ?? null);
+  const activeThreadIsRunning = isThreadActivelyWorking(activeThread);
   const activeThreadBranch = activeThread?.branch ?? activeDraftThread?.branch ?? null;
   const activeWorktreePath = activeThread?.worktreePath ?? activeDraftThread?.worktreePath ?? null;
   const activeThreadGitSyncKey = resolveThreadGitSyncKey(activeThread);
@@ -3265,16 +3320,58 @@ export function App({
   );
   const gitCwd = activeWorktreePath ?? activeProjectCwd ?? null;
   const composerSearchCwd = activeWorktreePath ?? activeProjectCwd ?? null;
+  const suppressedInterruptedTurns = activeThreadId
+    ? (suppressedInterruptedTurnsByThreadId[activeThreadId] ?? EMPTY_SUPPRESSED_INTERRUPTED_TURNS)
+    : EMPTY_SUPPRESSED_INTERRUPTED_TURNS;
+  const visibleThreadMessages = useMemo(
+    () =>
+      activeThread
+        ? activeThread.messages.filter((message) => {
+            if (suppressedInterruptedTurns.length === 0) {
+              return true;
+            }
+            return !suppressedInterruptedTurns.some(
+              (suppressed) =>
+                message.id === suppressed.messageId || message.turnId === suppressed.turnId,
+            );
+          })
+        : [],
+    [activeThread, suppressedInterruptedTurns],
+  );
+  const visibleThreadProposedPlans = useMemo(
+    () =>
+      activeThread
+        ? activeThread.proposedPlans.filter(
+            (plan) =>
+              suppressedInterruptedTurns.length === 0 ||
+              !suppressedInterruptedTurns.some((suppressed) => plan.turnId === suppressed.turnId),
+          )
+        : [],
+    [activeThread, suppressedInterruptedTurns],
+  );
+  const visibleThreadActivities = useMemo(
+    () =>
+      activeThread
+        ? activeThread.activities.filter(
+            (activity) =>
+              suppressedInterruptedTurns.length === 0 ||
+              !suppressedInterruptedTurns.some(
+                (suppressed) => activity.turnId === suppressed.turnId,
+              ),
+          )
+        : [],
+    [activeThread, suppressedInterruptedTurns],
+  );
   const workEntries = activeThread
-    ? deriveWorkLogEntries(activeThread.activities, activeThread.latestTurn?.turnId ?? undefined)
+    ? deriveWorkLogEntries(visibleThreadActivities, activeThread.latestTurn?.turnId ?? undefined)
     : [];
   const approvals = useMemo(
-    () => (activeThread ? derivePendingApprovals(activeThread.activities) : []),
-    [activeThread],
+    () => (activeThread ? derivePendingApprovals(visibleThreadActivities) : []),
+    [activeThread, visibleThreadActivities],
   );
   const userInputs = useMemo(
-    () => (activeThread ? derivePendingUserInputs(activeThread.activities) : []),
-    [activeThread],
+    () => (activeThread ? derivePendingUserInputs(visibleThreadActivities) : []),
+    [activeThread, visibleThreadActivities],
   );
   const activePendingApproval = approvals[0] ?? null;
   const activePendingUserInput = userInputs[0] ?? null;
@@ -3304,8 +3401,8 @@ export function App({
 
   const timelineEntries = activeThread
     ? deriveTimelineEntries(
-        activeThread.messages as unknown as Parameters<typeof deriveTimelineEntries>[0],
-        activeThread.proposedPlans as unknown as Parameters<typeof deriveTimelineEntries>[1],
+        visibleThreadMessages as unknown as Parameters<typeof deriveTimelineEntries>[0],
+        visibleThreadProposedPlans as unknown as Parameters<typeof deriveTimelineEntries>[1],
         workEntries,
       )
     : [];
@@ -3922,7 +4019,10 @@ export function App({
       if (checkpointCount < 1) {
         setDiffText("");
         setStatus("No diff yet");
-        logger.log("diff.skipped", { threadId: activeThread.id, reason: "no-checkpoints" });
+        logger.log("diff.skipped", {
+          threadId: activeThread.id,
+          reason: "no-checkpoints",
+        });
         return;
       }
 
@@ -3933,7 +4033,10 @@ export function App({
         });
         setDiffText(result.diff);
         setStatus("Diff ready");
-        logger.log("diff.loaded", { threadId: activeThread.id, length: result.diff.length });
+        logger.log("diff.loaded", {
+          threadId: activeThread.id,
+          length: result.diff.length,
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to load diff.";
         setDiffText("");
@@ -4008,6 +4111,67 @@ export function App({
     composerValueRef.current = nextValue;
     setComposer(nextValue);
     setComposerResetKey((current) => current + 1);
+  }
+
+  function insertComposerText(value: string) {
+    composerRef.current?.insertText(value);
+    const nextValue = composerRef.current?.plainText ?? `${readComposerValue()}${value}`;
+    composerValueRef.current = nextValue;
+    setComposer(nextValue);
+  }
+
+  function setLatestSubmittedRecovery(threadId: string, recovery: InterruptedTurnRecovery | null) {
+    setLastSubmittedByThreadId((current) => {
+      const next = { ...current };
+      if (recovery) {
+        next[threadId] = recovery;
+      } else {
+        delete next[threadId];
+      }
+      lastSubmittedByThreadIdRef.current = next;
+      return next;
+    });
+  }
+
+  function focusComposer(options?: { selectAll?: boolean }) {
+    setFocusArea("composer");
+    setTimeout(() => {
+      composerRef.current?.focus();
+      if (options?.selectAll) {
+        composerRef.current?.selectAll();
+      }
+      setTimeout(() => {
+        composerRef.current?.focus();
+        if (options?.selectAll) {
+          composerRef.current?.selectAll();
+        }
+      }, 0);
+    }, 0);
+  }
+
+  function applyInterruptedTurnRecovery(recovery: InterruptedTurnRecovery) {
+    resetComposerTextarea(recovery.text);
+    setComposerMentions(recovery.mentions.map(cloneComposerMention));
+    setComposerAttachments(recovery.attachments.map(cloneDraftAttachment));
+    setComposerAttachmentDeleteArmed(false);
+    setPathSuggestionEntries([]);
+    setPathSuggestionIndex(0);
+    setSuppressedInterruptedTurnsByThreadId((current) => ({
+      ...current,
+      [recovery.threadId]: [
+        ...(current[recovery.threadId] ?? []).filter(
+          (entry) => entry.turnId !== recovery.turnId && entry.messageId !== recovery.messageId,
+        ),
+        {
+          turnId: recovery.turnId,
+          messageId: recovery.messageId,
+        },
+      ],
+    }));
+    setPendingSends((current) => current.filter((entry) => entry.messageId !== recovery.messageId));
+    setLatestSubmittedRecovery(recovery.threadId, recovery);
+    setStatus("Canceled response restored to composer");
+    focusComposer({ selectAll: true });
   }
 
   const requestAppExit = useCallback(() => {
@@ -4502,11 +4666,7 @@ export function App({
       if (resolvedSubmission.attachments.length > 0) {
         addComposerAttachments(resolvedSubmission.attachments);
         if (resolvedSubmission.promptText.length > 0) {
-          composerRef.current?.insertText(resolvedSubmission.promptText);
-          setComposer(
-            composerRef.current?.plainText ??
-              `${readComposerValue()}${resolvedSubmission.promptText}`,
-          );
+          insertComposerText(resolvedSubmission.promptText);
         }
         setStatus(
           resolvedSubmission.attachments.length === 1
@@ -4516,8 +4676,7 @@ export function App({
         return;
       }
 
-      composerRef.current?.insertText(fallbackText);
-      setComposer(composerRef.current?.plainText ?? `${readComposerValue()}${fallbackText}`);
+      insertComposerText(fallbackText);
       return;
     }
 
@@ -4753,6 +4912,17 @@ export function App({
 
     if (actionId === "rename") {
       setRenameThreadDialog({ threadId: thread.id, value: thread.title });
+      return;
+    }
+
+    if (actionId === "generate-title") {
+      await dispatch({
+        type: "thread.title.generate",
+        commandId: newCommandId(),
+        threadId: thread.id as never,
+        createdAt: nowIso(),
+      });
+      setStatus("Generating title");
       return;
     }
 
@@ -5062,6 +5232,30 @@ export function App({
     }
     if (sidebarContextMenu && key.name === "escape") {
       closeSidebarContextMenu();
+      return;
+    }
+    if (
+      shouldInterruptComposerOnEscape({
+        keyName: key.name,
+        hasDismissibleLayer,
+        showStopAction: activeThreadIsRunning,
+      })
+    ) {
+      key.preventDefault();
+      void interruptActiveTurn();
+      return;
+    }
+    if (
+      isCtrlShiftA({
+        keyName: key.name,
+        ctrl: key.ctrl,
+        shift: key.shift,
+      }) &&
+      !hasDismissibleLayer &&
+      !isComposerFocused()
+    ) {
+      key.preventDefault();
+      focusComposer({ selectAll: true });
       return;
     }
     if (ctrlCPressed && !hasDismissibleLayer && !isComposerFocused()) {
@@ -5578,8 +5772,14 @@ export function App({
     }
 
     updateAppSettings(patchCustomModels(provider, [...customModels, normalized]));
-    setCustomModelInputByProvider((current) => ({ ...current, [provider]: "" }));
-    setCustomModelErrorByProvider((current) => ({ ...current, [provider]: null }));
+    setCustomModelInputByProvider((current) => ({
+      ...current,
+      [provider]: "",
+    }));
+    setCustomModelErrorByProvider((current) => ({
+      ...current,
+      [provider]: null,
+    }));
   }
 
   function removeCustomModel(provider: ProviderKind, slug: string) {
@@ -5590,7 +5790,10 @@ export function App({
         customModels.filter((model) => model !== slug),
       ),
     );
-    setCustomModelErrorByProvider((current) => ({ ...current, [provider]: null }));
+    setCustomModelErrorByProvider((current) => ({
+      ...current,
+      [provider]: null,
+    }));
   }
 
   async function openKeybindingsFile() {
@@ -5640,7 +5843,10 @@ export function App({
     const workspaceRoot = await resolveProjectWorkspaceRoot(rawWorkspaceRoot);
     const existingProject = projects.find((project) => project.workspaceRoot === workspaceRoot);
     if (existingProject) {
-      logger.log("project.selectExisting", { workspaceRoot, projectId: existingProject.id });
+      logger.log("project.selectExisting", {
+        workspaceRoot,
+        projectId: existingProject.id,
+      });
       setSelectedProjectId(existingProject.id);
       setStatus("Ready");
       return existingProject.id;
@@ -6156,6 +6362,15 @@ export function App({
         });
         const messageId = newMessageId();
         const createdAt = nowIso();
+        const submittedTurnRecovery: InterruptedTurnRecovery = {
+          threadId: activeThread.id,
+          turnId: activeThread.latestTurn?.turnId ?? `pending:${messageId}`,
+          messageId,
+          text: followUp.text,
+          mentions: [],
+          attachments: [],
+          createdAt,
+        };
         setPendingSends((current) => [
           ...current,
           {
@@ -6168,6 +6383,7 @@ export function App({
             visibleUntil: Date.now() + SEND_PLACEHOLDER_MIN_DURATION_MS,
           },
         ]);
+        scrollTimelineToBottom();
 
         try {
           await persistThreadSettingsForNextTurn({
@@ -6217,6 +6433,7 @@ export function App({
 
         setSelectedProjectId(projectId);
         setSelectedThreadId(activeThread.id);
+        setLatestSubmittedRecovery(activeThread.id, submittedTurnRecovery);
         setDraftInteractionMode(followUp.interactionMode);
         resetComposerTextarea("");
         setComposerMentions([]);
@@ -6232,7 +6449,11 @@ export function App({
         setStatus(
           followUp.interactionMode === "default" ? "Implementing plan" : "Plan feedback sent",
         );
-        logger.log("composer.sent", { threadId: activeThread.id, length: followUp.text.length });
+        focusComposer();
+        logger.log("composer.sent", {
+          threadId: activeThread.id,
+          length: followUp.text.length,
+        });
         return;
       }
       if (!trimmed && pendingAttachments.length === 0) {
@@ -6311,6 +6532,15 @@ export function App({
 
       const messageId = newMessageId();
       const createdAt = nowIso();
+      const submittedTurnRecovery: InterruptedTurnRecovery = {
+        threadId: threadId as string,
+        turnId: activeThread?.latestTurn?.turnId ?? `pending:${messageId}`,
+        messageId,
+        text: trimmed,
+        mentions: composerMentions.map(cloneComposerMention),
+        attachments: pendingAttachments.map(cloneDraftAttachment),
+        createdAt,
+      };
       setPendingSends((current) => [
         ...current,
         {
@@ -6323,6 +6553,7 @@ export function App({
           visibleUntil: Date.now() + SEND_PLACEHOLDER_MIN_DURATION_MS,
         },
       ]);
+      scrollTimelineToBottom();
 
       try {
         if (activeThread) {
@@ -6367,6 +6598,7 @@ export function App({
 
       setSelectedProjectId(projectId);
       setSelectedThreadId(threadId);
+      setLatestSubmittedRecovery(threadId as string, submittedTurnRecovery);
       resetComposerTextarea("");
       setComposerMentions([]);
       setComposerAttachments([]);
@@ -6380,6 +6612,7 @@ export function App({
         return next;
       });
       setStatus("Prompt sent");
+      focusComposer();
       logger.log("composer.sent", { threadId, length: trimmed.length });
     } finally {
       sendInFlightRef.current = false;
@@ -6387,10 +6620,13 @@ export function App({
   }
 
   async function interruptActiveTurn() {
-    if (!activeThread || !activeThreadIsRunning || interruptInFlightRef.current) {
+    if (!activeThread || !canInterruptActiveTurn(activeThread) || interruptInFlightRef.current) {
       return;
     }
     interruptInFlightRef.current = true;
+    const latestSubmitted = lastSubmittedByThreadIdRef.current[activeThread.id];
+    const activeTurnId =
+      activeThread.latestTurn?.turnId ?? activeThread.session?.activeTurnId ?? null;
     logger.log("composer.interruptAttempt", {
       threadId: activeThread.id,
       activeTurnId: activeThread.session?.activeTurnId ?? null,
@@ -6402,6 +6638,12 @@ export function App({
         threadId: activeThread.id,
         createdAt: nowIso(),
       });
+      if (latestSubmitted && activeTurnId) {
+        applyInterruptedTurnRecovery({
+          ...latestSubmitted,
+          turnId: activeTurnId,
+        });
+      }
       setStatus("Stopping");
     } catch (error) {
       setStatus("Stop failed");
@@ -6415,7 +6657,10 @@ export function App({
   }
 
   function applyDraftProviderModel(nextProvider: ProviderKind, nextModel: string) {
-    logger.log("controls.providerModelChanged", { provider: nextProvider, model: nextModel });
+    logger.log("controls.providerModelChanged", {
+      provider: nextProvider,
+      model: nextModel,
+    });
     setDraftProvider(nextProvider);
     setDraftModel(nextModel);
     setOverlayMenu(null);
@@ -6933,7 +7178,10 @@ export function App({
       const selectedBranchName = branch.isRemote
         ? deriveLocalBranchNameFromRemoteRef(branch.name)
         : branch.name;
-      await api.git.checkout({ cwd: selectionTarget.checkoutCwd, branch: branch.name });
+      await api.git.checkout({
+        cwd: selectionTarget.checkoutCwd,
+        branch: branch.name,
+      });
       let nextBranchName = selectedBranchName;
       if (branch.isRemote) {
         const status = await api.git.status({ cwd: selectionTarget.checkoutCwd }).catch(() => null);
@@ -7360,7 +7608,10 @@ export function App({
     if (focusArea === "composer" && overlayMenu !== null) {
       setOverlayMenu((current) => {
         if (current !== null) {
-          logger.log("overlay.close", { menu: current, reason: "composer-focus" });
+          logger.log("overlay.close", {
+            menu: current,
+            reason: "composer-focus",
+          });
         }
         return null;
       });
@@ -7826,7 +8077,10 @@ export function App({
                     <text content="󰉋" style={{ fg: PALETTE.muted, marginRight: 1 }} />
                     <text
                       content={project.title}
-                      style={{ fg: isProjectActive ? PALETTE.text : PALETTE.muted, flexGrow: 1 }}
+                      style={{
+                        fg: isProjectActive ? PALETTE.text : PALETTE.muted,
+                        flexGrow: 1,
+                      }}
                     />
                     <IconButton
                       icon="+"
@@ -7849,32 +8103,29 @@ export function App({
                         flexDirection: "column",
                       }}
                     >
-                      {projectThreads.length > 0 ? (
-                        projectThreads.map((thread) => {
-                          const status = threadStatus(thread, {
-                            forceUnread: locallyUnreadThreadIds.has(thread.id),
-                            locallyVisitedAt: locallyVisitedThreads[thread.id],
-                          });
-                          const isActive = thread.id === activeThreadId;
-                          const isSelected = selectedThreadIds.has(thread.id);
-                          return (
+                      {projectThreads.length > 0 || draftThreadsByProjectId[project.id] ? (
+                        <>
+                          {draftThreadsByProjectId[project.id] ? (
                             <SidebarRow
-                              key={thread.id}
-                              active={isActive}
-                              selected={isSelected}
+                              key={draftThreadsByProjectId[project.id]!.id}
+                              active={draftThreadsByProjectId[project.id]!.id === activeThreadId}
+                              selected={selectedThreadIds.has(
+                                draftThreadsByProjectId[project.id]!.id,
+                              )}
                               activeBackgroundColor={PALETTE.controlActiveStrong}
                               compact
-                              onPress={(event) => {
+                              onPress={() => {
                                 closeSidebarContextMenu();
-                                handleThreadClick(
-                                  event,
-                                  project.id,
-                                  thread.id,
-                                  orderedProjectThreadIds,
-                                );
-                              }}
-                              onSecondaryPress={(event) => {
-                                openThreadContextMenu(project.id, thread.id, event);
+                                if (selectedThreadIds.size > 0) {
+                                  clearSelection();
+                                }
+                                selectProject(project.id);
+                                setSelectedThreadId(draftThreadsByProjectId[project.id]!.id);
+                                setMainView("thread");
+                                setFocusArea("composer");
+                                setTimeout(() => {
+                                  composerRef.current?.focus();
+                                }, 0);
                               }}
                             >
                               <box
@@ -7885,17 +8136,7 @@ export function App({
                                   justifyContent: "center",
                                   flexShrink: 0,
                                 }}
-                              >
-                                {status ? (
-                                  <text
-                                    content="●"
-                                    style={{
-                                      fg: resolveThreadStatusDotColor(status, sidebarPulseTick),
-                                      flexShrink: 0,
-                                    }}
-                                  />
-                                ) : null}
-                              </box>
+                              />
                               <box
                                 style={{
                                   width: SIDEBAR_THREAD_TITLE_WIDTH,
@@ -7906,11 +8147,15 @@ export function App({
                               >
                                 <text
                                   content={truncateTitleForDisplay(
-                                    thread.title,
+                                    DEFAULT_THREAD_TITLE,
                                     SIDEBAR_THREAD_TITLE_WIDTH,
                                   )}
                                   style={{
-                                    fg: isActive || isSelected ? PALETTE.text : PALETTE.muted,
+                                    fg:
+                                      draftThreadsByProjectId[project.id]!.id === activeThreadId ||
+                                      selectedThreadIds.has(draftThreadsByProjectId[project.id]!.id)
+                                        ? PALETTE.text
+                                        : PALETTE.muted,
                                   }}
                                 />
                               </box>
@@ -7921,18 +8166,93 @@ export function App({
                                   flexShrink: 0,
                                   justifyContent: "flex-end",
                                 }}
+                              />
+                            </SidebarRow>
+                          ) : null}
+                          {projectThreads.map((thread) => {
+                            const status = threadStatus(thread, {
+                              forceUnread: locallyUnreadThreadIds.has(thread.id),
+                              locallyVisitedAt: locallyVisitedThreads[thread.id],
+                            });
+                            const isActive = thread.id === activeThreadId;
+                            const isSelected = selectedThreadIds.has(thread.id);
+                            return (
+                              <SidebarRow
+                                key={thread.id}
+                                active={isActive}
+                                selected={isSelected}
+                                activeBackgroundColor={PALETTE.controlActiveStrong}
+                                compact
+                                onPress={(event) => {
+                                  closeSidebarContextMenu();
+                                  handleThreadClick(
+                                    event,
+                                    project.id,
+                                    thread.id,
+                                    orderedProjectThreadIds,
+                                  );
+                                }}
+                                onSecondaryPress={(event) => {
+                                  openThreadContextMenu(project.id, thread.id, event);
+                                }}
                               >
-                                <text
-                                  content={formatRelativeTime(thread.updatedAt)}
+                                <box
                                   style={{
-                                    fg: isActive || isSelected ? PALETTE.muted : PALETTE.subtle,
+                                    width: 1,
+                                    marginRight: 1,
+                                    alignItems: "center",
+                                    justifyContent: "center",
                                     flexShrink: 0,
                                   }}
-                                />
-                              </box>
-                            </SidebarRow>
-                          );
-                        })
+                                >
+                                  {status ? (
+                                    <text
+                                      content="●"
+                                      style={{
+                                        fg: resolveThreadStatusDotColor(status, sidebarPulseTick),
+                                        flexShrink: 0,
+                                      }}
+                                    />
+                                  ) : null}
+                                </box>
+                                <box
+                                  style={{
+                                    width: SIDEBAR_THREAD_TITLE_WIDTH,
+                                    flexShrink: 0,
+                                    overflow: "hidden",
+                                    height: 1,
+                                  }}
+                                >
+                                  <text
+                                    content={truncateTitleForDisplay(
+                                      thread.title,
+                                      SIDEBAR_THREAD_TITLE_WIDTH,
+                                    )}
+                                    style={{
+                                      fg: isActive || isSelected ? PALETTE.text : PALETTE.muted,
+                                    }}
+                                  />
+                                </box>
+                                <box
+                                  style={{
+                                    width: SIDEBAR_THREAD_TIMESTAMP_WIDTH,
+                                    marginLeft: SIDEBAR_THREAD_TIMESTAMP_GAP,
+                                    flexShrink: 0,
+                                    justifyContent: "flex-end",
+                                  }}
+                                >
+                                  <text
+                                    content={formatRelativeTime(thread.updatedAt)}
+                                    style={{
+                                      fg: isActive || isSelected ? PALETTE.muted : PALETTE.subtle,
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                </box>
+                              </SidebarRow>
+                            );
+                          })}
+                        </>
                       ) : (
                         <box
                           style={{
@@ -7979,7 +8299,9 @@ export function App({
               />
               <text
                 content="Settings"
-                style={{ fg: mainView === "settings" ? PALETTE.text : PALETTE.muted }}
+                style={{
+                  fg: mainView === "settings" ? PALETTE.text : PALETTE.muted,
+                }}
               />
             </SidebarRow>
             <SidebarRow
@@ -8001,7 +8323,9 @@ export function App({
               />
               <text
                 content="Keybindings"
-                style={{ fg: mainView === "keybindings" ? PALETTE.text : PALETTE.muted }}
+                style={{
+                  fg: mainView === "keybindings" ? PALETTE.text : PALETTE.muted,
+                }}
               />
             </SidebarRow>
           </box>
@@ -8047,7 +8371,14 @@ export function App({
                 onPress={() => toggleSidebarVisibility()}
               />
             ) : null}
-            <box style={{ flexGrow: 1, flexShrink: 1, overflow: "hidden", height: 1 }}>
+            <box
+              style={{
+                flexGrow: 1,
+                flexShrink: 1,
+                overflow: "hidden",
+                height: 1,
+              }}
+            >
               <text content={activeThreadDisplayTitle} style={{ fg: PALETTE.text }} />
             </box>
             {mainView === "thread" && activeProject && responsiveLayout.showHeaderProjectBadge ? (
@@ -8135,7 +8466,13 @@ export function App({
                   paddingRight: 1,
                 }}
               >
-                <box style={{ maxWidth: 104, width: "100%", flexDirection: "column" }}>
+                <box
+                  style={{
+                    maxWidth: 104,
+                    width: "100%",
+                    flexDirection: "column",
+                  }}
+                >
                   {mainView === "settings" ? (
                     <>
                       <SettingsSection title="General">
@@ -8145,7 +8482,11 @@ export function App({
                           resetAction={
                             appSettings.theme !== DEFAULT_APP_THEME ? (
                               <SettingResetButton
-                                onPress={() => updateAppSettings({ theme: DEFAULT_APP_THEME })}
+                                onPress={() =>
+                                  updateAppSettings({
+                                    theme: DEFAULT_APP_THEME,
+                                  })
+                                }
                               />
                             ) : null
                           }
@@ -8321,7 +8662,11 @@ export function App({
                           }
                         >
                           <box
-                            style={{ flexDirection: "row", alignItems: "center", marginBottom: 1 }}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              marginBottom: 1,
+                            }}
                           >
                             <ToolbarButton
                               label={`${selectedCustomModelProviderLabel} ▾`}
@@ -8384,7 +8729,11 @@ export function App({
                             />
                           </box>
                           <box
-                            style={{ flexDirection: "row", alignItems: "center", marginBottom: 1 }}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              marginBottom: 1,
+                            }}
                           >
                             <ToolbarButton
                               label="Add"
@@ -8425,7 +8774,13 @@ export function App({
                                 marginBottom: 1,
                               }}
                             >
-                              <box style={{ flexDirection: "column", flexGrow: 1, flexShrink: 1 }}>
+                              <box
+                                style={{
+                                  flexDirection: "column",
+                                  flexGrow: 1,
+                                  flexShrink: 1,
+                                }}
+                              >
                                 <text
                                   content={`${row.providerTitle} · ${row.slug}`}
                                   style={{ fg: PALETTE.text }}
@@ -8500,7 +8855,10 @@ export function App({
                                   >
                                     <text
                                       content={providerSettings.title}
-                                      style={{ fg: PALETTE.text, marginRight: 1 }}
+                                      style={{
+                                        fg: PALETTE.text,
+                                        marginRight: 1,
+                                      }}
                                     />
                                     {(
                                       providerSettings.provider === "codex"
@@ -8536,7 +8894,10 @@ export function App({
                                   >
                                     <text
                                       content={`${providerSettings.title} binary path`}
-                                      style={{ fg: PALETTE.text, marginBottom: 1 }}
+                                      style={{
+                                        fg: PALETTE.text,
+                                        marginBottom: 1,
+                                      }}
                                     />
                                     <box
                                       style={{
@@ -8570,13 +8931,19 @@ export function App({
                                     </box>
                                     <text
                                       content={providerSettings.binaryDescription}
-                                      style={{ fg: PALETTE.subtle, marginBottom: 1 }}
+                                      style={{
+                                        fg: PALETTE.subtle,
+                                        marginBottom: 1,
+                                      }}
                                     />
                                     {providerSettings.homePathKey ? (
                                       <>
                                         <text
                                           content="CODEX_HOME path"
-                                          style={{ fg: PALETTE.text, marginBottom: 1 }}
+                                          style={{
+                                            fg: PALETTE.text,
+                                            marginBottom: 1,
+                                          }}
                                         />
                                         <box
                                           style={{
@@ -8591,7 +8958,9 @@ export function App({
                                           <input
                                             value={appSettings.codexHomePath}
                                             onInput={(value) =>
-                                              updateAppSettings({ codexHomePath: value })
+                                              updateAppSettings({
+                                                codexHomePath: value,
+                                              })
                                             }
                                             placeholder={
                                               providerSettings.homePlaceholder || "CODEX_HOME"
@@ -8608,7 +8977,10 @@ export function App({
                                         </box>
                                         <text
                                           content={providerSettings.homeDescription ?? ""}
-                                          style={{ fg: PALETTE.subtle, marginBottom: 1 }}
+                                          style={{
+                                            fg: PALETTE.subtle,
+                                            marginBottom: 1,
+                                          }}
                                         />
                                       </>
                                     ) : null}
@@ -8993,7 +9365,11 @@ export function App({
                             >
                               <text
                                 content={timestamp}
-                                style={{ fg: PALETTE.subtle, marginTop: 0, flexShrink: 0 }}
+                                style={{
+                                  fg: PALETTE.subtle,
+                                  marginTop: 0,
+                                  flexShrink: 0,
+                                }}
                               />
                             </box>
                           </box>
@@ -9390,7 +9766,11 @@ export function App({
                       {activePendingProgress?.activeQuestion ? (
                         <box style={{ flexDirection: "column", marginBottom: 1 }}>
                           <box
-                            style={{ flexDirection: "row", alignItems: "center", marginBottom: 1 }}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              marginBottom: 1,
+                            }}
                           >
                             <text
                               content={activePendingProgress.activeQuestion.header}
@@ -9445,10 +9825,53 @@ export function App({
                           }
                           syncComposerValueRefSoon();
                           const composerValue = readComposerValue();
+                          const composerSelection = composerRef.current?.getSelectedText() ?? "";
+                          if (
+                            isCtrlShiftA({
+                              keyName: key.name,
+                              ctrl: key.ctrl,
+                              shift: key.shift,
+                            })
+                          ) {
+                            key.preventDefault();
+                            composerRef.current?.focus();
+                            composerRef.current?.selectAll();
+                            setComposerSelectionPaintTick((current) => current + 1);
+                            return;
+                          }
+                          if (
+                            shouldInterruptComposerOnEscape({
+                              keyName: key.name,
+                              hasDismissibleLayer: false,
+                              showStopAction: activeThreadIsRunning,
+                            })
+                          ) {
+                            key.preventDefault();
+                            void interruptActiveTurn();
+                            return;
+                          }
+                          if (
+                            shouldCopyComposerSelectionOnCtrlShiftC({
+                              keyName: key.name,
+                              ctrl: key.ctrl,
+                              shift: key.shift,
+                              composerFocused: true,
+                              hasSelection:
+                                composerSelection.length > 0 || composerValue.length > 0,
+                            })
+                          ) {
+                            key.preventDefault();
+                            void copyToClipboard(
+                              composerSelection.length > 0 ? composerSelection : composerValue,
+                              "Copied to clipboard",
+                            );
+                            return;
+                          }
                           if (
                             shouldClearComposerOnCtrlC({
                               keyName: key.name,
                               ctrl: key.ctrl,
+                              shift: key.shift,
                               composerFocused: true,
                               hasComposerText: composerValue.length > 0,
                             })
@@ -9457,7 +9880,13 @@ export function App({
                             clearComposerDraft();
                             return;
                           }
-                          if (isCtrlC({ keyName: key.name, ctrl: key.ctrl })) {
+                          if (
+                            isCtrlC({
+                              keyName: key.name,
+                              ctrl: key.ctrl,
+                            }) &&
+                            key.shift !== true
+                          ) {
                             key.preventDefault();
                             requestAppExit();
                             return;
@@ -9505,6 +9934,18 @@ export function App({
                           ) {
                             key.preventDefault();
                             void attachClipboardImage();
+                            return;
+                          }
+                          if (
+                            !activePendingUserInput &&
+                            key.ctrl &&
+                            !key.meta &&
+                            !key.shift &&
+                            (key.name === "j" || key.name === "linefeed") &&
+                            !(showPathSuggestions && pathSuggestionEntries.length > 0)
+                          ) {
+                            key.preventDefault();
+                            insertComposerText("\n");
                             return;
                           }
                           if (showPathSuggestions && pathSuggestionEntries.length > 0) {
@@ -9571,6 +10012,7 @@ export function App({
                           }
                         }}
                         keyBindings={[
+                          { name: "a", ctrl: true, shift: true, action: "select-all" },
                           { name: "return", action: "submit" },
                           { name: "enter", action: "submit" },
                           { name: "kpenter", action: "submit" },
@@ -10124,7 +10566,10 @@ export function App({
                 {showSection ? (
                   <text
                     content={item.section}
-                    style={{ fg: PALETTE.subtle, marginTop: index === 0 ? 0 : 1 }}
+                    style={{
+                      fg: PALETTE.subtle,
+                      marginTop: index === 0 ? 0 : 1,
+                    }}
                   />
                 ) : null}
                 <PopupRow
@@ -10227,7 +10672,10 @@ export function App({
                   {showSection ? (
                     <text
                       content={item.section}
-                      style={{ fg: PALETTE.subtle, marginTop: index === 0 ? 0 : 1 }}
+                      style={{
+                        fg: PALETTE.subtle,
+                        marginTop: index === 0 ? 0 : 1,
+                      }}
                     />
                   ) : null}
                   <PopupRow
@@ -10592,4 +11040,16 @@ export function App({
       ) : null}
     </box>
   );
+}
+function canInterruptActiveTurn(thread: ThreadReadModel | null): boolean {
+  if (!thread) {
+    return false;
+  }
+  if (isThreadActivelyWorking(thread)) {
+    return true;
+  }
+  if (thread.session?.activeTurnId) {
+    return true;
+  }
+  return thread.latestTurn?.state === "running";
 }
