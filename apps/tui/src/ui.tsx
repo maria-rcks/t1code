@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type {
+  CliRenderer,
   InputRenderable,
   PasteEvent,
   ScrollBoxRenderable,
@@ -10,6 +11,7 @@ import type {
   TextareaRenderable,
 } from "@opentui/core";
 import {
+  CliRenderEvents,
   decodePasteBytes,
   pathToFiletype,
   RGBA,
@@ -132,6 +134,13 @@ import {
 } from "./messageMarkdown";
 import { openExternalUrl } from "./openExternal";
 import { type TuiPrefs, readPrefs, writePrefs } from "./prefs";
+import {
+  normalizeRendererThemeMode,
+  resolveTerminalPalette,
+  shouldListenForRendererThemeChanges,
+  shouldResolveTerminalPalette,
+  shouldTrackSystemThemeMode,
+} from "./rendererTheme";
 import { resolveTuiResponsiveLayout, TUI_SIDEBAR_WIDTH } from "./responsiveLayout";
 import { resolveAttachedServerConnection, startServerSupervisor } from "./serverSupervisor";
 import { createCoalescedRefreshRunner } from "./snapshotRefresh";
@@ -142,6 +151,20 @@ import {
   resolveTerminalImageSupport,
   type TerminalImageSupport,
 } from "./terminalImages";
+import {
+  DEFAULT_TUI_THEME,
+  DEFAULT_TUI_THEME_ID,
+  TUI_THEME_IDS,
+  TUI_THEME_LABELS,
+  normalizeTuiThemeId,
+  resolveTerminalThemeMode,
+  resolveTuiTheme,
+  type TuiColor,
+  type TuiPalette,
+  type TerminalColors,
+  type TuiThemeId,
+  type TuiThemeMode,
+} from "./theme";
 import {
   buildMultiSelectContextMenuItems,
   buildProjectRemovalConfirmSteps,
@@ -193,6 +216,7 @@ type OverlayMenu =
   | "composer-branch";
 type SettingsSelectKind =
   | "theme"
+  | "theme-preset"
   | "timestamp-format"
   | "thread-env"
   | "git-model"
@@ -226,6 +250,25 @@ type PendingSendPreview = {
   attachments: ComposerImageAttachment[];
   createdAt: string;
   visibleUntil: number;
+};
+type RendererSelection = {
+  getSelectedText(): string;
+};
+type TerminalRenderer = {
+  capabilities?: {
+    kitty_graphics?: boolean;
+    sixel?: boolean;
+  } | null;
+  resolution?: {
+    width: number;
+    height: number;
+  } | null;
+  console?: TerminalConsole | null;
+  getSelection?: () => RendererSelection | null;
+  clearSelection?: () => void;
+  on?: (event: string | symbol, handler: (...args: unknown[]) => void) => void;
+  off?: (event: string | symbol, handler: (...args: unknown[]) => void) => void;
+  writeOut?: (chunk: string) => void;
 };
 type DraftThreadState = {
   id: string;
@@ -431,101 +474,10 @@ type InstallProviderSettings = {
   homePlaceholder?: string;
   homeDescription?: string;
 };
-const DARK_PALETTE = {
-  canvas: "#171717",
-  sidebar: "#151515",
-  main: "#171717",
-  surface: "#1b1b1b",
-  surfaceAlt: "#1f1f1f",
-  input: "#111111",
-  surfaceUser: "#202020",
-  surfacePlan: "#1f221c",
-  surfaceWarn: "#262016",
-  surfaceInfo: "#1d2026",
-  footer: "#171717",
-  diff: "#1b1b1b",
-  popup: "#1c1c1c",
-  scrim: "#00000099",
-  border: "#252525",
-  divider: "#2d2d2d",
-  control: "transparent",
-  controlHover: "#202020",
-  controlActive: "#292929",
-  controlActiveStrong: "#1e1e1e",
-  controlInset: "#141414",
-  controlInsetHover: "#1a1a1a",
-  composerPanel: "#1a1a1a",
-  composerBorder: "#2a3f95",
-  composerBorderMuted: "#313131",
-  composerSend: "#2f438e",
-  composerSendHover: "#3c57ba",
-  composerStop: "#dc2626",
-  composerStopHover: "#ef4444",
-  accent: "#7c87ff",
-  cursor: "#d4d4d4",
-  selection: "#1f4f95",
-  selectionActive: "#2b61b0",
-  text: "#f5f5f5",
-  muted: "#a3a3a3",
-  subtle: "#737373",
-  success: "#10b981",
-  info: "#3b82f6",
-  warning: "#f59e0b",
-  claude: "#d97757",
-  macRed: "#ff5f57",
-  macYellow: "#febc2e",
-  macGreen: "#28c840",
-};
+const PALETTE: TuiPalette = { ...DEFAULT_TUI_THEME.palette };
+let ACTIVE_TUI_THEME = DEFAULT_TUI_THEME;
 
-const LIGHT_PALETTE = {
-  canvas: "#f5f5f5",
-  sidebar: "#eeeeee",
-  main: "#f7f7f7",
-  surface: "#ffffff",
-  surfaceAlt: "#f1f1f1",
-  input: "#ffffff",
-  surfaceUser: "#ececec",
-  surfacePlan: "#eef6ec",
-  surfaceWarn: "#fff5e6",
-  surfaceInfo: "#eef4ff",
-  footer: "#f7f7f7",
-  diff: "#fafafa",
-  popup: "#ffffff",
-  scrim: "#00000022",
-  border: "#dddddd",
-  divider: "#d8d8d8",
-  control: "transparent",
-  controlHover: "#ebebeb",
-  controlActive: "#e2e2e2",
-  controlActiveStrong: "#cdcdcd",
-  controlInset: "#e7e7e7",
-  controlInsetHover: "#dddddd",
-  composerPanel: "#ffffff",
-  composerBorder: "#0891b2",
-  composerBorderMuted: "#d0d0d0",
-  composerSend: "#60a5fa",
-  composerSendHover: "#3b82f6",
-  composerStop: "#dc2626",
-  composerStopHover: "#ef4444",
-  accent: "#0891b2",
-  cursor: "#a3a3a3",
-  selection: "#dbeafe",
-  selectionActive: "#bfdbfe",
-  text: "#171717",
-  muted: "#666666",
-  subtle: "#8a8a8a",
-  success: "#059669",
-  info: "#2563eb",
-  warning: "#d97706",
-  claude: "#c96d4d",
-  macRed: "#ff5f57",
-  macYellow: "#febc2e",
-  macGreen: "#28c840",
-};
-
-const PALETTE = { ...DARK_PALETTE };
-
-function themedScrollboxStyle(backgroundColor: string) {
+function themedScrollboxStyle(backgroundColor: TuiColor) {
   return {
     backgroundColor,
     rootOptions: {
@@ -551,6 +503,7 @@ function themedScrollboxStyle(backgroundColor: string) {
 
 const APP_VERSION = packageJson.version ?? "0.0.0";
 const THEME_OPTIONS: readonly AppTheme[] = ["system", "light", "dark"];
+const TUI_THEME_OPTIONS = TUI_THEME_IDS;
 const TIMESTAMP_FORMAT_OPTIONS: readonly TimestampFormat[] = ["locale", "12-hour", "24-hour"];
 const TIMESTAMP_FORMAT_LABELS: Record<TimestampFormat, string> = {
   locale: "System default",
@@ -576,42 +529,47 @@ const INSTALL_PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
     binaryDescription: "Leave blank to use claude from your PATH.",
   },
 ] as const;
-function buildMessageMarkdownSyntax(palette: typeof PALETTE) {
+
+function toRendererColor(color: TuiColor): RGBA {
+  return RGBA.fromHex(color);
+}
+
+function buildMessageMarkdownSyntax(palette: TuiPalette) {
   return SyntaxStyle.fromStyles({
-    keyword: { fg: RGBA.fromHex(palette.warning), bold: true },
+    keyword: { fg: toRendererColor(palette.warning), bold: true },
     string: { fg: RGBA.fromHex("#9bd1ff") },
-    comment: { fg: RGBA.fromHex(palette.subtle), italic: true },
+    comment: { fg: toRendererColor(palette.subtle), italic: true },
     number: { fg: RGBA.fromHex("#8cc8ff") },
-    function: { fg: RGBA.fromHex(palette.accent) },
+    function: { fg: toRendererColor(palette.accent) },
     type: { fg: RGBA.fromHex("#f7b267") },
-    operator: { fg: RGBA.fromHex(palette.warning) },
-    variable: { fg: RGBA.fromHex(palette.text) },
+    operator: { fg: toRendererColor(palette.warning) },
+    variable: { fg: toRendererColor(palette.text) },
     property: { fg: RGBA.fromHex("#8cc8ff") },
-    "punctuation.bracket": { fg: RGBA.fromHex(palette.text) },
-    "punctuation.delimiter": { fg: RGBA.fromHex(palette.muted) },
-    "punctuation.special": { fg: RGBA.fromHex(palette.subtle) },
-    "markup.heading": { fg: RGBA.fromHex(palette.text), bold: true },
-    "markup.heading.1": { fg: RGBA.fromHex(palette.text), bold: true, underline: true },
-    "markup.heading.2": { fg: RGBA.fromHex(palette.text), bold: true },
-    "markup.heading.3": { fg: RGBA.fromHex(palette.text), bold: true },
-    "markup.bold": { fg: RGBA.fromHex(palette.text), bold: true },
-    "markup.strong": { fg: RGBA.fromHex(palette.text), bold: true },
-    "markup.italic": { fg: RGBA.fromHex(palette.text), italic: true },
-    "markup.list": { fg: RGBA.fromHex(palette.muted) },
-    "markup.quote": { fg: RGBA.fromHex(palette.muted), italic: true },
-    "markup.raw": { fg: RGBA.fromHex("#9bd1ff"), bg: RGBA.fromHex(palette.surfaceAlt) },
-    "markup.raw.block": { fg: RGBA.fromHex("#9bd1ff"), bg: RGBA.fromHex(palette.surfaceAlt) },
-    "markup.raw.inline": { fg: RGBA.fromHex("#9bd1ff"), bg: RGBA.fromHex(palette.surfaceAlt) },
+    "punctuation.bracket": { fg: toRendererColor(palette.text) },
+    "punctuation.delimiter": { fg: toRendererColor(palette.muted) },
+    "punctuation.special": { fg: toRendererColor(palette.subtle) },
+    "markup.heading": { fg: toRendererColor(palette.text), bold: true },
+    "markup.heading.1": { fg: toRendererColor(palette.text), bold: true, underline: true },
+    "markup.heading.2": { fg: toRendererColor(palette.text), bold: true },
+    "markup.heading.3": { fg: toRendererColor(palette.text), bold: true },
+    "markup.bold": { fg: toRendererColor(palette.text), bold: true },
+    "markup.strong": { fg: toRendererColor(palette.text), bold: true },
+    "markup.italic": { fg: toRendererColor(palette.text), italic: true },
+    "markup.list": { fg: toRendererColor(palette.muted) },
+    "markup.quote": { fg: toRendererColor(palette.muted), italic: true },
+    "markup.raw": { fg: RGBA.fromHex("#9bd1ff"), bg: toRendererColor(palette.surfaceAlt) },
+    "markup.raw.block": { fg: RGBA.fromHex("#9bd1ff"), bg: toRendererColor(palette.surfaceAlt) },
+    "markup.raw.inline": { fg: RGBA.fromHex("#9bd1ff"), bg: toRendererColor(palette.surfaceAlt) },
     "markup.link": { fg: RGBA.fromHex("#7fb7ff"), underline: true },
     "markup.link.label": { fg: RGBA.fromHex("#b7d7ff"), underline: true },
     "markup.link.url": { fg: RGBA.fromHex("#7fb7ff"), underline: true },
-    label: { fg: RGBA.fromHex(palette.success) },
-    conceal: { fg: RGBA.fromHex(palette.subtle) },
-    default: { fg: RGBA.fromHex(palette.text) },
+    label: { fg: toRendererColor(palette.success) },
+    conceal: { fg: toRendererColor(palette.subtle) },
+    default: { fg: toRendererColor(palette.text) },
   });
 }
 
-function buildDiffSyntax(palette: typeof PALETTE) {
+function buildDiffSyntax(palette: TuiPalette) {
   return SyntaxStyle.fromStyles({
     keyword: { fg: RGBA.fromHex("#ff7b72"), bold: true },
     string: { fg: RGBA.fromHex("#a5d6ff") },
@@ -620,7 +578,7 @@ function buildDiffSyntax(palette: typeof PALETTE) {
     function: { fg: RGBA.fromHex("#d2a8ff") },
     type: { fg: RGBA.fromHex("#ffa657") },
     operator: { fg: RGBA.fromHex("#ffb86b") },
-    variable: { fg: RGBA.fromHex(palette.text) },
+    variable: { fg: toRendererColor(palette.text) },
     property: { fg: RGBA.fromHex("#79c0ff") },
     constant: { fg: RGBA.fromHex("#79c0ff") },
     tag: { fg: RGBA.fromHex("#7ee787") },
@@ -628,11 +586,11 @@ function buildDiffSyntax(palette: typeof PALETTE) {
     "punctuation.bracket": { fg: RGBA.fromHex("#c9d1d9") },
     "punctuation.delimiter": { fg: RGBA.fromHex("#c9d1d9") },
     "punctuation.special": { fg: RGBA.fromHex("#8b949e") },
-    default: { fg: RGBA.fromHex(palette.text) },
+    default: { fg: toRendererColor(palette.text) },
   });
 }
 
-function buildCodeBlockSyntax(_palette: typeof PALETTE) {
+function buildCodeBlockSyntax(_palette: TuiPalette) {
   return SyntaxStyle.fromStyles({
     keyword: { fg: RGBA.fromHex("#c9b37e"), bold: true },
     string: { fg: RGBA.fromHex("#9ab37f") },
@@ -822,7 +780,7 @@ function providerPickerIcon(provider: string): string {
   return "󰚩";
 }
 
-function providerColor(provider: ProviderKind | string | null | undefined): string {
+function providerColor(provider: ProviderKind | string | null | undefined): TuiColor {
   return provider === "claudeAgent" ? PALETTE.claude : PALETTE.muted;
 }
 
@@ -1301,17 +1259,9 @@ function mergeChatAttachments<T extends ComposerImageAttachment>(
   return merged;
 }
 
-const ATTACHMENT_PILL_TONES = [
-  { backgroundColor: "#1d2026", textColor: "#3b82f6" },
-  { backgroundColor: "#241b2f", textColor: "#a78bfa" },
-  { backgroundColor: "#2a2417", textColor: "#facc15" },
-  { backgroundColor: "#2a1b1b", textColor: "#f87171" },
-  { backgroundColor: "#1c2721", textColor: "#34d399" },
-  { backgroundColor: "#272019", textColor: "#fb923c" },
-];
-
 function resolveAttachmentPillTone(index: number) {
-  return ATTACHMENT_PILL_TONES[index % ATTACHMENT_PILL_TONES.length] ?? ATTACHMENT_PILL_TONES[0]!;
+  const tones = ACTIVE_TUI_THEME.attachmentPillTones;
+  return tones[index % tones.length] ?? tones[0]!;
 }
 
 function resolveHttpOriginFromWsUrl(rawUrl: string): string | null {
@@ -1485,7 +1435,7 @@ export function MessageMarkdown({
   onCopyCodeBlock,
 }: {
   content: string;
-  color?: string;
+  color?: TuiColor;
   fillWidth?: boolean;
   onCopyCodeBlock?: (value: string) => void;
 }) {
@@ -1567,7 +1517,7 @@ export function MessageMarkdown({
                 width: "auto",
                 minWidth: 0,
                 flexDirection: "column",
-                backgroundColor: "#101010",
+                backgroundColor: ACTIVE_TUI_THEME.codeBlock.background,
                 paddingLeft: 1,
                 paddingRight: 1,
                 paddingTop: 0,
@@ -1575,7 +1525,10 @@ export function MessageMarkdown({
               }}
             >
               {segment.language ? (
-                <text content={segment.language} style={{ fg: "#8a8a8a" }} />
+                <text
+                  content={segment.language}
+                  style={{ fg: ACTIVE_TUI_THEME.codeBlock.language }}
+                />
               ) : null}
               <code
                 content={displayedCode || " "}
@@ -1613,7 +1566,7 @@ export function MessageMarkdown({
                       alignItems: "center",
                     }}
                   >
-                    <text content="󰆏" style={{ fg: "#9a9a9a" }} />
+                    <text content="󰆏" style={{ fg: ACTIVE_TUI_THEME.codeBlock.copyIcon }} />
                   </box>
                 </box>
               ) : null}
@@ -1788,8 +1741,8 @@ function workEntryPrefix(entry: Extract<TimelineEntry, { kind: "work" }>["entry"
   return resolveWorkEntryIcon(entry);
 }
 
-function workEntryAccent(entry: Extract<TimelineEntry, { kind: "work" }>["entry"]): string {
-  if (entry.tone === "error") return "#fda4af";
+function workEntryAccent(entry: Extract<TimelineEntry, { kind: "work" }>["entry"]): TuiColor {
+  if (entry.tone === "error") return ACTIVE_TUI_THEME.colors.workEntryErrorAccent;
   if (entry.requestKind === "command" || entry.command) return PALETTE.text;
   if (entry.requestKind === "file-change" || (entry.changedFiles?.length ?? 0) > 0) {
     return PALETTE.info;
@@ -1802,21 +1755,21 @@ function workEntryAccent(entry: Extract<TimelineEntry, { kind: "work" }>["entry"
 
 type ThreadSidebarStatus = {
   label: ThreadStatusPill["label"];
-  dotColor: string;
+  dotColor: TuiColor;
   pulse: boolean;
 };
 
-function resolveThreadStatusColor(label: ThreadStatusPill["label"]): string {
+function resolveThreadStatusColor(label: ThreadStatusPill["label"]): TuiColor {
   switch (label) {
     case "Pending Approval":
       return PALETTE.warning;
     case "Awaiting Input":
-      return "#818cf8";
+      return ACTIVE_TUI_THEME.status.awaitingInput;
     case "Working":
     case "Connecting":
-      return "#7dd3fc";
+      return ACTIVE_TUI_THEME.status.working;
     case "Plan Ready":
-      return "#a78bfa";
+      return ACTIVE_TUI_THEME.status.planReady;
     case "Completed":
       return PALETTE.success;
   }
@@ -1857,9 +1810,9 @@ function threadStatus(
   };
 }
 
-function resolveThreadStatusDotColor(status: ThreadSidebarStatus, tick: number): string {
+function resolveThreadStatusDotColor(status: ThreadSidebarStatus, tick: number): TuiColor {
   if (!status.pulse) return status.dotColor;
-  return tick % 2 === 0 ? status.dotColor : "#3b82f6";
+  return tick % 2 === 0 ? status.dotColor : ACTIVE_TUI_THEME.status.pulse;
 }
 
 function approvalHint(approval: ReturnType<typeof derivePendingApprovals>[number]): string {
@@ -1954,8 +1907,6 @@ const COMPOSER_TEXTAREA_MAX_HEIGHT = 8;
 const COMPOSER_PATH_SUGGESTION_MAX_ITEMS = 5;
 const SEND_ANIMATION_INTERVAL_MS = 90;
 const SEND_PLACEHOLDER_MIN_DURATION_MS = 650;
-const SEND_DOT_IDLE_COLOR = "#6b7280";
-const SEND_DOT_ACTIVE_COLOR = "#d1d5db";
 const SIDEBAR_STATUS_PULSE_INTERVAL_MS = 260;
 const SIDEBAR_THREAD_TITLE_WIDTH =
   TUI_SIDEBAR_WIDTH -
@@ -2108,12 +2059,15 @@ function WindowDots() {
 
 function renderAnimatedSendDots(
   tick: number,
-): Array<{ key: string; character: string; color: string }> {
+): Array<{ key: string; character: string; color: TuiColor }> {
   const activeDot = tick % 3;
   return Array.from({ length: 3 }, (_, index) => ({
     key: `send-dot-${index}`,
     character: "•",
-    color: index === activeDot ? SEND_DOT_ACTIVE_COLOR : SEND_DOT_IDLE_COLOR,
+    color:
+      index === activeDot
+        ? ACTIVE_TUI_THEME.colors.sendDotActive
+        : ACTIVE_TUI_THEME.colors.sendDotIdle,
   }));
 }
 
@@ -2155,7 +2109,7 @@ function IconButton(props: {
   icon: string;
   active?: boolean;
   accent?: boolean;
-  iconColor?: string;
+  iconColor?: TuiColor;
   width?: number;
   justifyContent?: "center" | "flex-start" | "flex-end";
   onPress: (event?: SidebarMouseEvent) => void;
@@ -2170,7 +2124,11 @@ function IconButton(props: {
       : hovered
         ? PALETTE.controlHover
         : PALETTE.control;
-  const foreground = props.accent ? PALETTE.text : props.active ? PALETTE.text : PALETTE.muted;
+  const foreground = props.accent
+    ? ACTIVE_TUI_THEME.colors.selectedText
+    : props.active
+      ? PALETTE.text
+      : PALETTE.muted;
 
   return (
     <box
@@ -2203,7 +2161,7 @@ function ToolbarButton(props: {
   label?: string | undefined;
   active?: boolean;
   disabled?: boolean;
-  iconColor?: string;
+  iconColor?: TuiColor;
   marginRight?: number;
   compact?: boolean;
   surface?: "default" | "inset";
@@ -2282,7 +2240,7 @@ function TogglePill(props: { checked: boolean; onPress: () => void; disabled?: b
       : hovered
         ? PALETTE.controlHover
         : PALETTE.controlActive;
-  const knobColor = props.disabled ? PALETTE.subtle : "#f5f5f5";
+  const knobColor = props.disabled ? PALETTE.subtle : ACTIVE_TUI_THEME.colors.controlKnob;
   const edgeColor = background;
 
   return (
@@ -2325,7 +2283,7 @@ function SidebarRow(props: {
   selected?: boolean;
   compact?: boolean;
   suppressHighlight?: boolean;
-  activeBackgroundColor?: string;
+  activeBackgroundColor?: TuiColor;
   onPress?: (event: SidebarMouseEvent) => void;
   onSecondaryPress?: (event: SidebarMouseEvent) => void;
   children: React.ReactNode;
@@ -2381,7 +2339,7 @@ function PopupRow(props: {
   label: string;
   active?: boolean;
   disabled?: boolean;
-  iconColor?: string;
+  iconColor?: TuiColor;
   trailingLabel?: string;
   onHover?: () => void;
   onPress: () => void;
@@ -2642,7 +2600,7 @@ function ComposerSendButton(props: {
       : hovered
         ? PALETTE.composerSendHover
         : PALETTE.composerSend;
-  const foreground = props.disabled ? PALETTE.subtle : "#f5f5f5";
+  const foreground = props.disabled ? PALETTE.subtle : ACTIVE_TUI_THEME.colors.primaryButtonText;
 
   return (
     <box
@@ -2676,32 +2634,20 @@ export function App({
   renderer: _renderer,
   interruptRequestToken = 0,
   onRequestExit,
+  initialAppSettings,
+  initialTuiThemeId,
+  initialSystemThemeMode,
+  initialTerminalThemeColors,
 }: {
-  renderer: {
-    destroy: () => void;
-    setBackgroundColor?: (color: string) => void;
-    setCursorColor?: (color: RGBA) => void;
-    setCursorStyle?: (options: {
-      style: "block" | "line" | "underline";
-      blinking?: boolean;
-    }) => void;
-  };
+  renderer: CliRenderer;
   interruptRequestToken?: number;
   onRequestExit?: () => void;
+  initialAppSettings?: AppSettings;
+  initialTuiThemeId?: TuiThemeId;
+  initialSystemThemeMode?: TuiThemeMode | null;
+  initialTerminalThemeColors?: TerminalColors | null;
 }) {
-  const terminalRenderer = _renderer as {
-    capabilities?: {
-      kitty_graphics?: boolean;
-      sixel?: boolean;
-    } | null;
-    resolution?: { width: number; height: number } | null;
-    writeOut?: (chunk: string) => void;
-    on?: (event: string, handler: (...args: unknown[]) => void) => void;
-    off?: (event: string, handler: (...args: unknown[]) => void) => void;
-    console?: TerminalConsole;
-    getSelection?: () => { getSelectedText: () => string } | null;
-    clearSelection?: () => void;
-  };
+  const terminalRenderer = _renderer as unknown as TerminalRenderer;
   const paths = useMemo(() => resolveTuiPaths(), []);
   const logger = useMemo(() => createT1Logger(paths.logPath), [paths.logPath]);
   const [api, setApi] = useState<T1Api | null>(null);
@@ -2798,7 +2744,18 @@ export function App({
   const [locallyVisitedThreads, setLocallyVisitedThreads] = useState<LocalThreadVisitedState>({});
   const [selectedThreadIds, setSelectedThreadIds] = useState<ReadonlySet<string>>(() => new Set());
   const [selectionAnchorThreadId, setSelectionAnchorThreadId] = useState<string | null>(null);
-  const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
+  const [appSettings, setAppSettings] = useState<AppSettings>(() =>
+    normalizeAppSettings({ ...DEFAULT_APP_SETTINGS, ...initialAppSettings }),
+  );
+  const [tuiThemeId, setTuiThemeId] = useState<TuiThemeId>(
+    () => initialTuiThemeId ?? DEFAULT_TUI_THEME_ID,
+  );
+  const [systemThemeMode, setSystemThemeMode] = useState<TuiThemeMode | null>(
+    () => initialSystemThemeMode ?? normalizeRendererThemeMode(_renderer.themeMode),
+  );
+  const [terminalThemeColors, setTerminalThemeColors] = useState<TerminalColors | null>(
+    initialTerminalThemeColors ?? null,
+  );
   const [respondingRequestIds, setRespondingRequestIds] = useState<readonly ApprovalRequestId[]>(
     [],
   );
@@ -2846,13 +2803,21 @@ export function App({
   const updateAppSettings = useCallback((patch: Partial<AppSettings>) => {
     setAppSettings((current) => normalizeAppSettings({ ...current, ...patch }));
   }, []);
-  const resolvedTheme =
-    appSettings.theme === "light" ? "light" : appSettings.theme === "dark" ? "dark" : "dark";
-  const palette = resolvedTheme === "light" ? LIGHT_PALETTE : DARK_PALETTE;
-  Object.assign(PALETTE, palette);
-  MESSAGE_MARKDOWN_SYNTAX = buildMessageMarkdownSyntax(PALETTE);
-  DIFF_SYNTAX = buildDiffSyntax(PALETTE);
-  CODE_BLOCK_SYNTAX = buildCodeBlockSyntax(PALETTE);
+  const tracksSystemThemeMode = shouldTrackSystemThemeMode(appSettings.theme);
+  const usesTerminalPalette = shouldResolveTerminalPalette(tuiThemeId);
+  const listensForRendererThemeChanges = shouldListenForRendererThemeChanges(
+    appSettings.theme,
+    tuiThemeId,
+  );
+  const activeTheme = resolveTuiTheme(appSettings.theme, tuiThemeId, {
+    systemMode: systemThemeMode,
+    terminalColors: terminalThemeColors,
+  });
+  ACTIVE_TUI_THEME = activeTheme;
+  Object.assign(PALETTE, activeTheme.palette);
+  MESSAGE_MARKDOWN_SYNTAX = buildMessageMarkdownSyntax(activeTheme.palette);
+  DIFF_SYNTAX = buildDiffSyntax(activeTheme.palette);
+  CODE_BLOCK_SYNTAX = buildCodeBlockSyntax(activeTheme.palette);
 
   useEffect(() => {
     draftThreadsByProjectIdRef.current = draftThreadsByProjectId;
@@ -2863,13 +2828,49 @@ export function App({
   }, [composerDraftsByThreadId]);
 
   useEffect(() => {
-    _renderer.setBackgroundColor?.(PALETTE.canvas);
-    _renderer.setCursorColor?.(RGBA.fromHex(PALETTE.cursor));
+    _renderer.setBackgroundColor?.(toRendererColor(PALETTE.canvas));
+    _renderer.setCursorColor?.(toRendererColor(PALETTE.cursor));
     _renderer.setCursorStyle?.({
       style: "block",
       blinking: false,
     });
-  }, [_renderer, resolvedTheme]);
+  }, [_renderer, activeTheme.palette.canvas, activeTheme.palette.cursor]);
+
+  useEffect(() => {
+    let disposed = false;
+    const applyRendererThemeState = async (clearPaletteCache = false) => {
+      const nextTerminalColors = usesTerminalPalette
+        ? (await resolveTerminalPalette(_renderer, { clearCache: clearPaletteCache })).colors
+        : null;
+      if (disposed) return;
+      setTerminalThemeColors(nextTerminalColors);
+      setSystemThemeMode(
+        resolveTerminalThemeMode(nextTerminalColors) ??
+          normalizeRendererThemeMode(_renderer.themeMode),
+      );
+    };
+
+    void applyRendererThemeState(false);
+    if (!listensForRendererThemeChanges) {
+      return () => {
+        disposed = true;
+      };
+    }
+
+    const handleThemeMode = (nextMode: unknown) => {
+      const normalizedMode = normalizeRendererThemeMode(nextMode);
+      if (tracksSystemThemeMode && normalizedMode) {
+        setSystemThemeMode(normalizedMode);
+      }
+      void applyRendererThemeState(usesTerminalPalette);
+    };
+
+    _renderer.on?.(CliRenderEvents.THEME_MODE, handleThemeMode);
+    return () => {
+      disposed = true;
+      _renderer.off?.(CliRenderEvents.THEME_MODE, handleThemeMode);
+    };
+  }, [_renderer, listensForRendererThemeChanges, tracksSystemThemeMode, usesTerminalPalette]);
 
   useEffect(() => {
     setTerminalImageSupport(resolveTerminalImageSupport(terminalRenderer));
@@ -2963,6 +2964,7 @@ export function App({
           setMainView(prefs.mainView);
           setFocusArea("settings");
         }
+        setTuiThemeId(normalizeTuiThemeId(prefs.tuiThemeId));
         if (prefs.appSettings) {
           setAppSettings(normalizeAppSettings({ ...DEFAULT_APP_SETTINGS, ...prefs.appSettings }));
           setOpenInstallProviders({
@@ -3161,6 +3163,7 @@ export function App({
       draftInteractionMode,
       diffOpen,
       diffView,
+      ...(tuiThemeId !== DEFAULT_TUI_THEME_ID ? { tuiThemeId } : {}),
       ...(draftModelOptions ? { draftModelOptions } : {}),
       ...(selectedProjectId ? { selectedProjectId } : {}),
       ...(selectedThreadId ? { selectedThreadId } : {}),
@@ -3193,6 +3196,7 @@ export function App({
     prefsReady,
     paths,
     appSettings,
+    tuiThemeId,
     composerDraftsByThreadId,
     expandedProjectIds,
     selectedProjectId,
@@ -3474,6 +3478,7 @@ export function App({
       : appSettings.theme === "light"
         ? "Light"
         : "Dark";
+  const selectedTuiThemeLabel = TUI_THEME_LABELS[tuiThemeId] ?? TUI_THEME_LABELS.default;
   const selectedThreadEnvLabel =
     appSettings.defaultThreadEnvMode === "worktree" ? "New worktree" : "Local";
   const composerEnvMenuItems: ComposerEnvMenuItem[] = ENV_MODE_OPTIONS.map((option) => ({
@@ -3553,6 +3558,16 @@ export function App({
             setOverlayMenu(null);
           },
         }));
+      case "theme-preset":
+        return TUI_THEME_OPTIONS.map((option) => ({
+          id: option,
+          label: TUI_THEME_LABELS[option],
+          selected: tuiThemeId === option,
+          onSelect: () => {
+            setTuiThemeId(option);
+            setOverlayMenu(null);
+          },
+        }));
       case "timestamp-format":
         return TIMESTAMP_FORMAT_OPTIONS.map((option) => ({
           id: option,
@@ -3602,6 +3617,7 @@ export function App({
     gitTextGenerationModelOptions,
     selectedCustomModelProvider,
     settingsSelectKind,
+    tuiThemeId,
     updateAppSettings,
   ]);
   const sidebarSortItems = useMemo<SidebarSortMenuItem[]>(
@@ -3644,6 +3660,7 @@ export function App({
   );
   const changedSettingLabels = [
     ...(appSettings.theme !== DEFAULT_APP_THEME ? ["Theme"] : []),
+    ...(tuiThemeId !== DEFAULT_TUI_THEME_ID ? ["Theme preset"] : []),
     ...(appSettings.timestampFormat !== DEFAULT_TIMESTAMP_FORMAT ? ["Time format"] : []),
     ...(appSettings.sidebarProjectSortOrder !== DEFAULT_SIDEBAR_PROJECT_SORT_ORDER
       ? ["Project sort"]
@@ -5554,6 +5571,7 @@ export function App({
 
   function restoreDefaultSettings() {
     setAppSettings(DEFAULT_APP_SETTINGS);
+    setTuiThemeId(DEFAULT_TUI_THEME_ID);
     setOpenInstallProviders({ codex: false, claudeAgent: false });
     setSelectedCustomModelProvider("codex");
     setCustomModelInputByProvider({ codex: "", claudeAgent: "" });
@@ -7429,13 +7447,15 @@ export function App({
   const settingsSelectTitle =
     settingsSelectKind === "theme"
       ? "Theme"
-      : settingsSelectKind === "timestamp-format"
-        ? "Time format"
-        : settingsSelectKind === "thread-env"
-          ? "New threads"
-          : settingsSelectKind === "custom-model-provider"
-            ? "Custom model provider"
-            : "Text generation model";
+      : settingsSelectKind === "theme-preset"
+        ? "Theme preset"
+        : settingsSelectKind === "timestamp-format"
+          ? "Time format"
+          : settingsSelectKind === "thread-env"
+            ? "New threads"
+            : settingsSelectKind === "custom-model-provider"
+              ? "Custom model provider"
+              : "Text generation model";
   const settingsSelectPopupWidth = Math.max(
     14,
     settingsSelectItems.reduce(
@@ -7929,7 +7949,11 @@ export function App({
                                     SIDEBAR_THREAD_TITLE_WIDTH,
                                   )}
                                   style={{
-                                    fg: isActive || isSelected ? PALETTE.text : PALETTE.muted,
+                                    fg: isSelected
+                                      ? ACTIVE_TUI_THEME.colors.selectedText
+                                      : isActive
+                                        ? PALETTE.text
+                                        : PALETTE.muted,
                                   }}
                                 />
                               </box>
@@ -7944,7 +7968,11 @@ export function App({
                                 <text
                                   content={formatRelativeTime(thread.updatedAt)}
                                   style={{
-                                    fg: isActive || isSelected ? PALETTE.muted : PALETTE.subtle,
+                                    fg: isSelected
+                                      ? ACTIVE_TUI_THEME.colors.selectedText
+                                      : isActive
+                                        ? PALETTE.muted
+                                        : PALETTE.subtle,
                                     flexShrink: 0,
                                   }}
                                 />
@@ -8176,6 +8204,28 @@ export function App({
                                 overlayMenu === "settings-select" && settingsSelectKind === "theme"
                               }
                               onPress={(event) => openSettingsSelectMenu("theme", event)}
+                            />
+                          }
+                        />
+                        <SettingsRow
+                          title="Theme preset"
+                          description="Default uses the built-in palette. Terminal Match derives colors from your terminal palette."
+                          resetAction={
+                            tuiThemeId !== DEFAULT_TUI_THEME_ID ? (
+                              <SettingResetButton
+                                onPress={() => setTuiThemeId(DEFAULT_TUI_THEME_ID)}
+                              />
+                            ) : null
+                          }
+                          control={
+                            <ToolbarButton
+                              label={`${selectedTuiThemeLabel} ▾`}
+                              surface="inset"
+                              active={
+                                overlayMenu === "settings-select" &&
+                                settingsSelectKind === "theme-preset"
+                              }
+                              onPress={(event) => openSettingsSelectMenu("theme-preset", event)}
                             />
                           }
                         />
@@ -8833,14 +8883,14 @@ export function App({
                                 showLineNumbers
                                 wrapMode="none"
                                 {...(file.filetype ? { filetype: file.filetype } : {})}
-                                addedBg="#173124"
-                                removedBg="#3a1f1f"
-                                addedContentBg="#1d3a2b"
-                                removedContentBg="#442525"
+                                addedBg={ACTIVE_TUI_THEME.diffViewer.addedBg}
+                                removedBg={ACTIVE_TUI_THEME.diffViewer.removedBg}
+                                addedContentBg={ACTIVE_TUI_THEME.diffViewer.addedContentBg}
+                                removedContentBg={ACTIVE_TUI_THEME.diffViewer.removedContentBg}
                                 contextBg={PALETTE.main}
                                 lineNumberBg={PALETTE.surface}
-                                addedSignColor="#4ade80"
-                                removedSignColor="#f87171"
+                                addedSignColor={ACTIVE_TUI_THEME.diffViewer.addedSignColor}
+                                removedSignColor={ACTIVE_TUI_THEME.diffViewer.removedSignColor}
                                 style={{
                                   flexGrow: 1,
                                   minHeight: 8,
@@ -10327,7 +10377,9 @@ export function App({
                 }
                 label={item.label}
                 active={index === sidebarContextMenu.selectedIndex}
-                {...(item.destructive ? { iconColor: "#fda4af" } : {})}
+                {...(item.destructive
+                  ? { iconColor: ACTIVE_TUI_THEME.colors.destructiveIcon }
+                  : {})}
                 onHover={() =>
                   setSidebarContextMenu((current) =>
                     current

@@ -8,6 +8,7 @@ import {
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { TuiPaths } from "./config";
+import type { TuiThemeId } from "./theme";
 
 export interface PersistedComposerImageAttachment {
   readonly type: "image";
@@ -40,6 +41,7 @@ export interface PersistedDraftThreadState {
 }
 
 export interface TuiPrefs {
+  readonly tuiThemeId?: TuiThemeId;
   readonly selectedProjectId?: string;
   readonly selectedThreadId?: string;
   readonly expandedProjectIds?: readonly string[];
