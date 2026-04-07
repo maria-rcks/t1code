@@ -14,7 +14,8 @@
   },
   "bin": {
     "t1": "./bin/t1code.js",
-    "t1code": "./bin/t1code.js"
+    "t1code": "./bin/t1code.js",
+    "t1chat": "./bin/t1chat.js"
   },
   "files": [
     "README.md",

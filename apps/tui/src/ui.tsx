@@ -2800,6 +2800,9 @@ export function App({
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const previewAttachmentCacheRef = useRef<Map<string, string>>(new Map());
   const composerDraftsByThreadIdRef = useRef<Readonly<Record<string, ComposerDraftState>>>({});
+
+  const isChatMode = process.env.T1CODE_CHAT_MODE === "1";
+  const [tempChatMode, setTempChatMode] = useState(false);
   const updateAppSettings = useCallback((patch: Partial<AppSettings>) => {
     setAppSettings((current) => normalizeAppSettings({ ...current, ...patch }));
   }, []);
@@ -8120,7 +8123,7 @@ export function App({
                 marginRight={1}
                 onPress={() => restoreDefaultSettings()}
               />
-            ) : mainView === "keybindings" ? null : (
+            ) : mainView === "keybindings" ? null : isChatMode ? null : (
               <>
                 <ToolbarButton
                   icon={gitActionBusy ? "󱦟" : "󰊢"}
@@ -8936,7 +8939,94 @@ export function App({
                     paddingRight: 1,
                   }}
                 >
-                  {!activeProject && !activeThread && !activeDraftThread ? (
+                  {isChatMode && (!activeThread || activeThread.messages.length === 0) ? (
+                    <box
+                      style={{
+                        flexGrow: 1,
+                        flexDirection: "column",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        padding: 2,
+                      }}
+                    >
+                      <box style={{ flexDirection: "row", marginBottom: 2 }}>
+                        {tempChatMode ? (
+                          <box style={{ flexDirection: "row", alignItems: "center" }}>
+                            <text content="󰔟" style={{ fg: PALETTE.text, marginRight: 1 }} />
+                            <text content="Temporary chat" style={{ fg: PALETTE.text, bold: true }} />
+                          </box>
+                        ) : (
+                          <text content="How can I help you today?" style={{ fg: PALETTE.text, bold: true }} />
+                        )}
+                      </box>
+
+                      <box style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", marginBottom: 2 }}>
+                        {[
+                          { icon: "✨", label: "Create" },
+                          { icon: "📰", label: "Explore" },
+                          { icon: "💻", label: "Code" },
+                          { icon: "🎓", label: "Learn" },
+                        ].map((item) => (
+                          <box
+                            key={item.label}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              syncComposerValueRefSoon();
+                              setComposer(`${item.label} `);
+                              setTimeout(() => composerRef.current?.focus(), 0);
+                            }}
+                            style={{
+                              backgroundColor: PALETTE.surfaceAlt,
+                              paddingLeft: 2,
+                              paddingRight: 2,
+                              paddingTop: 0,
+                              paddingBottom: 0,
+                              marginRight: 1,
+                              marginBottom: 1,
+                              flexDirection: "row",
+                              alignItems: "center",
+                              border: true,
+                              borderStyle: "rounded",
+                              borderColor: PALETTE.border,
+                            }}
+                          >
+                            <text content={item.icon} style={{ marginRight: 1 }} />
+                            <text content={item.label} style={{ fg: PALETTE.text }} />
+                          </box>
+                        ))}
+                      </box>
+
+                      <box style={{ flexDirection: "column", width: "100%", maxWidth: 64 }}>
+                        {[
+                          "How does AI work?",
+                          "Are black holes real?",
+                          'How many Rs are in the word "strawberry"?',
+                          "What is the meaning of life?",
+                        ].map((q) => (
+                          <box
+                            key={q}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              syncComposerValueRefSoon();
+                              setComposer(q);
+                              setTimeout(() => composerRef.current?.focus(), 0);
+                            }}
+                            style={{
+                              border: ["top"],
+                              borderColor: PALETTE.border,
+                              paddingTop: 1,
+                              paddingBottom: 1,
+                              width: "100%",
+                            }}
+                          >
+                            <text content={q} style={{ fg: PALETTE.muted }} />
+                          </box>
+                        ))}
+                      </box>
+                    </box>
+                  ) : !activeProject && !activeThread && !activeDraftThread ? (
                     <box
                       style={{
                         backgroundColor: PALETTE.surface,
@@ -9696,6 +9786,17 @@ export function App({
                       alignItems: "center",
                     }}
                   >
+                    {isChatMode ? (
+                      <box style={{ marginRight: 1 }}>
+                        <ToolbarButton
+                          icon="󰔟"
+                          label={responsiveLayout.showComposerModeLabels ? "Temp chat" : undefined}
+                          active={tempChatMode}
+                          compact={!responsiveLayout.showComposerModeLabels}
+                          onPress={() => setTempChatMode((prev) => !prev)}
+                        />
+                      </box>
+                    ) : null}
                     {activePendingApproval ? (
                       <>
                         <box style={{ flexGrow: 1 }} />
@@ -9852,7 +9953,7 @@ export function App({
                       </>
                     )}
                   </box>
-                  {activeProjectId && isGitRepo ? (
+                  {activeProjectId && isGitRepo && !isChatMode ? (
                     <box
                       style={{
                         position: "absolute",
