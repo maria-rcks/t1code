@@ -7147,7 +7147,7 @@ export function App({
             ? activeDraftThread
               ? "Start a new thread with a prompt"
               : "Ask for follow-up changes or attach images"
-            : COMPOSER_PLACEHOLDER;
+            : isChatMode ? "Type your message here..." : COMPOSER_PLACEHOLDER;
   const composerPathTrigger = detectTrailingComposerPathTrigger(composer);
   const showPathSuggestions =
     composerIsFocused &&
@@ -7785,8 +7785,8 @@ export function App({
               paddingRight: 2,
             }}
           >
-            <box style={{ flexDirection: "row", alignItems: "center" }}>
-              {responsiveLayout.showWindowDots ? <WindowDots /> : null}
+            <box style={{ flexDirection: "row", alignItems: "center", justifyContent: isChatMode ? "center" : "flex-start", flexGrow: isChatMode ? 1 : 0 }}>
+              {responsiveLayout.showWindowDots && !isChatMode ? <WindowDots /> : null}
               <text
                 content={responsiveLayout.sidebarTitle}
                 style={{
