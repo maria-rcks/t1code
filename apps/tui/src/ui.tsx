@@ -1315,6 +1315,41 @@ function AttachmentPill({
   );
 }
 
+function ChatCategoryButton(props: {
+  icon: string;
+  label: string;
+  onPress: () => void;
+}) {
+  const [hoveredCategory, setHoveredCategory] = useState(false);
+  return (
+    <box
+      onMouseOver={() => setHoveredCategory(true)}
+      onMouseOut={() => setHoveredCategory(false)}
+      onMouseDown={props.onPress}
+      style={{
+        backgroundColor: hoveredCategory ? RGBA.fromHex("#a23b67") : PALETTE.surfaceAlt,
+        paddingLeft: 2,
+        paddingRight: 2,
+        paddingTop: 0,
+        paddingBottom: 0,
+        marginRight: 1,
+        marginBottom: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        border: true,
+        borderStyle: "rounded",
+        borderColor: hoveredCategory ? RGBA.fromHex("#a23b67") : PALETTE.border,
+      }}
+    >
+      <text content={props.icon} style={{ marginRight: 1 }} />
+      <text
+        content={props.label}
+        style={{ fg: hoveredCategory ? RGBA.fromHex("#ffffff") : PALETTE.text }}
+      />
+    </box>
+  );
+}
+
 function PathSuggestionRow(props: {
   entry: ProjectEntry;
   active?: boolean;
@@ -8952,8 +8987,8 @@ export function App({
                       <box style={{ flexDirection: "row", marginBottom: 2 }}>
                         {tempChatMode ? (
                           <box style={{ flexDirection: "row", alignItems: "center" }}>
-                            <text content="󰔟" style={{ fg: PALETTE.text, marginRight: 1 }} />
-                            <text content="Temporary chat" style={{ fg: PALETTE.text, bold: true }} />
+                            <text content="󰔟" style={{ fg: RGBA.fromHex("#a23b67"), marginRight: 1 }} />
+                            <text content="Temporary chat" style={{ fg: RGBA.fromHex("#a23b67"), bold: true }} />
                           </box>
                         ) : (
                           <text content="How can I help you today?" style={{ fg: PALETTE.text, bold: true }} />
@@ -8967,33 +9002,16 @@ export function App({
                           { icon: "💻", label: "Code" },
                           { icon: "🎓", label: "Learn" },
                         ].map((item) => (
-                          <box
+                          <ChatCategoryButton
                             key={item.label}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
+                            icon={item.icon}
+                            label={item.label}
+                            onPress={() => {
                               syncComposerValueRefSoon();
                               setComposer(`${item.label} `);
                               setTimeout(() => composerRef.current?.focus(), 0);
                             }}
-                            style={{
-                              backgroundColor: PALETTE.surfaceAlt,
-                              paddingLeft: 2,
-                              paddingRight: 2,
-                              paddingTop: 0,
-                              paddingBottom: 0,
-                              marginRight: 1,
-                              marginBottom: 1,
-                              flexDirection: "row",
-                              alignItems: "center",
-                              border: true,
-                              borderStyle: "rounded",
-                              borderColor: PALETTE.border,
-                            }}
-                          >
-                            <text content={item.icon} style={{ marginRight: 1 }} />
-                            <text content={item.label} style={{ fg: PALETTE.text }} />
-                          </box>
+                          />
                         ))}
                       </box>
 
