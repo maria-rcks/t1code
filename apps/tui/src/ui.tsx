@@ -2839,7 +2839,7 @@ export function App({
   const previewAttachmentCacheRef = useRef<Map<string, string>>(new Map());
   const composerDraftsByThreadIdRef = useRef<Readonly<Record<string, ComposerDraftState>>>({});
 
-  const isChatMode = process.env.T1CODE_CHAT_MODE === "1";
+  const [isChatMode, setIsChatMode] = useState(process.env.T1CODE_CHAT_MODE === "1");
   const [tempChatMode, setTempChatMode] = useState(false);
   const [sidebarSearchQuery, setSidebarSearchQuery] = useState("");
   const [chatProfiles, setChatProfiles] = useState<import("./profiles").Profile[]>([
@@ -8636,6 +8636,17 @@ export function App({
                   {mainView === "settings" ? (
                     <>
                       <SettingsSection title="General">
+                        <SettingsRow
+                          title="Mode"
+                          description="Switch between T1 Code (coding) and T1 Chat (conversation) modes."
+                          control={
+                            <ToolbarButton
+                              label={isChatMode ? "T1 Chat" : "T1 Code"}
+                              surface="inset"
+                              onPress={() => setIsChatMode((v) => !v)}
+                            />
+                          }
+                        />
                         <SettingsRow
                           title="Theme"
                           description="Choose how T3 Code looks across the app."

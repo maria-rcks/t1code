@@ -37,6 +37,10 @@ bun dev:tui
 
 ## t1chat (chat mode)
 
+<div align="center">
+<img src="./assets/repo/t1chat-preview.png" alt="t1chat terminal UI screenshot" width="1000" />
+</div>
+
 t1chat is a chat-focused mode that transforms the TUI into a conversational interface inspired by [T3 Chat](https://t3.chat). It features a pink/magenta/lavender theme, a flat thread list grouped by time, and a streamlined UI without code-specific tools.
 
 ### What changes in chat mode
