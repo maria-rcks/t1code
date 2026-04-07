@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { KEYBINDING_GUIDE_SECTIONS, isCtrlC, shouldClearComposerOnCtrlC } from "./keyboardBehavior";
+import {
+  isCtrlC,
+  resolveKeybindingGuideSections,
+  shouldClearComposerOnCtrlC,
+} from "./keyboardBehavior";
 
 describe("keyboardBehavior", () => {
   it("detects ctrl-c", () => {
@@ -46,10 +50,9 @@ describe("keyboardBehavior", () => {
   });
 
   it("documents the updated quit flow", () => {
-    const globalSection = KEYBINDING_GUIDE_SECTIONS.find((section) => section.title === "Global");
-    const composerSection = KEYBINDING_GUIDE_SECTIONS.find(
-      (section) => section.title === "Composer",
-    );
+    const sections = resolveKeybindingGuideSections(false);
+    const globalSection = sections.find((section) => section.title === "Global");
+    const composerSection = sections.find((section) => section.title === "Composer");
 
     expect(globalSection?.items).toContainEqual(
       expect.objectContaining({
@@ -73,6 +76,25 @@ describe("keyboardBehavior", () => {
       expect.objectContaining({
         shortcut: "Ctrl+C",
         action: "Clear the current draft",
+      }),
+    );
+  });
+
+  it("switches displayed fallback shortcuts for windows terminal sessions", () => {
+    const sections = resolveKeybindingGuideSections(true);
+    const projectsSection = sections.find((section) => section.title === "Projects and Threads");
+    const composerSection = sections.find((section) => section.title === "Composer");
+
+    expect(projectsSection?.items).toContainEqual(
+      expect.objectContaining({
+        shortcut: "Ctrl+T",
+        action: "Toggle the terminal pane for the active thread",
+      }),
+    );
+    expect(composerSection?.items).toContainEqual(
+      expect.objectContaining({
+        shortcut: "Ctrl+O",
+        action: "Insert a newline",
       }),
     );
   });

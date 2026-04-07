@@ -24,14 +24,13 @@ function readBooleanEnv(value: string | undefined): boolean | undefined {
   return undefined;
 }
 
-function terminalIdentity(env: NodeJS.ProcessEnv = process.env): string {
-  return [env.TERM_PROGRAM, env.TERM, env.COLORTERM].filter(Boolean).join(" ").toLowerCase();
-}
-
 function shouldUseKittyKeyboard(env: NodeJS.ProcessEnv = process.env): boolean {
   const forced = readBooleanEnv(env.T1CODE_USE_KITTY_KEYBOARD);
   if (forced !== undefined) return forced;
-  const identity = terminalIdentity(env);
+  const identity = [env.TERM_PROGRAM, env.TERM, env.COLORTERM]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
   return ["ghostty", "kitty", "wezterm", "iterm"].some((token) => identity.includes(token));
 }
 

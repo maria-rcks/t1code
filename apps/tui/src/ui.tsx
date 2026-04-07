@@ -20,6 +20,7 @@ import {
 } from "@opentui/core";
 import {
   ApprovalRequestId,
+  DEFAULT_TERMINAL_ID,
   type ClaudeCodeEffort,
   type CodexReasoningEffort,
   DEFAULT_GIT_TEXT_GENERATION_MODEL,
@@ -40,6 +41,7 @@ import {
   type ProviderModelOptions,
   type RuntimeMode,
   type ServerConfig,
+  type TerminalSessionSnapshot,
 } from "@t3tools/contracts";
 import {
   DEFAULT_APP_SETTINGS,
@@ -123,7 +125,13 @@ import {
   type ResolvedComposerImageAttachment,
 } from "./composerSubmit";
 import { saveClipboardImageToFile } from "./clipboardImage";
-import { KEYBINDING_GUIDE_SECTIONS, isCtrlC, shouldClearComposerOnCtrlC } from "./keyboardBehavior";
+import {
+  isCtrlC,
+  resolveKeybindingGuideSections,
+  resolveTerminalToggleShortcutLabel,
+  shouldClearComposerOnCtrlC,
+  shouldPreferTerminalShortcutFallbacks,
+} from "./keyboardBehavior";
 import { createT1Logger } from "./log";
 import { resolveUserMessageBubbleWidth } from "./messageLayout";
 import {
@@ -144,6 +152,7 @@ import {
 import { resolveTuiResponsiveLayout, TUI_SIDEBAR_WIDTH } from "./responsiveLayout";
 import { resolveAttachedServerConnection, startServerSupervisor } from "./serverSupervisor";
 import { createCoalescedRefreshRunner } from "./snapshotRefresh";
+import { normalizeTerminalHistoryForDisplay } from "./terminalHistory";
 import {
   cacheRemoteAttachmentToFile,
   clearTerminalImagePreview,
@@ -202,6 +211,7 @@ type FocusArea =
   | "composer"
   | "timeline"
   | "diff"
+  | "terminal"
   | "settings";
 type MainView = "thread" | "settings" | "keybindings";
 type ThreadEnvMode = "local" | "worktree";
@@ -290,6 +300,18 @@ type ImagePreviewState = {
   status: "loading" | "ready" | "error";
   error: string | null;
 };
+type ThreadTerminalPaneState = {
+  readonly open: boolean;
+  readonly cwd: string | null;
+  readonly status: "idle" | "starting" | "running" | "exited" | "error";
+  readonly terminalId: string;
+  readonly history: string;
+  readonly pid: number | null;
+  readonly exitCode: number | null;
+  readonly exitSignal: number | null;
+  readonly hasRunningSubprocess: boolean;
+  readonly lastError: string | null;
+};
 
 const SIDEBAR_PROJECT_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
   updated_at: "Last user message",
@@ -302,6 +324,9 @@ const SIDEBAR_THREAD_SORT_LABELS: Record<SidebarThreadSortOrder, string> = {
   created_at: "Created at",
 };
 const SELECTION_COPY_TOAST_MESSAGE = "Copied to clipboard";
+const TERMINAL_PANE_HEIGHT = 12;
+const TERMINAL_HISTORY_CHAR_LIMIT = 200_000;
+const TERMINAL_BODY_HEIGHT = TERMINAL_PANE_HEIGHT - 2;
 
 type ComposerPathTrigger = {
   query: string;
@@ -1985,6 +2010,157 @@ function estimateWrappedLineCount(text: string, width: number): number {
   }, 0);
 }
 
+function createDefaultThreadTerminalPaneState(): ThreadTerminalPaneState {
+  return {
+    open: false,
+    cwd: null,
+    status: "idle",
+    terminalId: DEFAULT_TERMINAL_ID,
+    history: "",
+    pid: null,
+    exitCode: null,
+    exitSignal: null,
+    hasRunningSubprocess: false,
+    lastError: null,
+  };
+}
+
+function trimTerminalHistory(history: string): string {
+  if (history.length <= TERMINAL_HISTORY_CHAR_LIMIT) {
+    return history;
+  }
+  return history.slice(history.length - TERMINAL_HISTORY_CHAR_LIMIT);
+}
+
+function appendTerminalHistory(history: string, nextChunk: string): string {
+  return trimTerminalHistory(`${history}${nextChunk}`);
+}
+
+function appendTerminalSystemMessage(history: string, message: string): string {
+  return appendTerminalHistory(history, `\n[terminal] ${message}\n`);
+}
+
+function terminalPaneStateFromSnapshot(
+  snapshot: TerminalSessionSnapshot,
+  current: ThreadTerminalPaneState,
+): ThreadTerminalPaneState {
+  return {
+    ...current,
+    cwd: snapshot.cwd,
+    status: snapshot.status,
+    history: trimTerminalHistory(snapshot.history),
+    pid: snapshot.pid,
+    exitCode: snapshot.exitCode,
+    exitSignal: snapshot.exitSignal,
+    lastError: null,
+  };
+}
+
+function isCtrlJ(input: {
+  readonly keyName: string | undefined;
+  readonly ctrl: boolean | undefined;
+  readonly meta?: boolean | undefined;
+  readonly shift?: boolean | undefined;
+  readonly source?: string | undefined;
+  readonly sequence?: string | undefined;
+  readonly raw?: string | undefined;
+  readonly code?: string | undefined;
+  readonly baseCode?: number | undefined;
+}): boolean {
+  return (
+    (input.ctrl === true &&
+      (input.keyName === "j" ||
+        input.keyName === "linefeed" ||
+        input.keyName === "return" ||
+        input.sequence === "\n" ||
+        input.raw === "\n" ||
+        input.code === "KeyJ" ||
+        input.baseCode === 106)) ||
+    input.sequence === "\x1b[106;5u" ||
+    input.raw === "\x1b[106;5u"
+  );
+}
+
+function isCtrlT(input: {
+  readonly keyName: string | undefined;
+  readonly ctrl: boolean | undefined;
+}): boolean {
+  return input.ctrl === true && input.keyName === "t";
+}
+
+function isTerminalToggleShortcut(input: {
+  readonly keyName: string | undefined;
+  readonly ctrl: boolean | undefined;
+  readonly meta?: boolean | undefined;
+  readonly shift?: boolean | undefined;
+  readonly source?: string | undefined;
+  readonly sequence?: string | undefined;
+  readonly raw?: string | undefined;
+  readonly code?: string | undefined;
+  readonly baseCode?: number | undefined;
+}): boolean {
+  return isCtrlJ(input) || isCtrlT(input);
+}
+
+function isCtrlO(input: {
+  readonly keyName: string | undefined;
+  readonly ctrl: boolean | undefined;
+  readonly meta?: boolean | undefined;
+  readonly shift?: boolean | undefined;
+}): boolean {
+  return (
+    input.ctrl === true && input.meta !== true && input.shift !== true && input.keyName === "o"
+  );
+}
+
+function terminalInputFromKey(key: {
+  readonly name: string;
+  readonly ctrl?: boolean;
+  readonly meta?: boolean;
+  readonly shift?: boolean;
+  readonly sequence?: string;
+}): string | null {
+  switch (key.name) {
+    case "return":
+    case "enter":
+    case "kpenter":
+    case "linefeed":
+      return "\r";
+    case "tab":
+      return key.shift ? "\u001b[Z" : "\t";
+    case "backspace":
+      return "\u007f";
+    case "delete":
+      return "\u001b[3~";
+    case "escape":
+      return "\u001b";
+    case "up":
+      return "\u001b[A";
+    case "down":
+      return "\u001b[B";
+    case "right":
+      return "\u001b[C";
+    case "left":
+      return "\u001b[D";
+    case "home":
+      return "\u001b[H";
+    case "end":
+      return "\u001b[F";
+    case "pageup":
+      return "\u001b[5~";
+    case "pagedown":
+      return "\u001b[6~";
+    default:
+      break;
+  }
+
+  if (key.ctrl && !key.meta && /^[a-z]$/.test(key.name)) {
+    return String.fromCharCode(key.name.charCodeAt(0) - 96);
+  }
+
+  return key.sequence && key.sequence.length > 0 ? key.sequence : null;
+}
+
 function estimateComposerTextareaHeight(input: {
   text: string;
   placeholder: string;
@@ -2648,6 +2824,14 @@ export function App({
   initialTerminalThemeColors?: TerminalColors | null;
 }) {
   const terminalRenderer = _renderer as unknown as TerminalRenderer;
+  const preferTerminalShortcutFallbacks = shouldPreferTerminalShortcutFallbacks();
+  const keybindingGuideSections = useMemo(
+    () => resolveKeybindingGuideSections(preferTerminalShortcutFallbacks),
+    [preferTerminalShortcutFallbacks],
+  );
+  const terminalToggleShortcutLabel = resolveTerminalToggleShortcutLabel(
+    preferTerminalShortcutFallbacks,
+  );
   const paths = useMemo(() => resolveTuiPaths(), []);
   const logger = useMemo(() => createT1Logger(paths.logPath), [paths.logPath]);
   const [api, setApi] = useState<T1Api | null>(null);
@@ -2707,6 +2891,9 @@ export function App({
   const [draftInteractionMode, setDraftInteractionMode] = useState<"default" | "plan">("default");
   const [focusArea, setFocusArea] = useState<FocusArea>("composer");
   const [diffOpen, setDiffOpen] = useState(false);
+  const [threadTerminalPanes, setThreadTerminalPanes] = useState<
+    Readonly<Record<string, ThreadTerminalPaneState>>
+  >({});
   const [sidebarCollapsedPreference, setSidebarCollapsedPreference] = useState(false);
   const [sidebarOverlayOpen, setSidebarOverlayOpen] = useState(false);
   const [diffView, setDiffView] = useState<"unified" | "split">("unified");
@@ -3293,6 +3480,26 @@ export function App({
   );
   const gitCwd = activeWorktreePath ?? activeProjectCwd ?? null;
   const composerSearchCwd = activeWorktreePath ?? activeProjectCwd ?? null;
+  const activeThreadTerminalPane = activeThreadId
+    ? (threadTerminalPanes[activeThreadId] ?? createDefaultThreadTerminalPaneState())
+    : createDefaultThreadTerminalPaneState();
+  const terminalPaneOpen =
+    mainView === "thread" && Boolean(activeThreadId) && activeThreadTerminalPane.open;
+  const activeTerminalDisplayEntries = useMemo(() => {
+    const displayText = normalizeTerminalHistoryForDisplay(activeThreadTerminalPane.history);
+    if (displayText.length === 0) {
+      return [];
+    }
+    let offset = 0;
+    return displayText.split("\n").map((line) => {
+      const entry = {
+        key: `terminal-line-${offset}`,
+        line,
+      };
+      offset += line.length + 1;
+      return entry;
+    });
+  }, [activeThreadTerminalPane.history]);
   const workEntries = activeThread
     ? deriveWorkLogEntries(activeThread.activities, activeThread.latestTurn?.turnId ?? undefined)
     : [];
@@ -3375,6 +3582,7 @@ export function App({
   const showFullDiffView = mainView === "thread" && diffOpen;
   const mainPanelColumns =
     totalColumns - responsiveLayout.sidebarWidth - (responsiveLayout.showSidebar ? 1 : 0);
+  const terminalPaneCols = Math.max(20, Math.min(400, mainPanelColumns - 4));
   const diffFiles = useMemo(() => parseDiffFiles(diffText), [diffText]);
   const userMessageBubbleWidth = resolveUserMessageBubbleWidth(mainPanelColumns);
   const customModelsByProvider = useMemo(
@@ -3917,6 +4125,157 @@ export function App({
     setLocallyUnreadThreadIds((current) => pruneLocallyUnreadThreadIds(current, liveThreadIds));
     setLocallyVisitedThreads((current) => pruneLocalThreadVisitedState(current, liveThreadIds));
   }, [allThreads]);
+
+  useEffect(() => {
+    if (!api) return;
+    return api.terminal.onEvent((event) => {
+      updateThreadTerminalPaneState(event.threadId, (current) => {
+        switch (event.type) {
+          case "started":
+          case "restarted":
+            return {
+              ...terminalPaneStateFromSnapshot(event.snapshot, current),
+              open: current.open,
+              hasRunningSubprocess: false,
+            };
+          case "output":
+            return {
+              ...current,
+              status: current.status === "idle" ? "running" : current.status,
+              history: appendTerminalHistory(current.history, event.data),
+            };
+          case "activity":
+            return {
+              ...current,
+              hasRunningSubprocess: event.hasRunningSubprocess,
+            };
+          case "cleared":
+            return {
+              ...current,
+              history: "",
+            };
+          case "error":
+            return {
+              ...current,
+              status: "error",
+              lastError: event.message,
+              history: appendTerminalSystemMessage(current.history, event.message),
+            };
+          case "exited": {
+            const details = [
+              typeof event.exitCode === "number" ? `code ${event.exitCode}` : null,
+              typeof event.exitSignal === "number" ? `signal ${event.exitSignal}` : null,
+            ]
+              .filter((value): value is string => value !== null)
+              .join(", ");
+            return {
+              ...current,
+              status: "exited",
+              exitCode: event.exitCode,
+              exitSignal: event.exitSignal,
+              hasRunningSubprocess: false,
+              history: appendTerminalSystemMessage(
+                current.history,
+                details.length > 0 ? `Process exited (${details})` : "Process exited",
+              ),
+            };
+          }
+        }
+      });
+    });
+  }, [api]);
+
+  useEffect(() => {
+    if (!activeThreadId || !gitCwd || !activeThreadTerminalPane.open || !api) {
+      return;
+    }
+    if (
+      activeThreadTerminalPane.cwd === gitCwd &&
+      (activeThreadTerminalPane.status === "running" ||
+        activeThreadTerminalPane.status === "starting" ||
+        activeThreadTerminalPane.history.length > 0)
+    ) {
+      return;
+    }
+    void (async () => {
+      updateThreadTerminalPaneState(activeThreadId, (current) => ({
+        ...current,
+        open: true,
+        cwd: gitCwd,
+        status: current.status === "running" ? current.status : "starting",
+        lastError: null,
+      }));
+      try {
+        const pane = threadTerminalPanes[activeThreadId] ?? createDefaultThreadTerminalPaneState();
+        const snapshot = await api.terminal.open({
+          threadId: activeThreadId,
+          terminalId: pane.terminalId,
+          cwd: gitCwd,
+          cols: terminalPaneCols,
+          rows: TERMINAL_BODY_HEIGHT,
+        });
+        updateThreadTerminalPaneState(activeThreadId, (current) => ({
+          ...terminalPaneStateFromSnapshot(snapshot, current),
+          open: true,
+        }));
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unable to open the terminal session.";
+        updateThreadTerminalPaneState(activeThreadId, (current) => ({
+          ...current,
+          open: true,
+          cwd: gitCwd,
+          status: "error",
+          lastError: message,
+          history: appendTerminalSystemMessage(current.history, message),
+        }));
+      }
+    })();
+  }, [
+    activeThreadId,
+    activeThreadTerminalPane.cwd,
+    activeThreadTerminalPane.history.length,
+    activeThreadTerminalPane.open,
+    activeThreadTerminalPane.status,
+    api,
+    gitCwd,
+    terminalPaneCols,
+    threadTerminalPanes,
+  ]);
+
+  useEffect(() => {
+    if (!api || !activeThreadId || !terminalPaneOpen) {
+      return;
+    }
+    if (
+      activeThreadTerminalPane.status !== "running" &&
+      activeThreadTerminalPane.status !== "starting"
+    ) {
+      return;
+    }
+    void api.terminal
+      .resize({
+        threadId: activeThreadId,
+        terminalId: activeThreadTerminalPane.terminalId,
+        cols: terminalPaneCols,
+        rows: TERMINAL_BODY_HEIGHT,
+      })
+      .catch(() => undefined);
+  }, [
+    activeThreadId,
+    activeThreadTerminalPane.status,
+    activeThreadTerminalPane.terminalId,
+    api,
+    terminalPaneCols,
+    terminalPaneOpen,
+  ]);
+
+  useEffect(() => {
+    if (focusArea !== "terminal" || terminalPaneOpen) {
+      return;
+    }
+    setFocusArea(activeThreadId ? "timeline" : activeProjectId ? "threads" : "projects");
+  }, [activeProjectId, activeThreadId, focusArea, terminalPaneOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -5100,6 +5459,31 @@ export function App({
       closeSidebarContextMenu();
       return;
     }
+    if (
+      isTerminalToggleShortcut({
+        keyName: key.name,
+        ctrl: key.ctrl,
+        meta: key.meta,
+        shift: key.shift,
+        source: key.source,
+        sequence: key.sequence,
+        raw: key.raw,
+        code: key.code,
+        baseCode: key.baseCode,
+      })
+    ) {
+      key.preventDefault();
+      toggleTerminalPane();
+      return;
+    }
+    if (focusArea === "terminal") {
+      const terminalInput = terminalInputFromKey(key);
+      if (terminalInput && activeThreadId) {
+        key.preventDefault();
+        void writeToThreadTerminal(activeThreadId, terminalInput);
+      }
+      return;
+    }
     if (ctrlCPressed && !hasDismissibleLayer && !isComposerFocused()) {
       key.preventDefault();
       requestAppExit();
@@ -5449,6 +5833,9 @@ export function App({
       openDraftThread(activeProjectId);
     }
     if (key.name === "tab") {
+      const threadFocusOrder: FocusArea[] = terminalPaneOpen
+        ? ["timeline", "controls", "composer", "terminal", "diff"]
+        : ["timeline", "controls", "composer", "diff"];
       const order: FocusArea[] =
         mainView !== "thread"
           ? responsiveLayout.showSidebar
@@ -5459,8 +5846,8 @@ export function App({
               ? ["projects", "threads", "diff"]
               : ["diff"]
             : responsiveLayout.showSidebar
-              ? ["projects", "threads", "timeline", "controls", "composer", "diff"]
-              : ["timeline", "controls", "composer", "diff"];
+              ? ["projects", "threads", ...threadFocusOrder]
+              : threadFocusOrder;
       const index = order.indexOf(focusArea);
       setFocusArea(
         order[(index + 1) % order.length] ??
@@ -5482,6 +5869,113 @@ export function App({
     if (!api) return;
     logger.log("command.dispatch", { type: command.type });
     await api.orchestration.dispatchCommand(command);
+  }
+
+  function updateThreadTerminalPaneState(
+    threadId: string,
+    updater: (current: ThreadTerminalPaneState) => ThreadTerminalPaneState,
+  ) {
+    setThreadTerminalPanes((current) => {
+      const previous = current[threadId] ?? createDefaultThreadTerminalPaneState();
+      const next = updater(previous);
+      if (next === previous) {
+        return current;
+      }
+      return {
+        ...current,
+        [threadId]: next,
+      };
+    });
+  }
+
+  async function writeToThreadTerminal(threadId: string, data: string) {
+    if (!api) return;
+    const pane = threadTerminalPanes[threadId] ?? createDefaultThreadTerminalPaneState();
+    try {
+      await api.terminal.write({
+        threadId,
+        terminalId: pane.terminalId,
+        data,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to write to the terminal session.";
+      updateThreadTerminalPaneState(threadId, (current) => ({
+        ...current,
+        status: "error",
+        lastError: message,
+        history: appendTerminalSystemMessage(current.history, message),
+      }));
+      setStatus("Terminal unavailable");
+    }
+  }
+
+  async function openThreadTerminalPane(threadId: string, cwd: string, focusTerminal: boolean) {
+    if (!api) return;
+    closeSidebarContextMenu();
+    closeOverlayMenu();
+    updateThreadTerminalPaneState(threadId, (current) => ({
+      ...current,
+      open: true,
+      cwd,
+      status: current.status === "running" ? current.status : "starting",
+      lastError: null,
+    }));
+    if (focusTerminal) {
+      setFocusArea("terminal");
+    }
+    setStatus("Opening terminal...");
+    try {
+      const pane = threadTerminalPanes[threadId] ?? createDefaultThreadTerminalPaneState();
+      const snapshot = await api.terminal.open({
+        threadId,
+        terminalId: pane.terminalId,
+        cwd,
+        cols: terminalPaneCols,
+        rows: TERMINAL_BODY_HEIGHT,
+      });
+      updateThreadTerminalPaneState(threadId, (current) => ({
+        ...terminalPaneStateFromSnapshot(snapshot, current),
+        open: true,
+      }));
+      setStatus("Terminal ready");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to open the terminal session.";
+      updateThreadTerminalPaneState(threadId, (current) => ({
+        ...current,
+        open: true,
+        cwd,
+        status: "error",
+        lastError: message,
+        history: appendTerminalSystemMessage(current.history, message),
+      }));
+      setStatus("Terminal unavailable");
+    }
+  }
+
+  function closeThreadTerminalPane(threadId: string) {
+    closeSidebarContextMenu();
+    closeOverlayMenu();
+    updateThreadTerminalPaneState(threadId, (current) => ({
+      ...current,
+      open: false,
+    }));
+    if (focusArea === "terminal") {
+      setFocusArea(activeThreadId ? "timeline" : activeProjectId ? "threads" : "projects");
+    }
+    setStatus(activeThreadId ? "Timeline" : activeProjectId ? "Threads" : "Projects");
+  }
+
+  function toggleTerminalPane() {
+    if (mainView !== "thread" || !activeThreadId || !gitCwd) {
+      return;
+    }
+    if (activeThreadTerminalPane.open) {
+      closeThreadTerminalPane(activeThreadId);
+      return;
+    }
+    void openThreadTerminalPane(activeThreadId, gitCwd, true);
   }
 
   function openMainView(view: Exclude<MainView, "thread">) {
@@ -8139,6 +8633,16 @@ export function App({
                   onPress={toggleGitActionsMenu}
                 />
                 <ToolbarButton
+                  icon="󰆍"
+                  active={terminalPaneOpen}
+                  disabled={!activeThreadId || !gitCwd}
+                  chrome="bare"
+                  width={4}
+                  justifyContent="center"
+                  iconColor={focusArea === "terminal" ? PALETTE.text : PALETTE.muted}
+                  onPress={toggleTerminalPane}
+                />
+                <ToolbarButton
                   icon=""
                   active={diffOpen}
                   disabled={!isGitRepo}
@@ -8759,7 +9263,7 @@ export function App({
                           style={{ fg: PALETTE.subtle }}
                         />
                       </box>
-                      {KEYBINDING_GUIDE_SECTIONS.map((section) => (
+                      {keybindingGuideSections.map((section) => (
                         <SettingsSection key={section.title} title={section.title}>
                           {section.items.map((item) => (
                             <SettingsRow
@@ -9547,6 +10051,36 @@ export function App({
                             clearComposerDraft();
                             return;
                           }
+                          if (
+                            isTerminalToggleShortcut({
+                              keyName: key.name,
+                              ctrl: key.ctrl,
+                              meta: key.meta,
+                              shift: key.shift,
+                              source: key.source,
+                              sequence: key.sequence,
+                              raw: key.raw,
+                              code: key.code,
+                              baseCode: key.baseCode,
+                            })
+                          ) {
+                            key.preventDefault();
+                            toggleTerminalPane();
+                            return;
+                          }
+                          if (
+                            isCtrlO({
+                              keyName: key.name,
+                              ctrl: key.ctrl,
+                              meta: key.meta,
+                              shift: key.shift,
+                            })
+                          ) {
+                            key.preventDefault();
+                            composerRef.current?.newLine();
+                            syncComposerFromTextarea();
+                            return;
+                          }
                           if (isCtrlC({ keyName: key.name, ctrl: key.ctrl })) {
                             key.preventDefault();
                             requestAppExit();
@@ -9640,6 +10174,8 @@ export function App({
                                 void interruptActiveTurn();
                               }
                             } else {
+                              key.preventDefault();
+                              composerRef.current?.newLine();
                               syncComposerFromTextarea();
                             }
                             return;
@@ -9911,6 +10447,91 @@ export function App({
                 </box>
               </>
             )}
+            {terminalPaneOpen ? (
+              <box
+                style={{
+                  marginTop: 1,
+                  backgroundColor: PALETTE.surface,
+                  border: ["top"],
+                  borderColor: focusArea === "terminal" ? PALETTE.composerBorder : PALETTE.divider,
+                  flexDirection: "column",
+                  flexShrink: 0,
+                  height: TERMINAL_PANE_HEIGHT,
+                  minHeight: TERMINAL_PANE_HEIGHT,
+                }}
+              >
+                <box
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation?.();
+                    setFocusArea("terminal");
+                  }}
+                  style={{
+                    height: 1,
+                    paddingLeft: 1,
+                    paddingRight: 1,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                >
+                  <text content="󰆍" style={{ fg: PALETTE.muted, marginRight: 1 }} />
+                  <text content="Terminal" style={{ fg: PALETTE.text, marginRight: 1 }} />
+                  {activeThreadTerminalPane.cwd ? (
+                    <text
+                      content={activeThreadTerminalPane.cwd}
+                      truncate
+                      style={{ fg: PALETTE.subtle, flexGrow: 1 }}
+                    />
+                  ) : (
+                    <box style={{ flexGrow: 1 }} />
+                  )}
+                  <text
+                    content={
+                      activeThreadTerminalPane.status === "running" &&
+                      activeThreadTerminalPane.hasRunningSubprocess
+                        ? "busy"
+                        : activeThreadTerminalPane.status
+                    }
+                    style={{ fg: PALETTE.subtle, marginRight: 1 }}
+                  />
+                  <text content={terminalToggleShortcutLabel} style={{ fg: PALETTE.subtle }} />
+                </box>
+                <scrollbox
+                  focused={focusArea === "terminal"}
+                  stickyScroll
+                  stickyStart="bottom"
+                  onMouseDown={() => {
+                    setFocusArea("terminal");
+                  }}
+                  onMouseScroll={() => {
+                    setFocusArea("terminal");
+                  }}
+                  style={{
+                    flexGrow: 1,
+                    flexShrink: 1,
+                    minHeight: 0,
+                    paddingLeft: 1,
+                    paddingRight: 1,
+                    ...themedScrollboxStyle(PALETTE.surface),
+                  }}
+                >
+                  {activeTerminalDisplayEntries.length > 0 ? (
+                    activeTerminalDisplayEntries.map((entry) => (
+                      <text
+                        key={entry.key}
+                        content={entry.line.length > 0 ? entry.line : " "}
+                        style={{ fg: PALETTE.text }}
+                      />
+                    ))
+                  ) : (
+                    <text
+                      content="Terminal ready. Click here and type to interact with the shell."
+                      style={{ fg: PALETTE.subtle }}
+                    />
+                  )}
+                </scrollbox>
+              </box>
+            ) : null}
           </box>
         </box>
       </box>
