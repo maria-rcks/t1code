@@ -3408,6 +3408,7 @@ export function App({
   const responsiveLayout = resolveTuiResponsiveLayout({
     viewportColumns: totalColumns,
     sidebarCollapsedPreference,
+    isChatMode,
   });
   const showSidebarOverlay = !responsiveLayout.showSidebar && sidebarOverlayOpen;
   const showFullDiffView = mainView === "thread" && diffOpen;
@@ -4091,7 +4092,7 @@ export function App({
 
   const requestAppExit = useCallback(() => {
     setConfirmDialog({
-      title: "Quit T1 Code?",
+      title: isChatMode ? "Quit T1 Chat?" : "Quit T1 Code?",
       body: "Press Ctrl-C again or Enter to quit. Press Escape to stay in the session.",
       confirmLabel: "Quit",
       escapeBehavior: "cancel",
@@ -7760,7 +7761,7 @@ export function App({
           style={{
             width: responsiveLayout.showSidebar ? responsiveLayout.sidebarWidth : TUI_SIDEBAR_WIDTH,
             backgroundColor: sidebarBg,
-            border: ["right"],
+            border: isChatMode ? [] : ["right"],
             borderColor: PALETTE.divider,
             flexDirection: "column",
             ...(showSidebarOverlay
@@ -7795,6 +7796,43 @@ export function App({
             </box>
           </box>
 
+          {isChatMode ? (
+            <box style={{ paddingLeft: 1, paddingRight: 1, flexDirection: "column" }}>
+              <box
+                onMouseDown={() => {
+                  if (activeProjectId) {
+                    openDraftThread(activeProjectId);
+                  }
+                }}
+                style={{
+                  backgroundColor: RGBA.fromHex("#a23b67"),
+                  height: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  paddingTop: 0,
+                  paddingBottom: 0,
+                }}
+              >
+                <text content="New Chat" style={{ fg: "#ffffff" }} />
+              </box>
+              <box
+                style={{
+                  height: 1,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginTop: 1,
+                  paddingBottom: 0,
+                }}
+              >
+                <text content="󰍉" style={{ fg: PALETTE.subtle, marginRight: 1 }} />
+                <text content="Search your threads..." style={{ fg: PALETTE.subtle }} />
+              </box>
+              <box style={{ height: 1, marginTop: 0 }}>
+                <text content={"─".repeat(TUI_SIDEBAR_WIDTH - 4)} style={{ fg: PALETTE.divider }} />
+              </box>
+            </box>
+          ) : null}
+
           <scrollbox
             focused={focusArea === "projects" || focusArea === "threads"}
             style={{
@@ -7804,7 +7842,7 @@ export function App({
               paddingRight: 1,
             }}
           >
-            <SectionLabel
+            {isChatMode ? null : <SectionLabel
               label="PROJECTS"
               actions={[
                 {
@@ -7821,9 +7859,9 @@ export function App({
                   },
                 },
               ]}
-            />
+            />}
 
-            {projects.length === 0 ? (
+            {!isChatMode && projects.length === 0 ? (
               <box
                 style={{
                   paddingLeft: 2,
@@ -7839,7 +7877,116 @@ export function App({
               </box>
             ) : null}
 
-            {sortedProjects.map((project) => {
+            {isChatMode ? (() => {
+              const allThreads = sortedProjects.flatMap((project) => {
+                const projectThreads = threadsByProject.get(project.id) ?? [];
+                return projectThreads.map((thread) => ({ ...thread, projectId: project.id }));
+              });
+              allThreads.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+              const now = new Date();
+              const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const yesterdayStart = new Date(todayStart.getTime() - 86400000);
+              const weekStart = new Date(todayStart.getTime() - 7 * 86400000);
+              const monthStart = new Date(todayStart.getTime() - 30 * 86400000);
+
+              type TimeGroup = { label: string; threads: typeof allThreads };
+              const groups: TimeGroup[] = [
+                { label: "Today", threads: [] },
+                { label: "Yesterday", threads: [] },
+                { label: "Last 7 Days", threads: [] },
+                { label: "Last 30 Days", threads: [] },
+                { label: "Older", threads: [] },
+              ];
+
+              for (const thread of allThreads) {
+                const date = new Date(thread.updatedAt);
+                if (date >= todayStart) groups[0]!.threads.push(thread);
+                else if (date >= yesterdayStart) groups[1]!.threads.push(thread);
+                else if (date >= weekStart) groups[2]!.threads.push(thread);
+                else if (date >= monthStart) groups[3]!.threads.push(thread);
+                else groups[4]!.threads.push(thread);
+              }
+
+              return groups.filter((g) => g.threads.length > 0).map((group) => (
+                <box key={group.label} style={{ flexDirection: "column" }}>
+                  <SectionLabel label={group.label} actions={[]} />
+                  {group.threads.map((thread) => {
+                    const isActive = thread.id === activeThreadId;
+                    const isSelected = selectedThreadIds.has(thread.id);
+                    const status = threadStatus(thread, {
+                      forceUnread: locallyUnreadThreadIds.has(thread.id),
+                      locallyVisitedAt: locallyVisitedThreads[thread.id],
+                    });
+                    return (
+                      <SidebarRow
+                        key={thread.id}
+                        active={isActive}
+                        selected={isSelected}
+                        activeBackgroundColor={PALETTE.controlActiveStrong}
+                        compact
+                        onPress={(event) => {
+                          closeSidebarContextMenu();
+                          handleThreadClick(
+                            event,
+                            thread.projectId,
+                            thread.id,
+                            allThreads.map((t) => t.id),
+                          );
+                        }}
+                        onSecondaryPress={(event) => {
+                          openThreadContextMenu(thread.projectId, thread.id, event);
+                        }}
+                      >
+                        <box
+                          style={{
+                            width: 1,
+                            marginRight: 1,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {status ? (
+                            <text
+                              content="●"
+                              style={{
+                                fg: resolveThreadStatusDotColor(status, sidebarPulseTick),
+                                flexShrink: 0,
+                              }}
+                            />
+                          ) : null}
+                        </box>
+                        <box
+                          style={{
+                            width: SIDEBAR_THREAD_TITLE_WIDTH,
+                            flexShrink: 0,
+                            overflow: "hidden",
+                            height: 1,
+                          }}
+                        >
+                          <text
+                            content={truncateTitleForDisplay(
+                              thread.title,
+                              SIDEBAR_THREAD_TITLE_WIDTH,
+                            )}
+                            style={{
+                              fg: isSelected
+                                ? ACTIVE_TUI_THEME.colors.selectedText
+                                : isActive
+                                  ? PALETTE.text
+                                  : PALETTE.muted,
+                            }}
+                          />
+                        </box>
+                      </SidebarRow>
+                    );
+                  })}
+                </box>
+              ));
+            })() : null}
+
+            {!isChatMode ? sortedProjects.map((project) => {
               const projectThreads = threadsByProject.get(project.id) ?? [];
               const orderedProjectThreadIds = projectThreads.map((thread) => thread.id);
               const isProjectExpanded = expandedProjectIds.has(project.id);
@@ -8034,7 +8181,7 @@ export function App({
                   ) : null}
                 </box>
               );
-            })}
+            }) : null}
           </scrollbox>
 
           <box
@@ -8100,14 +8247,24 @@ export function App({
           backgroundColor: PALETTE.main,
         }}
       >
+        {isChatMode && responsiveLayout.showSidebar ? (
+          <box style={{ height: 1, flexDirection: "row", backgroundColor: sidebarBg }}>
+            <text content="╭" style={{ fg: PALETTE.divider }} />
+            <text
+              content={"─".repeat(Math.max(0, (process.stdout.columns ?? 160) - responsiveLayout.sidebarWidth - 2))}
+              style={{ fg: PALETTE.divider }}
+            />
+            <text content="╮" style={{ fg: PALETTE.divider }} />
+          </box>
+        ) : null}
         <box
           style={{
-            height: 3,
+            height: isChatMode && responsiveLayout.showSidebar ? 2 : 3,
             flexDirection: "row",
             alignItems: "center",
             paddingLeft: responsiveLayout.showSidebarToggle ? 1 : 2,
             paddingRight: 0,
-            paddingTop: 1,
+            paddingTop: isChatMode && responsiveLayout.showSidebar ? 0 : 1,
             paddingBottom: 1,
             backgroundColor: PALETTE.main,
             border: ["bottom"],
@@ -8988,10 +9145,10 @@ export function App({
                         {tempChatMode ? (
                           <box style={{ flexDirection: "row", alignItems: "center" }}>
                             <text content="󰔟" style={{ fg: RGBA.fromHex("#a23b67"), marginRight: 1 }} />
-                            <text content="Temporary chat" style={{ fg: RGBA.fromHex("#a23b67"), bold: true }} />
+                            <text content="Temporary chat" style={{ fg: RGBA.fromHex("#a23b67") }} />
                           </box>
                         ) : (
-                          <text content="How can I help you today?" style={{ fg: PALETTE.text, bold: true }} />
+                          <text content="How can I help you today?" style={{ fg: PALETTE.text }} />
                         )}
                       </box>
 

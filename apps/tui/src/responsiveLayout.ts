@@ -27,6 +27,7 @@ export type TuiResponsiveLayout = Readonly<{
 export function resolveTuiResponsiveLayout(input: {
   viewportColumns: number;
   sidebarCollapsedPreference: boolean;
+  isChatMode?: boolean;
 }): TuiResponsiveLayout {
   const openSidebarMainPanelColumns = input.viewportColumns - TUI_SIDEBAR_WIDTH - 1;
   const showSidebarToggle =
@@ -53,7 +54,7 @@ export function resolveTuiResponsiveLayout(input: {
     // should track sidebar visibility rather than the overall terminal width.
     showWindowDots: showSidebar,
     showSidebarAlphaBadge: showSidebar,
-    sidebarTitle: showSidebar ? "T1 Code" : "T1",
+    sidebarTitle: showSidebar ? (input.isChatMode ? "T1 Chat" : "T1 Code") : "T1",
     showHeaderProjectBadge: input.viewportColumns >= 144,
     showComposerModeLabels,
     showComposerModelLabel,
