@@ -1341,7 +1341,7 @@ function ChatCategoryButton(props: {
         borderColor: hoveredCategory ? RGBA.fromHex("#a23b67") : PALETTE.border,
       }}
     >
-      <text content={props.icon} style={{ marginRight: 1 }} />
+      <text content={props.icon} style={{ fg: hoveredCategory ? RGBA.fromHex("#ffffff") : PALETTE.text, marginRight: 1 }} />
       <text
         content={props.label}
         style={{ fg: hoveredCategory ? RGBA.fromHex("#ffffff") : PALETTE.text }}
@@ -8442,7 +8442,7 @@ export function App({
               paddingLeft: 2,
               paddingRight: 2,
               paddingTop: 1,
-              paddingBottom: 1,
+              paddingBottom: isChatMode ? 0 : 1,
               minHeight: 0,
             }}
           >
@@ -9220,9 +9220,11 @@ export function App({
                       style={{
                         flexGrow: 1,
                         flexDirection: "column",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        padding: 2,
+                        justifyContent: "flex-start",
+                        alignItems: "flex-start",
+                        paddingLeft: 2,
+                        paddingRight: 2,
+                        paddingTop: 4,
                       }}
                     >
                       <box style={{ flexDirection: "row", marginBottom: 2 }}>
@@ -9232,16 +9234,16 @@ export function App({
                             <text content="Temporary chat" style={{ fg: RGBA.fromHex("#a23b67") }} />
                           </box>
                         ) : (
-                          <text content="How can I help you today?" style={{ fg: PALETTE.text }} />
+                          <text content="How can I help you?" style={{ fg: PALETTE.text }} />
                         )}
                       </box>
 
-                      <box style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", marginBottom: 2 }}>
+                      <box style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-start", marginBottom: 2 }}>
                         {[
-                          { icon: "✨", label: "Create" },
-                          { icon: "📰", label: "Explore" },
-                          { icon: "💻", label: "Code" },
-                          { icon: "🎓", label: "Learn" },
+                          { icon: "󰛕", label: "Create" },
+                          { icon: "󰎕", label: "Explore" },
+                          { icon: "󰅪", label: "Code" },
+                          { icon: "󰑴", label: "Learn" },
                         ].map((item) => (
                           <ChatCategoryButton
                             key={item.label}
@@ -9256,13 +9258,13 @@ export function App({
                         ))}
                       </box>
 
-                      <box style={{ flexDirection: "column", width: "100%", maxWidth: 64 }}>
+                      <box style={{ flexDirection: "column", width: "100%", alignItems: "flex-start" }}>
                         {[
                           "How does AI work?",
                           "Are black holes real?",
                           'How many Rs are in the word "strawberry"?',
                           "What is the meaning of life?",
-                        ].map((q) => (
+                        ].map((q, i) => (
                           <box
                             key={q}
                             onMouseDown={(e) => {
@@ -9273,10 +9275,12 @@ export function App({
                               setTimeout(() => composerRef.current?.focus(), 0);
                             }}
                             style={{
-                              border: ["top"],
-                              borderColor: PALETTE.border,
-                              paddingTop: 1,
-                              paddingBottom: 1,
+                              border: i > 0 ? ["top"] : [],
+                              borderColor: PALETTE.divider,
+                              paddingTop: 0,
+                              paddingBottom: 0,
+                              height: 2,
+                              alignItems: "center",
                               width: "100%",
                             }}
                           >
@@ -9716,7 +9720,7 @@ export function App({
                     position: "relative",
                     zIndex: 20,
                     backgroundColor: PALETTE.composerPanel,
-                    border: true,
+                    border: isChatMode ? ["top", "left", "right"] : true,
                     borderStyle: "rounded",
                     borderColor: activePendingProgress
                       ? focusArea === "composer"
@@ -9726,7 +9730,7 @@ export function App({
                         ? PALETTE.composerBorder
                         : PALETTE.composerBorderMuted,
                     paddingTop: activePendingProgress ? 0 : 1,
-                    paddingBottom: isChatMode ? 0 : 1,
+                    paddingBottom: 1,
                     paddingLeft: 1,
                     paddingRight: 1,
                     flexDirection: "column",
@@ -9750,7 +9754,7 @@ export function App({
 
                   <box
                     style={{
-                      marginBottom: activePendingProgress ? 0 : 1,
+                      marginBottom: activePendingProgress ? 0 : isChatMode ? 0 : 1,
                       height: activePendingProgress ? "auto" : composerTextareaHeight,
                       minHeight: activePendingProgress
                         ? COMPOSER_PENDING_TEXTAREA_MIN_HEIGHT
