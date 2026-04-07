@@ -16,12 +16,14 @@ export interface TerminalColors {
 export type TuiColor = string;
 
 export const TERMINAL_MATCH_THEME_ID = "terminal-match" as const;
-export const TUI_THEME_IDS = ["default", TERMINAL_MATCH_THEME_ID] as const;
+export const BORING_THEME_ID = "boring" as const;
+export const TUI_THEME_IDS = ["default", TERMINAL_MATCH_THEME_ID, BORING_THEME_ID] as const;
 export type TuiThemeId = (typeof TUI_THEME_IDS)[number];
 export const DEFAULT_TUI_THEME_ID = "default" as const;
 export const TUI_THEME_LABELS: Record<TuiThemeId, string> = {
   default: "Default",
   [TERMINAL_MATCH_THEME_ID]: "Terminal Match",
+  [BORING_THEME_ID]: "Boring",
 };
 
 export type TuiThemeMode = "light" | "dark";
@@ -205,6 +207,84 @@ const DEFAULT_LIGHT_THEME: TuiTheme = {
     ...DEFAULT_DARK_THEME.colors,
     selectedText: "#171717",
   },
+};
+
+const BORING_DARK_PALETTE: TuiPalette = {
+  ...DEFAULT_DARK_PALETTE,
+  canvas: "#151515",
+  sidebar: "#1a1a1a",
+  main: "#151515",
+  surface: "#1e1e1e",
+  surfaceAlt: "#222222",
+  input: "#1a1a1a",
+  surfaceUser: "#1e1e1e",
+  footer: "#151515",
+  popup: "#1e1e1e",
+  border: "#282828",
+  divider: "#282828",
+  controlHover: "#252525",
+  controlActive: "#2a2a2a",
+  controlActiveStrong: "#222222",
+  controlInset: "#1a1a1a",
+  controlInsetHover: "#202020",
+  composerPanel: "#1e1e1e",
+  composerBorder: "#763750",
+  composerBorderMuted: "#333333",
+  composerSend: "#763750",
+  composerSendHover: "#ad5273",
+  accent: "#ad5273",
+  selection: "#3a2030",
+  selectionActive: "#4a2840",
+  text: "#e6e6e6",
+  muted: "#b0b0b0",
+  subtle: "#707070",
+  info: "#888888",
+};
+
+const BORING_LIGHT_PALETTE: TuiPalette = {
+  ...DEFAULT_LIGHT_PALETTE,
+  canvas: "#ebebeb",
+  sidebar: "#e0e0e0",
+  main: "#f0f0f0",
+  surface: "#ffffff",
+  surfaceAlt: "#e8e8e8",
+  input: "#ffffff",
+  surfaceUser: "#e0e0e0",
+  footer: "#f0f0f0",
+  popup: "#ffffff",
+  border: "#d4d4d4",
+  divider: "#d0d0d0",
+  controlHover: "#e0e0e0",
+  controlActive: "#d4d4d4",
+  controlActiveStrong: "#c8c8c8",
+  controlInset: "#e0e0e0",
+  controlInsetHover: "#d8d8d8",
+  composerPanel: "#ffffff",
+  composerBorder: "#ad5273",
+  composerBorderMuted: "#c9c9c9",
+  composerSend: "#ad5273",
+  composerSendHover: "#8a3f5c",
+  accent: "#ad5273",
+  selection: "#e8d0dd",
+  selectionActive: "#ddbece",
+  text: "#171717",
+  muted: "#616161",
+  subtle: "#8a8a8a",
+  info: "#666666",
+};
+
+const BORING_DARK_THEME: TuiTheme = {
+  ...DEFAULT_DARK_THEME,
+  id: BORING_THEME_ID,
+  mode: "dark",
+  palette: BORING_DARK_PALETTE,
+};
+
+const BORING_LIGHT_THEME: TuiTheme = {
+  ...DEFAULT_LIGHT_THEME,
+  id: BORING_THEME_ID,
+  mode: "light",
+  palette: BORING_LIGHT_PALETTE,
 };
 
 export const DEFAULT_TUI_THEME = DEFAULT_DARK_THEME;
@@ -714,6 +794,8 @@ export function resolveTuiThemeMode(
 const THEME_CACHE = new Map<string, TuiTheme>([
   [`${DEFAULT_TUI_THEME_ID}:dark`, DEFAULT_DARK_THEME],
   [`${DEFAULT_TUI_THEME_ID}:light`, DEFAULT_LIGHT_THEME],
+  [`${BORING_THEME_ID}:dark`, BORING_DARK_THEME],
+  [`${BORING_THEME_ID}:light`, BORING_LIGHT_THEME],
 ]);
 
 export function resolveTuiTheme(

@@ -195,6 +195,7 @@ import {
 } from "./threadSelection";
 import { resolveWorkEntryIcon } from "./workEntryIcons";
 import { createProfile, PROFILE_ICON_OPTIONS } from "./profiles";
+import { BORING_THEME_ID } from "./theme";
 
 type FocusArea =
   | "projects"
@@ -214,7 +215,8 @@ type OverlayMenu =
   | "sidebar-sort"
   | "git-actions"
   | "composer-env"
-  | "composer-branch";
+  | "composer-branch"
+  | "chat-settings";
 type SettingsSelectKind =
   | "theme"
   | "theme-preset"
@@ -8247,7 +8249,7 @@ export function App({
                     bottom: 4,
                     left: 0,
                     right: 0,
-                    backgroundColor: RGBA.fromHex("#eaa7cb"),
+                    backgroundColor: PALETTE.surfaceAlt,
                     border: ["top"],
                     borderColor: PALETTE.divider,
                     flexDirection: "column",
@@ -8267,11 +8269,11 @@ export function App({
                       style={{
                         border: true,
                         borderStyle: "rounded",
-                        borderColor: profileIconFocused ? RGBA.fromHex("#db2777") : PALETTE.border,
+                        borderColor: profileIconFocused ? PALETTE.composerBorder : PALETTE.border,
                         paddingLeft: 1,
                         paddingRight: 1,
                         marginRight: 1,
-                        backgroundColor: RGBA.fromHex("#eaa7cb"),
+                        backgroundColor: PALETTE.surfaceAlt,
                         justifyContent: "center",
                         alignItems: "center",
                       }}
@@ -8283,7 +8285,7 @@ export function App({
                     </box>
                     <box
                       onMouseDown={() => { setProfileNameFocused(true); setProfileIconFocused(false); }}
-                      style={{ flexGrow: 1, border: true, borderStyle: "rounded", borderColor: profileNameFocused ? RGBA.fromHex("#db2777") : PALETTE.border, backgroundColor: RGBA.fromHex("#eaa7cb"), justifyContent: "center", paddingLeft: 1 }}
+                      style={{ flexGrow: 1, border: true, borderStyle: "rounded", borderColor: profileNameFocused ? PALETTE.composerBorder : PALETTE.border, backgroundColor: PALETTE.surfaceAlt, justifyContent: "center", paddingLeft: 1 }}
                     >
                       <input
                         value={newProfileName}
@@ -8295,10 +8297,10 @@ export function App({
                         }}
                         style={{
                           flexGrow: 1,
-                          backgroundColor: RGBA.fromHex("#eaa7cb"),
+                          backgroundColor: PALETTE.surfaceAlt,
                           textColor: PALETTE.text,
                           focusedTextColor: PALETTE.text,
-                          focusedBackgroundColor: RGBA.fromHex("#eaa7cb"),
+                          focusedBackgroundColor: PALETTE.surfaceAlt,
                         }}
                       />
                     </box>
@@ -8318,7 +8320,7 @@ export function App({
                       }
                     }}
                     style={{
-                      backgroundColor: RGBA.fromHex(newProfileName.trim() ? "#e33f86" : "#f19dc5"),
+                      backgroundColor: newProfileName.trim() ? PALETTE.composerSend : PALETTE.controlActive,
                       height: 1,
                       justifyContent: "center",
                       alignItems: "center",
@@ -8465,9 +8467,10 @@ export function App({
                   chrome="bare"
                   width={4}
                   justifyContent="flex-end"
-                  iconColor={PALETTE.muted}
+                  iconColor={overlayMenu === "chat-settings" ? PALETTE.text : PALETTE.muted}
+                  active={overlayMenu === "chat-settings"}
                   onPress={() => {
-                    openMainView("settings");
+                    setOverlayMenu((current) => current === "chat-settings" ? null : "chat-settings");
                   }}
                 />
               </box>
@@ -11023,6 +11026,100 @@ export function App({
               content="Press Enter to save or Escape to cancel."
               style={{ fg: PALETTE.subtle, marginTop: 1 }}
             />
+          </box>
+        </box>
+      ) : null}
+
+      {overlayMenu === "chat-settings" ? (
+        <box
+          style={{
+            position: "absolute",
+            top: 4,
+            right: 1,
+            width: 28,
+            backgroundColor: PALETTE.popup,
+            border: true,
+            borderStyle: "rounded",
+            borderColor: PALETTE.border,
+            paddingTop: 0,
+            paddingBottom: 0,
+            paddingLeft: 1,
+            paddingRight: 1,
+            zIndex: 200,
+            flexDirection: "column",
+          }}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation?.();
+          }}
+        >
+          <box style={{ height: 1, flexDirection: "row", alignItems: "center" }}>
+            <text content="Theme" style={{ fg: PALETTE.text, marginRight: 1 }} />
+            <box
+              onMouseDown={() => {
+                updateAppSettings({ theme: "light" });
+                setOverlayMenu(null);
+              }}
+              style={{
+                paddingLeft: 1,
+                paddingRight: 1,
+                backgroundColor: appSettings.theme === "light" ? PALETTE.controlActive : "transparent",
+              }}
+            >
+              <text content="󰖙" style={{ fg: appSettings.theme === "light" ? PALETTE.text : PALETTE.muted }} />
+            </box>
+            <box
+              onMouseDown={() => {
+                updateAppSettings({ theme: "system" });
+                setOverlayMenu(null);
+              }}
+              style={{
+                paddingLeft: 1,
+                paddingRight: 1,
+                backgroundColor: appSettings.theme === "system" || !appSettings.theme ? PALETTE.controlActive : "transparent",
+              }}
+            >
+              <text content="󰍹" style={{ fg: appSettings.theme === "system" || !appSettings.theme ? PALETTE.text : PALETTE.muted }} />
+            </box>
+            <box
+              onMouseDown={() => {
+                updateAppSettings({ theme: "dark" });
+                setOverlayMenu(null);
+              }}
+              style={{
+                paddingLeft: 1,
+                paddingRight: 1,
+                backgroundColor: appSettings.theme === "dark" ? PALETTE.controlActive : "transparent",
+              }}
+            >
+              <text content="󰖔" style={{ fg: appSettings.theme === "dark" ? PALETTE.text : PALETTE.muted }} />
+            </box>
+          </box>
+          <box
+            onMouseDown={() => {
+              setTuiThemeId((current) => current === BORING_THEME_ID ? "default" : BORING_THEME_ID);
+            }}
+            style={{ height: 1, flexDirection: "row", alignItems: "center" }}
+          >
+            <text content="󰏘" style={{ fg: PALETTE.muted, marginRight: 1 }} />
+            <text content="Boring Mode" style={{ fg: PALETTE.text, flexGrow: 1 }} />
+            <text
+              content={tuiThemeId === BORING_THEME_ID ? "●" : "○"}
+              style={{ fg: tuiThemeId === BORING_THEME_ID ? PALETTE.accent : PALETTE.subtle }}
+            />
+          </box>
+          <box style={{ height: 1 }}>
+            <text content={"─".repeat(26)} style={{ fg: PALETTE.divider }} />
+          </box>
+          <box
+            onMouseDown={() => {
+              openMainView("settings");
+              setOverlayMenu(null);
+            }}
+            style={{ height: 1, flexDirection: "row", alignItems: "center" }}
+          >
+            <text content="󰒓" style={{ fg: PALETTE.muted, marginRight: 1 }} />
+            <text content="Settings" style={{ fg: PALETTE.text }} />
           </box>
         </box>
       ) : null}
