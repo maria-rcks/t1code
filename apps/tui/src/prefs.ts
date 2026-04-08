@@ -1,4 +1,4 @@
-import type { AppSettings } from "@t3tools/client-core";
+import type { AppSettings, ThreadTerminalState } from "@t3tools/client-core";
 import {
   type ProjectEntry,
   type ProviderKind,
@@ -57,6 +57,7 @@ export interface TuiPrefs {
   readonly draftInteractionMode?: "default" | "plan";
   readonly diffOpen?: boolean;
   readonly diffView?: "unified" | "split";
+  readonly terminalStateByThreadId?: Readonly<Record<string, ThreadTerminalState>>;
   readonly appSettings?: AppSettings;
 }
 
