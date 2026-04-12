@@ -127,6 +127,39 @@ export function formatElapsed(startIso: string, endIso: string | undefined): str
 
 type LatestTurnTiming = Pick<OrchestrationLatestTurn, "turnId" | "startedAt" | "completedAt">;
 type SessionActivityState = Pick<ThreadSession, "orchestrationStatus" | "activeTurnId">;
+type ThreadSessionActivityLike = {
+  status?: ThreadSession["status"] | string | null | undefined;
+  orchestrationStatus?: ThreadSession["orchestrationStatus"] | string | null | undefined;
+  activeTurnId?: TurnId | string | null | undefined;
+};
+
+function resolveSessionActivityStatus(session: ThreadSessionActivityLike | null): string | null {
+  return session?.orchestrationStatus ?? session?.status ?? null;
+}
+
+export function isThreadSessionActivelyWorking(session: ThreadSessionActivityLike | null): boolean {
+  if (!session) {
+    return false;
+  }
+
+  const sessionStatus = resolveSessionActivityStatus(session);
+  if (sessionStatus === "starting" || sessionStatus === "connecting") {
+    return true;
+  }
+
+  if (sessionStatus === "running") {
+    return session.activeTurnId !== undefined && session.activeTurnId !== null;
+  }
+
+  return (
+    session.activeTurnId !== undefined &&
+    session.activeTurnId !== null &&
+    sessionStatus !== "error" &&
+    sessionStatus !== "closed" &&
+    sessionStatus !== "stopped" &&
+    sessionStatus !== "interrupted"
+  );
+}
 
 export function isLatestTurnSettled(
   latestTurn: LatestTurnTiming | null,

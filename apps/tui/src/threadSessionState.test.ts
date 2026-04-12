@@ -15,6 +15,10 @@ describe("threadSessionState", () => {
     expect(isThreadSessionActivelyWorking({ status: "running", activeTurnId: null })).toBe(false);
   });
 
+  it("treats ready sessions with a tracked active turn as actively working", () => {
+    expect(isThreadSessionActivelyWorking({ status: "ready", activeTurnId: "turn-1" })).toBe(true);
+  });
+
   it("ignores settled and missing sessions", () => {
     expect(isThreadSessionActivelyWorking({ status: "ready", activeTurnId: null })).toBe(false);
     expect(isThreadSessionActivelyWorking({ status: "stopped", activeTurnId: null })).toBe(false);

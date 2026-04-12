@@ -30,6 +30,7 @@ const THREAD_STATUS_PRIORITY: Record<ThreadStatusPill["label"], number> = {
 type ThreadStatusSessionLike = {
   status?: string | null | undefined;
   orchestrationStatus?: string | null | undefined;
+  activeTurnId?: string | null | undefined;
 };
 
 type ThreadStatusInput = {
@@ -65,6 +66,14 @@ function hasUnseenCompletionForSidebar(thread: ThreadStatusInput): boolean {
   return completedAt > lastVisitedAt;
 }
 
+function resolveSidebarSessionStatus(session: ThreadStatusInput["session"]): string | null {
+  return session?.orchestrationStatus ?? session?.status ?? null;
+}
+
+function hasTrackedActiveTurn(session: ThreadStatusInput["session"]): boolean {
+  return session?.activeTurnId !== undefined && session.activeTurnId !== null;
+}
+
 export function resolveThreadStatusPill(input: {
   thread: ThreadStatusInput;
   hasPendingApprovals: boolean;
@@ -90,7 +99,11 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  if (thread.session?.status === "running") {
+  const sessionStatus = resolveSidebarSessionStatus(thread.session);
+  if (
+    sessionStatus === "running" ||
+    (hasTrackedActiveTurn(thread.session) && sessionStatus === "ready")
+  ) {
     return {
       label: "Working",
       colorClass: "text-sky-600 dark:text-sky-300/80",
@@ -99,7 +112,7 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  if (thread.session?.status === "connecting") {
+  if (sessionStatus === "connecting" || sessionStatus === "starting") {
     return {
       label: "Connecting",
       colorClass: "text-sky-600 dark:text-sky-300/80",

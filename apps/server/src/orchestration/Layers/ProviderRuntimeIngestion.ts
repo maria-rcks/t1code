@@ -917,8 +917,13 @@ const make = Effect.gen(function* () {
               : activeTurnId;
         const status = (() => {
           switch (event.type) {
-            case "session.state.changed":
-              return orchestrationSessionStatusFromRuntimeState(event.payload.state);
+            case "session.state.changed": {
+              const nextStatus = orchestrationSessionStatusFromRuntimeState(event.payload.state);
+              if (activeTurnId !== null && (nextStatus === "starting" || nextStatus === "ready")) {
+                return "running";
+              }
+              return nextStatus;
+            }
             case "turn.started":
               return "running";
             case "session.exited":
