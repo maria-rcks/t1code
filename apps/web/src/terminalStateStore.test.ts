@@ -20,6 +20,7 @@ describe("terminalStateStore actions", () => {
     );
     expect(terminalState).toEqual({
       terminalOpen: false,
+      terminalFullScreen: false,
       terminalHeight: 280,
       terminalIds: ["default"],
       runningTerminalIds: [],

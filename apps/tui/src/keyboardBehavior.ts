@@ -96,11 +96,49 @@ export const KEYBINDING_GUIDE_SECTIONS: readonly KeybindingGuideSection[] = [
       {
         shortcut: "Ctrl+D",
         action: "Toggle the full diff view",
+        note: "While the terminal is focused, Ctrl+D kills the active terminal tab instead.",
       },
       {
         shortcut: "v",
         action: "Toggle unified and split diff view",
         note: "Only while the diff view is focused.",
+      },
+    ],
+  },
+  {
+    title: "Terminal",
+    items: [
+      {
+        shortcut: "Ctrl+J",
+        action: "Show or hide the thread terminal drawer",
+      },
+      {
+        shortcut: "Ctrl+Shift+J",
+        action: "Toggle the thread terminal full screen",
+      },
+      {
+        shortcut: "Ctrl+T",
+        action: "Open a new terminal tab for the current thread",
+      },
+      {
+        shortcut: "Ctrl+Shift+D",
+        action: "Split from the active terminal into another tab",
+      },
+      {
+        shortcut: "Ctrl+W",
+        action: "Close the active thread terminal",
+      },
+      {
+        shortcut: "↑ / ↓ / ← / →",
+        action: "Send navigation keys to the focused terminal session",
+      },
+      {
+        shortcut: "PageUp / PageDown / Home / End",
+        action: "Scroll the focused terminal pane",
+      },
+      {
+        shortcut: "Esc",
+        action: "Leave terminal focus and return to the thread view",
       },
     ],
   },

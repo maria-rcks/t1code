@@ -50,6 +50,9 @@ describe("keyboardBehavior", () => {
     const composerSection = KEYBINDING_GUIDE_SECTIONS.find(
       (section) => section.title === "Composer",
     );
+    const terminalSection = KEYBINDING_GUIDE_SECTIONS.find(
+      (section) => section.title === "Terminal",
+    );
 
     expect(globalSection?.items).toContainEqual(
       expect.objectContaining({
@@ -73,6 +76,18 @@ describe("keyboardBehavior", () => {
       expect.objectContaining({
         shortcut: "Ctrl+C",
         action: "Clear the current draft",
+      }),
+    );
+    expect(terminalSection?.items).toContainEqual(
+      expect.objectContaining({
+        shortcut: "Ctrl+J",
+        action: "Show or hide the thread terminal drawer",
+      }),
+    );
+    expect(terminalSection?.items).toContainEqual(
+      expect.objectContaining({
+        shortcut: "Ctrl+Shift+J",
+        action: "Toggle the thread terminal full screen",
       }),
     );
   });

@@ -40,31 +40,47 @@ import {
   type ProviderModelOptions,
   type RuntimeMode,
   type ServerConfig,
+  type ThreadId,
 } from "@t3tools/contracts";
 import {
+  DEFAULT_THREAD_TERMINAL_HEIGHT,
+  DEFAULT_THREAD_TERMINAL_ID,
   DEFAULT_APP_SETTINGS,
   DEFAULT_APP_THEME,
   DEFAULT_SIDEBAR_PROJECT_SORT_ORDER,
   DEFAULT_SIDEBAR_THREAD_SORT_ORDER,
   DEFAULT_TIMESTAMP_FORMAT,
+  MAX_TERMINALS_PER_GROUP,
   buildPendingUserInputAnswers,
   buildGitActionMenuItems,
   buildPlanImplementationPrompt,
+  closeThreadTerminal,
+  createDefaultThreadTerminalState,
   getAppModelOptions,
   getCustomModelsForProvider,
   getProviderStartOptions,
   MAX_CUSTOM_MODEL_LENGTH,
   MODEL_PROVIDER_SETTINGS,
+  newThreadTerminal,
   normalizeAppSettings,
   patchCustomModels,
+  selectThreadTerminalState,
+  setThreadActiveTerminal,
+  setThreadTerminalActivity,
+  setThreadTerminalFullScreen,
+  setThreadTerminalHeight,
+  setThreadTerminalOpen,
   sortProjectsForSidebar,
+  splitThreadTerminal,
   sortThreadsForSidebar,
+  terminalRunningSubprocessFromEvent,
   type AppSettings,
   type AppTheme,
   type PendingUserInputDraftAnswer,
   type SidebarProjectSortOrder,
   type SidebarThreadSortOrder,
   type TimestampFormat,
+  type ThreadTerminalState,
   createTransportNativeApi,
   derivePendingApprovals,
   derivePendingUserInputProgress,
@@ -84,6 +100,7 @@ import {
   resolveProjectStatusIndicator,
   resolveQuickAction,
   resolveThreadStatusPill,
+  updateTerminalStateByThreadId,
   type ChatAttachment,
   type GitActionMenuItem,
   type ThreadStatusPill,
@@ -145,6 +162,24 @@ import { resolveTuiResponsiveLayout, TUI_SIDEBAR_WIDTH } from "./responsiveLayou
 import { resolveAttachedServerConnection, startServerSupervisor } from "./serverSupervisor";
 import { createCoalescedRefreshRunner } from "./snapshotRefresh";
 import {
+  DEFAULT_TUI_THREAD_TERMINAL_HEIGHT,
+  MIN_TUI_THREAD_TERMINAL_HEIGHT,
+  type TuiTerminalColorTheme,
+  type TuiThreadTerminalSessionsByThreadId,
+  applyTerminalEvent,
+  buildTerminalBufferRows,
+  ensureTerminalSession,
+  removeOrphanedTerminalSessions,
+  removeTerminalSession,
+  resizeTerminalSessionViewport,
+  resolveTuiTerminalViewportRows,
+  resolveTerminalViewportState,
+  resolveTuiThreadTerminalHeight,
+  setTerminalSessionViewportPosition,
+  terminalInputFromKey,
+  upsertTerminalSnapshot,
+} from "./threadTerminal";
+import {
   cacheRemoteAttachmentToFile,
   clearTerminalImagePreview,
   renderKittyImagePreview,
@@ -200,6 +235,7 @@ type FocusArea =
   | "threads"
   | "controls"
   | "composer"
+  | "terminal"
   | "timeline"
   | "diff"
   | "settings";
@@ -2667,6 +2703,8 @@ export function App({
   const composerValueRef = useRef("");
   const deferredComposerSyncRef = useRef(createDeferredComposerSyncState());
   const timelineScrollRef = useRef<ScrollBoxRenderable | null>(null);
+  const terminalScrollRefs = useRef<Record<string, ScrollBoxRenderable | null>>({});
+  const lastTerminalScreenEpochRef = useRef(0);
   const composerBranchScrollRef = useRef<ScrollBoxRenderable | null>(null);
   const gitRefreshInFlightRef = useRef(false);
   const gitRefreshQueuedRef = useRef(false);
@@ -2707,6 +2745,12 @@ export function App({
   const [draftInteractionMode, setDraftInteractionMode] = useState<"default" | "plan">("default");
   const [focusArea, setFocusArea] = useState<FocusArea>("composer");
   const [diffOpen, setDiffOpen] = useState(false);
+  const [terminalStateByThreadId, setTerminalStateByThreadId] = useState<
+    Readonly<Record<string, ThreadTerminalState>>
+  >({});
+  const [terminalSessionsByThreadId, setTerminalSessionsByThreadId] =
+    useState<TuiThreadTerminalSessionsByThreadId>({});
+  const [terminalScreenEpoch, setTerminalScreenEpoch] = useState(0);
   const [sidebarCollapsedPreference, setSidebarCollapsedPreference] = useState(false);
   const [sidebarOverlayOpen, setSidebarOverlayOpen] = useState(false);
   const [diffView, setDiffView] = useState<"unified" | "split">("unified");
@@ -2826,6 +2870,10 @@ export function App({
   useEffect(() => {
     composerDraftsByThreadIdRef.current = composerDraftsByThreadId;
   }, [composerDraftsByThreadId]);
+
+  const bumpTerminalScreenEpoch = useCallback(() => {
+    setTerminalScreenEpoch((current) => current + 1);
+  }, []);
 
   useEffect(() => {
     _renderer.setBackgroundColor?.(toRendererColor(PALETTE.canvas));
@@ -2983,6 +3031,9 @@ export function App({
         );
         setDiffOpen(Boolean(prefs.diffOpen));
         setDiffView(prefs.diffView ?? "unified");
+        if (prefs.terminalStateByThreadId) {
+          setTerminalStateByThreadId(prefs.terminalStateByThreadId);
+        }
         setPrefsReady(true);
 
         const attachedServer = resolveAttachedServerConnection();
@@ -3154,6 +3205,30 @@ export function App({
   }, [selectedThreadId]);
 
   useEffect(() => {
+    if (!api) {
+      return;
+    }
+    return api.terminal.onEvent((event) => {
+      setTerminalSessionsByThreadId((current) =>
+        applyTerminalEvent(current, event, null, {
+          onScreenMutation: bumpTerminalScreenEpoch,
+        }),
+      );
+      const hasRunningSubprocess = terminalRunningSubprocessFromEvent(event);
+      if (hasRunningSubprocess === null) {
+        return;
+      }
+      setTerminalStateByThreadId((current) =>
+        updateTerminalStateByThreadId(
+          current as Record<string, ThreadTerminalState>,
+          event.threadId as ThreadId,
+          (state) => setThreadTerminalActivity(state, event.terminalId, hasRunningSubprocess),
+        ),
+      );
+    });
+  }, [api, bumpTerminalScreenEpoch]);
+
+  useEffect(() => {
     if (!prefsReady) return;
     const prefs = {
       mainView,
@@ -3168,6 +3243,7 @@ export function App({
       ...(selectedProjectId ? { selectedProjectId } : {}),
       ...(selectedThreadId ? { selectedThreadId } : {}),
       ...(expandedProjectIds.size > 0 ? { expandedProjectIds: [...expandedProjectIds] } : {}),
+      ...(Object.keys(terminalStateByThreadId).length > 0 ? { terminalStateByThreadId } : {}),
       ...(locallyUnreadThreadIds.size > 0
         ? { locallyUnreadThreadIds: [...locallyUnreadThreadIds] }
         : {}),
@@ -3196,6 +3272,7 @@ export function App({
     prefsReady,
     paths,
     appSettings,
+    terminalStateByThreadId,
     tuiThemeId,
     composerDraftsByThreadId,
     expandedProjectIds,
@@ -3211,6 +3288,27 @@ export function App({
     () => snapshot?.threads.filter((thread) => thread.deletedAt === null) ?? [],
     [snapshot?.threads],
   );
+  useEffect(() => {
+    const activeThreadIds = new Set([
+      ...allThreads.map((thread) => thread.id),
+      ...Object.values(draftThreadsByProjectId).map((thread) => thread.id),
+    ]);
+    setTerminalStateByThreadId((current) => {
+      let changed = false;
+      const next: Record<string, ThreadTerminalState> = {};
+      for (const [threadId, state] of Object.entries(current)) {
+        if (!activeThreadIds.has(threadId)) {
+          changed = true;
+          continue;
+        }
+        next[threadId] = state;
+      }
+      return changed ? next : current;
+    });
+    setTerminalSessionsByThreadId((current) =>
+      removeOrphanedTerminalSessions(current, activeThreadIds),
+    );
+  }, [allThreads, draftThreadsByProjectId]);
   const sortedProjects = useMemo(
     () =>
       sortProjectsForSidebar(
@@ -3279,6 +3377,12 @@ export function App({
   const activeWorktreePath = activeThread?.worktreePath ?? activeDraftThread?.worktreePath ?? null;
   const activeThreadGitSyncKey = resolveThreadGitSyncKey(activeThread);
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
+  const activeThreadTerminalState = activeThreadId
+    ? selectThreadTerminalState(
+        terminalStateByThreadId as Record<string, ThreadTerminalState>,
+        activeThreadId as ThreadId,
+      )
+    : createDefaultThreadTerminalState();
   const hasServerThread = activeThread !== null;
   const effectiveThreadEnvMode = resolveEffectiveThreadEnvMode({
     activeWorktreePath,
@@ -3292,6 +3396,17 @@ export function App({
       (activeThread.session !== null && activeThread.session.status !== "stopped")),
   );
   const gitCwd = activeWorktreePath ?? activeProjectCwd ?? null;
+  const threadTerminalCwd = activeWorktreePath ?? activeProjectCwd ?? null;
+  const threadTerminalRuntimeEnv = useMemo(() => {
+    if (!activeProjectCwd) return {};
+    return activeWorktreePath
+      ? {
+          T3CODE_PROJECT_ROOT: activeProjectCwd,
+          T3CODE_WORKTREE_PATH: activeWorktreePath,
+        }
+      : { T3CODE_PROJECT_ROOT: activeProjectCwd };
+  }, [activeProjectCwd, activeWorktreePath]);
+  const canOpenThreadTerminal = hasServerThread && threadTerminalCwd !== null;
   const composerSearchCwd = activeWorktreePath ?? activeProjectCwd ?? null;
   const workEntries = activeThread
     ? deriveWorkLogEntries(activeThread.activities, activeThread.latestTurn?.turnId ?? undefined)
@@ -5100,6 +5215,116 @@ export function App({
       closeSidebarContextMenu();
       return;
     }
+    if (focusArea === "terminal" && activeThreadTerminalState.terminalOpen) {
+      if (key.ctrl && !key.meta && key.shift && key.name === "j") {
+        key.preventDefault();
+        toggleTerminalFullScreen();
+        return;
+      }
+      if (
+        key.ctrl &&
+        !key.meta &&
+        !key.shift &&
+        key.name === "d" &&
+        activeThreadTerminalState.activeTerminalId
+      ) {
+        key.preventDefault();
+        void closeActiveTerminal(activeThreadTerminalState.activeTerminalId);
+        return;
+      }
+      if (key.name === "escape") {
+        key.preventDefault();
+        setFocusArea(activeThreadId ? "timeline" : "composer");
+        return;
+      }
+      if (!key.ctrl && !key.meta && !key.shift && key.name === "pageup") {
+        key.preventDefault();
+        scrollActiveTerminalByPage(-1);
+        return;
+      }
+      if (!key.ctrl && !key.meta && !key.shift && key.name === "pagedown") {
+        key.preventDefault();
+        scrollActiveTerminalByPage(1);
+        return;
+      }
+      if (!key.ctrl && !key.meta && !key.shift && key.name === "home") {
+        key.preventDefault();
+        jumpActiveTerminalViewport("top");
+        return;
+      }
+      if (!key.ctrl && !key.meta && !key.shift && key.name === "end") {
+        key.preventDefault();
+        jumpActiveTerminalViewport("bottom");
+        return;
+      }
+      const terminalInput = terminalInputFromKey(key);
+      if (terminalInput !== null) {
+        key.preventDefault();
+        void sendTerminalInput(terminalInput);
+      }
+      return;
+    }
+    if (
+      !hasDismissibleLayer &&
+      mainView === "thread" &&
+      key.ctrl &&
+      !key.meta &&
+      key.shift &&
+      key.name === "j"
+    ) {
+      key.preventDefault();
+      toggleTerminalFullScreen();
+      return;
+    }
+    if (
+      !hasDismissibleLayer &&
+      mainView === "thread" &&
+      key.ctrl &&
+      !key.meta &&
+      !key.shift &&
+      key.name === "j"
+    ) {
+      key.preventDefault();
+      toggleTerminalVisibility();
+      return;
+    }
+    if (
+      !hasDismissibleLayer &&
+      mainView === "thread" &&
+      key.ctrl &&
+      !key.meta &&
+      !key.shift &&
+      key.name === "t"
+    ) {
+      key.preventDefault();
+      createNewTerminal();
+      return;
+    }
+    if (
+      !hasDismissibleLayer &&
+      mainView === "thread" &&
+      key.ctrl &&
+      !key.meta &&
+      key.shift &&
+      key.name === "d"
+    ) {
+      key.preventDefault();
+      splitTerminal();
+      return;
+    }
+    if (
+      !hasDismissibleLayer &&
+      mainView === "thread" &&
+      key.ctrl &&
+      !key.meta &&
+      !key.shift &&
+      key.name === "w" &&
+      activeThreadTerminalState.terminalOpen
+    ) {
+      key.preventDefault();
+      void closeActiveTerminal(activeThreadTerminalState.activeTerminalId);
+      return;
+    }
     if (ctrlCPressed && !hasDismissibleLayer && !isComposerFocused()) {
       key.preventDefault();
       requestAppExit();
@@ -5454,13 +5679,31 @@ export function App({
           ? responsiveLayout.showSidebar
             ? ["projects", "settings"]
             : ["settings"]
-          : showFullDiffView
+          : terminalFullScreen
             ? responsiveLayout.showSidebar
-              ? ["projects", "threads", "diff"]
-              : ["diff"]
-            : responsiveLayout.showSidebar
-              ? ["projects", "threads", "timeline", "controls", "composer", "diff"]
-              : ["timeline", "controls", "composer", "diff"];
+              ? ["projects", "threads", "terminal"]
+              : ["terminal"]
+            : showFullDiffView
+              ? responsiveLayout.showSidebar
+                ? ["projects", "threads", "diff"]
+                : ["diff"]
+              : responsiveLayout.showSidebar
+                ? [
+                    "projects",
+                    "threads",
+                    "timeline",
+                    ...(activeThreadTerminalState.terminalOpen ? (["terminal"] as const) : []),
+                    "controls",
+                    "composer",
+                    "diff",
+                  ]
+                : [
+                    "timeline",
+                    ...(activeThreadTerminalState.terminalOpen ? (["terminal"] as const) : []),
+                    "controls",
+                    "composer",
+                    "diff",
+                  ];
       const index = order.indexOf(focusArea);
       setFocusArea(
         order[(index + 1) % order.length] ??
@@ -5555,6 +5798,233 @@ export function App({
       return;
     }
     openDiffView();
+  }
+
+  function updateActiveThreadTerminalState(
+    updater: (state: ThreadTerminalState) => ThreadTerminalState,
+  ) {
+    if (!activeThreadId) {
+      return;
+    }
+    setTerminalStateByThreadId((current) =>
+      updateTerminalStateByThreadId(
+        current as Record<string, ThreadTerminalState>,
+        activeThreadId as ThreadId,
+        updater,
+      ),
+    );
+  }
+
+  function setTerminalOpen(open: boolean) {
+    if (!activeThreadId) {
+      return;
+    }
+    updateActiveThreadTerminalState((state) => {
+      const baseState =
+        state.terminalHeight === DEFAULT_THREAD_TERMINAL_HEIGHT
+          ? setThreadTerminalHeight(state, DEFAULT_TUI_THREAD_TERMINAL_HEIGHT)
+          : state;
+      return setThreadTerminalOpen(baseState, open);
+    });
+  }
+
+  function toggleTerminalVisibility() {
+    if (!activeThreadId || !canOpenThreadTerminal) {
+      return;
+    }
+    const nextOpen = !activeThreadTerminalState.terminalOpen;
+    setTerminalOpen(nextOpen);
+    if (nextOpen) {
+      setFocusArea("terminal");
+      setStatus("Terminal opened");
+      return;
+    }
+    if (focusArea === "terminal") {
+      setFocusArea(activeThreadId ? "timeline" : "composer");
+    }
+    setStatus("Terminal hidden");
+  }
+
+  function toggleTerminalFullScreen() {
+    if (!activeThreadId || !canOpenThreadTerminal) {
+      return;
+    }
+    const nextFullScreen = !activeThreadTerminalState.terminalFullScreen;
+    updateActiveThreadTerminalState((state) => {
+      const openState = setThreadTerminalOpen(state, true);
+      return setThreadTerminalFullScreen(openState, nextFullScreen);
+    });
+    setFocusArea("terminal");
+    setStatus(nextFullScreen ? "Terminal full screen" : "Terminal restored");
+  }
+
+  function activateTerminal(terminalId: string, options?: { clearSelection?: boolean }) {
+    if (options?.clearSelection !== false) {
+      terminalRenderer.clearSelection?.();
+    }
+    updateActiveThreadTerminalState((state) => setThreadActiveTerminal(state, terminalId));
+    setFocusArea("terminal");
+  }
+
+  function getActiveTerminalScrollbox(): ScrollBoxRenderable | null {
+    const terminalId = activeThreadTerminalState.activeTerminalId;
+    return terminalId ? (terminalScrollRefs.current[terminalId] ?? null) : null;
+  }
+
+  function scrollActiveTerminalByPage(pageCount: number) {
+    if (pageCount === 0) {
+      return;
+    }
+    const scrollbox = getActiveTerminalScrollbox();
+    if (!scrollbox) {
+      return;
+    }
+    scrollbox.scrollBy({ x: 0, y: pageCount }, "viewport");
+    setFocusArea("terminal");
+  }
+
+  function jumpActiveTerminalViewport(target: "top" | "bottom") {
+    const scrollbox = getActiveTerminalScrollbox();
+    if (!scrollbox) {
+      return;
+    }
+    scrollbox.scrollTo({
+      x: scrollbox.scrollLeft,
+      y: target === "top" ? 0 : scrollbox.scrollHeight,
+    });
+    setFocusArea("terminal");
+  }
+
+  function setTerminalScrollRef(terminalId: string, node: ScrollBoxRenderable | null) {
+    if (node) {
+      terminalScrollRefs.current[terminalId] = node;
+      return;
+    }
+    delete terminalScrollRefs.current[terminalId];
+  }
+
+  function handleTerminalPaneMouseDown(
+    terminalId: string,
+    event: {
+      preventDefault: () => void;
+      stopPropagation?: () => void;
+      target?: { selectable?: boolean } | null;
+    },
+  ) {
+    if (event.target?.selectable) {
+      activateTerminal(terminalId, { clearSelection: false });
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation?.();
+    activateTerminal(terminalId);
+  }
+
+  function splitTerminal() {
+    if (!activeThreadId || !canOpenThreadTerminal || hasReachedTerminalSplitLimit) {
+      return;
+    }
+    const terminalId = `terminal-${randomUUID()}`;
+    updateActiveThreadTerminalState((state) => splitThreadTerminal(state, terminalId));
+    if (threadTerminalCwd) {
+      setTerminalSessionsByThreadId((current) =>
+        ensureTerminalSession(current, {
+          threadId: activeThreadId,
+          terminalId,
+          cwd: threadTerminalCwd,
+          cols: visibleTerminalCols,
+          rows: visibleTerminalRows,
+        }),
+      );
+    }
+    setTerminalOpen(true);
+    setFocusArea("terminal");
+    setStatus("Split terminal");
+  }
+
+  function createNewTerminal() {
+    if (!activeThreadId || !canOpenThreadTerminal) {
+      return;
+    }
+    const terminalId = `terminal-${randomUUID()}`;
+    updateActiveThreadTerminalState((state) => newThreadTerminal(state, terminalId));
+    if (threadTerminalCwd) {
+      setTerminalSessionsByThreadId((current) =>
+        ensureTerminalSession(current, {
+          threadId: activeThreadId,
+          terminalId,
+          cwd: threadTerminalCwd,
+          cols: terminalViewportColumns,
+          rows: terminalViewportRows,
+        }),
+      );
+    }
+    setTerminalOpen(true);
+    setFocusArea("terminal");
+    setStatus("New terminal");
+  }
+
+  async function closeActiveTerminal(terminalId: string) {
+    if (!activeThreadId || !api || !canOpenThreadTerminal) {
+      return;
+    }
+    const isFinalTerminal = activeThreadTerminalState.terminalIds.length <= 1;
+    const fallbackExitWrite = () =>
+      api.terminal
+        .write({ threadId: activeThreadId, terminalId, data: "exit\n" })
+        .catch(() => undefined);
+
+    try {
+      if (isFinalTerminal) {
+        await api.terminal.clear({ threadId: activeThreadId, terminalId }).catch(() => undefined);
+      }
+      await api.terminal.close({
+        threadId: activeThreadId,
+        terminalId,
+        deleteHistory: true,
+      });
+    } catch {
+      await fallbackExitWrite();
+    }
+
+    updateActiveThreadTerminalState((state) => closeThreadTerminal(state, terminalId));
+    setTerminalSessionsByThreadId((current) =>
+      removeTerminalSession(current, { threadId: activeThreadId, terminalId }),
+    );
+    if (focusArea === "terminal" && activeThreadTerminalState.terminalIds.length <= 1) {
+      setFocusArea(activeThreadId ? "timeline" : "composer");
+    }
+    setStatus("Terminal closed");
+  }
+
+  async function sendTerminalInput(data: string) {
+    if (
+      !api ||
+      !activeThreadId ||
+      !canOpenThreadTerminal ||
+      !threadTerminalCwd ||
+      data.length === 0
+    ) {
+      return;
+    }
+    const terminalId =
+      activeThreadTerminalState.activeTerminalId ||
+      activeThreadTerminalState.terminalIds[0] ||
+      DEFAULT_THREAD_TERMINAL_ID;
+    setTerminalSessionsByThreadId((current) =>
+      ensureTerminalSession(current, {
+        threadId: activeThreadId,
+        terminalId,
+        cwd: threadTerminalCwd,
+        cols: terminalViewportColumns,
+        rows: terminalViewportRows,
+      }),
+    );
+    try {
+      await api.terminal.write({ threadId: activeThreadId, terminalId, data });
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Terminal write failed");
+    }
   }
 
   function toggleDiffFile(key: string) {
@@ -7404,6 +7874,15 @@ export function App({
     }
   }, [focusArea, logger, overlayMenu]);
 
+  useEffect(() => {
+    if (
+      focusArea === "terminal" &&
+      (!activeThreadId || !activeThreadTerminalState.terminalOpen || !canOpenThreadTerminal)
+    ) {
+      setFocusArea(activeThreadId ? "timeline" : "composer");
+    }
+  }, [activeThreadId, activeThreadTerminalState.terminalOpen, canOpenThreadTerminal, focusArea]);
+
   const modelMenuHeight = Math.min(Math.max(modelOptions.length, 1), 6);
   const modelProvidersHeight =
     2 +
@@ -7488,7 +7967,562 @@ export function App({
     (process.stdout.rows ?? Number(process.env.T1CODE_HEADLESS_HEIGHT ?? 0)) || 48;
   const viewportColumns =
     (process.stdout.columns ?? Number(process.env.T1CODE_HEADLESS_WIDTH ?? 0)) || 160;
+  const resolvedTerminalPaneHeight = resolveTuiThreadTerminalHeight(
+    activeThreadTerminalState.terminalHeight,
+    viewportRows,
+  );
+  const fullScreenTerminalPaneHeight = Math.max(MIN_TUI_THREAD_TERMINAL_HEIGHT, viewportRows - 7);
+  const terminalFullScreen =
+    activeThreadTerminalState.terminalOpen &&
+    activeThreadTerminalState.terminalFullScreen &&
+    canOpenThreadTerminal;
+  const terminalPaneHeight =
+    activeThreadTerminalState.terminalOpen && canOpenThreadTerminal
+      ? terminalFullScreen
+        ? fullScreenTerminalPaneHeight
+        : resolvedTerminalPaneHeight
+      : 0;
+  const terminalViewportRows = resolveTuiTerminalViewportRows(terminalPaneHeight);
+  const terminalViewportColumns = Math.max(20, mainPanelColumns - 6);
+  const activeTerminalGroup =
+    activeThreadTerminalState.terminalGroups.find(
+      (group) => group.id === activeThreadTerminalState.activeTerminalGroupId,
+    ) ??
+    activeThreadTerminalState.terminalGroups.find((group) =>
+      group.terminalIds.includes(activeThreadTerminalState.activeTerminalId),
+    ) ??
+    null;
+  const hasReachedTerminalSplitLimit =
+    (activeTerminalGroup?.terminalIds.length ?? 0) >= MAX_TERMINALS_PER_GROUP;
+  const visibleTerminalIds = useMemo(
+    () =>
+      activeTerminalGroup && activeTerminalGroup.terminalIds.length > 0
+        ? activeTerminalGroup.terminalIds
+        : [activeThreadTerminalState.activeTerminalId],
+    [activeTerminalGroup, activeThreadTerminalState.activeTerminalId],
+  );
+  const activeTerminalSession =
+    (activeThreadId
+      ? terminalSessionsByThreadId[activeThreadId]?.[activeThreadTerminalState.activeTerminalId]
+      : null) ?? null;
+  const terminalColorTheme = useMemo<TuiTerminalColorTheme>(
+    () => ({
+      defaultForeground: terminalThemeColors?.defaultForeground ?? PALETTE.text,
+      defaultBackground: terminalThemeColors?.defaultBackground ?? PALETTE.surface,
+      cursorForeground: ACTIVE_TUI_THEME.colors.selectedText,
+      cursorBackground: terminalThemeColors?.cursorColor ?? PALETTE.selectionActive,
+      ansi: [
+        terminalThemeColors?.palette[0] ?? "#1f1f1f",
+        terminalThemeColors?.palette[1] ?? "#ef4444",
+        terminalThemeColors?.palette[2] ?? "#22c55e",
+        terminalThemeColors?.palette[3] ?? "#f59e0b",
+        terminalThemeColors?.palette[4] ?? "#60a5fa",
+        terminalThemeColors?.palette[5] ?? "#c084fc",
+        terminalThemeColors?.palette[6] ?? "#22d3ee",
+        terminalThemeColors?.palette[7] ?? "#e5e7eb",
+        terminalThemeColors?.palette[8] ?? "#6b7280",
+        terminalThemeColors?.palette[9] ?? "#f87171",
+        terminalThemeColors?.palette[10] ?? "#4ade80",
+        terminalThemeColors?.palette[11] ?? "#fbbf24",
+        terminalThemeColors?.palette[12] ?? "#93c5fd",
+        terminalThemeColors?.palette[13] ?? "#d8b4fe",
+        terminalThemeColors?.palette[14] ?? "#67e8f9",
+        terminalThemeColors?.palette[15] ?? "#f9fafb",
+      ],
+    }),
+    [terminalThemeColors],
+  );
+  const visibleTerminalColumnWidth = Math.max(
+    16,
+    Math.floor(
+      (terminalViewportColumns - Math.max(visibleTerminalIds.length - 1, 0)) /
+        Math.max(visibleTerminalIds.length, 1),
+    ),
+  );
+  const visibleTerminalCols = Math.max(20, visibleTerminalColumnWidth - 3);
+  const visibleTerminalRows = Math.max(5, terminalViewportRows);
+  const terminalStatusLabel =
+    activeTerminalSession?.status === "running"
+      ? activeTerminalSession.hasRunningSubprocess
+        ? "Running"
+        : "Shell ready"
+      : activeTerminalSession?.status === "starting"
+        ? "Starting"
+        : activeTerminalSession?.status === "exited"
+          ? activeTerminalSession.exitCode === null
+            ? "Exited"
+            : `Exited (${activeTerminalSession.exitCode})`
+          : activeTerminalSession?.status === "error"
+            ? "Error"
+            : "Idle";
+
+  useEffect(() => {
+    if (
+      !api ||
+      !activeThreadId ||
+      !canOpenThreadTerminal ||
+      !threadTerminalCwd ||
+      !activeThreadTerminalState.terminalOpen
+    ) {
+      return;
+    }
+    let cancelled = false;
+    for (const terminalId of activeThreadTerminalState.terminalIds) {
+      const isVisibleInSplit = visibleTerminalIds.includes(terminalId);
+      setTerminalSessionsByThreadId((current) =>
+        ensureTerminalSession(current, {
+          threadId: activeThreadId,
+          terminalId,
+          cwd: threadTerminalCwd,
+        }),
+      );
+
+      void api.terminal
+        .open({
+          threadId: activeThreadId,
+          terminalId,
+          cwd: threadTerminalCwd,
+          cols: isVisibleInSplit ? visibleTerminalCols : terminalViewportColumns,
+          rows: isVisibleInSplit ? visibleTerminalRows : terminalViewportRows,
+          ...(Object.keys(threadTerminalRuntimeEnv).length > 0
+            ? { env: threadTerminalRuntimeEnv }
+            : {}),
+        })
+        .then((snapshot) => {
+          if (cancelled) {
+            return;
+          }
+          setTerminalSessionsByThreadId((current) =>
+            upsertTerminalSnapshot(current, activeThreadId, snapshot, {
+              onScreenMutation: bumpTerminalScreenEpoch,
+            }),
+          );
+        })
+        .catch((error) => {
+          if (cancelled) {
+            return;
+          }
+          setTerminalSessionsByThreadId((current) =>
+            applyTerminalEvent(
+              current,
+              {
+                type: "error",
+                threadId: activeThreadId,
+                terminalId,
+                createdAt: new Date().toISOString(),
+                message: error instanceof Error ? error.message : "Failed to open terminal",
+              },
+              threadTerminalCwd,
+              {
+                onScreenMutation: bumpTerminalScreenEpoch,
+              },
+            ),
+          );
+        });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    api,
+    activeThreadId,
+    activeThreadTerminalState.activeTerminalId,
+    activeThreadTerminalState.terminalIds,
+    activeThreadTerminalState.terminalOpen,
+    canOpenThreadTerminal,
+    terminalViewportColumns,
+    terminalViewportRows,
+    threadTerminalCwd,
+    threadTerminalRuntimeEnv,
+    visibleTerminalCols,
+    visibleTerminalIds,
+    visibleTerminalRows,
+    bumpTerminalScreenEpoch,
+  ]);
+
+  useEffect(() => {
+    if (
+      !api ||
+      !activeThreadId ||
+      !canOpenThreadTerminal ||
+      !threadTerminalCwd ||
+      !activeThreadTerminalState.terminalOpen
+    ) {
+      return;
+    }
+    for (const terminalId of activeThreadTerminalState.terminalIds) {
+      const isVisibleInSplit = visibleTerminalIds.includes(terminalId);
+      setTerminalSessionsByThreadId((current) =>
+        resizeTerminalSessionViewport(current, {
+          threadId: activeThreadId,
+          terminalId,
+          cols: isVisibleInSplit ? visibleTerminalCols : terminalViewportColumns,
+          rows: isVisibleInSplit ? visibleTerminalRows : terminalViewportRows,
+        }),
+      );
+      void api.terminal
+        .resize({
+          threadId: activeThreadId,
+          terminalId,
+          cols: isVisibleInSplit ? visibleTerminalCols : terminalViewportColumns,
+          rows: isVisibleInSplit ? visibleTerminalRows : terminalViewportRows,
+        })
+        .catch(() => undefined);
+    }
+  }, [
+    api,
+    activeThreadId,
+    activeThreadTerminalState.activeTerminalId,
+    activeThreadTerminalState.terminalIds,
+    activeThreadTerminalState.terminalOpen,
+    canOpenThreadTerminal,
+    terminalViewportColumns,
+    terminalViewportRows,
+    threadTerminalCwd,
+    visibleTerminalCols,
+    visibleTerminalIds,
+    visibleTerminalRows,
+  ]);
+
+  useEffect(() => {
+    if (!activeThreadId || !activeThreadTerminalState.terminalOpen) {
+      return;
+    }
+    const shouldFollowFreshOutput = terminalScreenEpoch !== lastTerminalScreenEpochRef.current;
+    lastTerminalScreenEpochRef.current = terminalScreenEpoch;
+    process.nextTick(() => {
+      for (const terminalId of visibleTerminalIds) {
+        const scrollbox = terminalScrollRefs.current[terminalId];
+        const session = terminalSessionsByThreadId[activeThreadId]?.[terminalId];
+        if (!scrollbox || !session) {
+          continue;
+        }
+        const viewportState = resolveTerminalViewportState(session, visibleTerminalRows);
+        const viewportHeight = scrollbox.viewport.height;
+        const distanceFromBottom = scrollbox.scrollHeight - viewportHeight - scrollbox.scrollTop;
+        const targetScrollTop =
+          shouldFollowFreshOutput && distanceFromBottom <= TIMELINE_SCROLL_BOTTOM_THRESHOLD_ROWS
+            ? scrollbox.scrollHeight
+            : viewportState.viewportY;
+        if (Math.round(scrollbox.scrollTop) === Math.round(targetScrollTop)) {
+          continue;
+        }
+        scrollbox.scrollTo({ x: scrollbox.scrollLeft, y: targetScrollTop });
+      }
+    });
+  }, [
+    activeThreadId,
+    activeThreadTerminalState.terminalOpen,
+    terminalScreenEpoch,
+    terminalSessionsByThreadId,
+    visibleTerminalIds,
+    visibleTerminalRows,
+  ]);
+
+  useEffect(() => {
+    if (!activeThreadId || !activeThreadTerminalState.terminalOpen) {
+      return;
+    }
+    const interval = setInterval(() => {
+      for (const terminalId of visibleTerminalIds) {
+        const scrollbox = terminalScrollRefs.current[terminalId];
+        const session = terminalSessionsByThreadId[activeThreadId]?.[terminalId];
+        if (!scrollbox || !session) {
+          continue;
+        }
+        const nextViewportY = Math.round(scrollbox.scrollTop);
+        if (nextViewportY === session.screen.terminal.buffer.active.viewportY) {
+          continue;
+        }
+        setTerminalSessionsByThreadId((current) =>
+          setTerminalSessionViewportPosition(current, {
+            threadId: activeThreadId,
+            terminalId,
+            viewportY: nextViewportY,
+          }),
+        );
+      }
+    }, 16);
+    return () => {
+      clearInterval(interval);
+    };
+  }, [
+    activeThreadId,
+    activeThreadTerminalState.terminalOpen,
+    terminalSessionsByThreadId,
+    visibleTerminalIds,
+    visibleTerminalRows,
+  ]);
   const mainPanelLeft = responsiveLayout.showSidebar ? responsiveLayout.sidebarWidth + 1 : 0;
+  const renderTerminalPane = (fullScreen: boolean) => (
+    <box
+      style={{
+        ...(fullScreen
+          ? {
+              flexGrow: 1,
+              flexShrink: 1,
+              minHeight: 0,
+            }
+          : {
+              height: terminalPaneHeight,
+              minHeight: terminalPaneHeight,
+              marginTop: 1,
+            }),
+        border: true,
+        borderStyle: "rounded",
+        borderColor: focusArea === "terminal" ? PALETTE.composerBorder : PALETTE.divider,
+        backgroundColor: PALETTE.surface,
+        flexDirection: "column",
+      }}
+      onMouseDown={(event) => {
+        event.stopPropagation?.();
+        setFocusArea("terminal");
+      }}
+    >
+      <box
+        style={{
+          height: 1,
+          paddingLeft: 1,
+          paddingRight: 1,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <box
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            minWidth: 0,
+            flexGrow: 1,
+            overflow: "hidden",
+          }}
+        >
+          <text content="" style={{ fg: PALETTE.muted, marginRight: 1 }} />
+          <text content="Terminal" style={{ fg: PALETTE.text, marginRight: 1 }} />
+          <text content={terminalStatusLabel} style={{ fg: PALETTE.subtle, marginRight: 1 }} />
+          <text content="·" selectable={false} style={{ fg: PALETTE.subtle }} />
+          <text
+            content={activeTerminalSession?.cwd || threadTerminalCwd || "No working directory"}
+            truncate={true}
+            style={{ fg: PALETTE.subtle, marginLeft: 1, flexGrow: 1 }}
+          />
+        </box>
+        <box style={{ flexDirection: "row", alignItems: "center" }}>
+          <ToolbarButton
+            icon={fullScreen ? "⤡" : "⤢"}
+            compact
+            width={3}
+            onPress={toggleTerminalFullScreen}
+          />
+          <ToolbarButton
+            icon="−"
+            compact
+            width={3}
+            disabled={fullScreen || resolvedTerminalPaneHeight <= MIN_TUI_THREAD_TERMINAL_HEIGHT}
+            onPress={() =>
+              updateActiveThreadTerminalState((state) =>
+                setThreadTerminalHeight(state, resolvedTerminalPaneHeight - 2),
+              )
+            }
+          />
+          <ToolbarButton
+            icon="+"
+            compact
+            width={3}
+            disabled={fullScreen}
+            onPress={() =>
+              updateActiveThreadTerminalState((state) =>
+                setThreadTerminalHeight(state, resolvedTerminalPaneHeight + 2),
+              )
+            }
+          />
+          <ToolbarButton
+            icon="◫"
+            compact
+            width={3}
+            disabled={hasReachedTerminalSplitLimit}
+            onPress={splitTerminal}
+          />
+          <ToolbarButton icon="⊞" compact width={3} onPress={createNewTerminal} />
+          <ToolbarButton
+            icon="×"
+            compact
+            width={3}
+            onPress={() => {
+              void closeActiveTerminal(activeThreadTerminalState.activeTerminalId);
+            }}
+          />
+        </box>
+      </box>
+
+      <box
+        style={{
+          height: 1,
+          paddingLeft: 1,
+          paddingRight: 1,
+          flexDirection: "row",
+          alignItems: "center",
+          overflow: "hidden",
+        }}
+      >
+        {activeThreadTerminalState.terminalGroups.map((group, groupIndex) => {
+          const activeGroup = group.id === activeThreadTerminalState.activeTerminalGroupId;
+          const runningGroup = activeThreadTerminalState.runningTerminalIds.some((terminalId) =>
+            group.terminalIds.includes(terminalId),
+          );
+          return (
+            <box
+              key={`terminal-group:${group.id}`}
+              style={{ flexDirection: "row", alignItems: "center", marginRight: 1 }}
+            >
+              <box
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation?.();
+                  activateTerminal(
+                    group.terminalIds[0] ?? activeThreadTerminalState.activeTerminalId,
+                  );
+                }}
+                style={{
+                  paddingLeft: 1,
+                  paddingRight: 1,
+                  marginRight: 1,
+                  backgroundColor: activeGroup ? PALETTE.controlActiveStrong : "transparent",
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+              >
+                <text
+                  content={runningGroup ? "●" : "○"}
+                  selectable={false}
+                  style={{
+                    fg: runningGroup ? PALETTE.success : PALETTE.subtle,
+                    marginRight: 1,
+                  }}
+                />
+                <text
+                  content={`${groupIndex + 1}×${group.terminalIds.length}`}
+                  selectable={false}
+                  style={{
+                    fg: activeGroup ? ACTIVE_TUI_THEME.colors.selectedText : PALETTE.muted,
+                  }}
+                />
+              </box>
+              {groupIndex < activeThreadTerminalState.terminalGroups.length - 1 ? (
+                <text
+                  content="│"
+                  selectable={false}
+                  style={{ fg: PALETTE.subtle, marginLeft: 1 }}
+                />
+              ) : null}
+            </box>
+          );
+        })}
+      </box>
+
+      <box
+        style={{
+          flexDirection: "row",
+          flexGrow: 1,
+          flexShrink: 1,
+          minHeight: terminalViewportRows,
+        }}
+      >
+        {visibleTerminalIds.map((terminalId, index) => {
+          const terminalSession = activeThreadId
+            ? terminalSessionsByThreadId[activeThreadId]?.[terminalId]
+            : null;
+          const active = terminalId === activeThreadTerminalState.activeTerminalId;
+          const viewportState = resolveTerminalViewportState(terminalSession, visibleTerminalRows);
+          const terminalRows = buildTerminalBufferRows(terminalSession, {
+            startRow: 0,
+            rows: viewportState.totalRows,
+            cols: visibleTerminalCols,
+            theme: terminalColorTheme,
+            focused:
+              focusArea === "terminal" &&
+              active &&
+              viewportState.viewportY >= viewportState.maxViewportY,
+          });
+          return (
+            <box
+              key={`terminal-column:${terminalId}`}
+              style={{
+                width: visibleTerminalColumnWidth,
+                flexGrow: 1,
+                flexShrink: 1,
+                minWidth: 0,
+                flexDirection: "column",
+                ...(index < visibleTerminalIds.length - 1
+                  ? {
+                      border: ["right"],
+                      borderColor: PALETTE.divider,
+                    }
+                  : {}),
+              }}
+            >
+              <scrollbox
+                ref={(node) => setTerminalScrollRef(terminalId, node)}
+                stickyScroll
+                stickyStart="bottom"
+                onMouseDown={(event) => {
+                  handleTerminalPaneMouseDown(terminalId, event);
+                }}
+                onMouseScroll={() => {
+                  setFocusArea("terminal");
+                }}
+                style={{
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  minHeight: terminalViewportRows,
+                  paddingLeft: 1,
+                  paddingRight: 1,
+                  ...themedScrollboxStyle(active ? PALETTE.controlActiveStrong : PALETTE.surface),
+                }}
+              >
+                <box style={{ flexDirection: "column" }}>
+                  {terminalRows.map((row) => (
+                    <box
+                      key={`terminal-row:${activeThreadId}:${terminalId}:${row.id}`}
+                      style={{
+                        height: 1,
+                        flexDirection: "row",
+                        backgroundColor: PALETTE.surface,
+                      }}
+                    >
+                      <text
+                        content={row.content}
+                        selectable={true}
+                        onMouseDown={(event) => {
+                          event.stopPropagation?.();
+                        }}
+                        style={{
+                          fg: PALETTE.text,
+                          bg: PALETTE.surface,
+                          height: 1,
+                        }}
+                      />
+                      {row.trailingColumns > 0 ? (
+                        <box
+                          style={{
+                            width: row.trailingColumns,
+                            height: 1,
+                            backgroundColor: PALETTE.surface,
+                          }}
+                        />
+                      ) : null}
+                    </box>
+                  ))}
+                </box>
+              </scrollbox>
+            </box>
+          );
+        })}
+      </box>
+    </box>
+  );
   const imagePreviewModalWidth = Math.max(48, Math.min(110, viewportColumns - 8));
   const imagePreviewModalHeight = Math.max(18, Math.min(36, viewportRows - 6));
   const imagePreviewModalLeft = Math.max(
@@ -8139,7 +9173,21 @@ export function App({
                   onPress={toggleGitActionsMenu}
                 />
                 <ToolbarButton
-                  icon=""
+                  icon=""
+                  active={activeThreadTerminalState.terminalOpen}
+                  disabled={!canOpenThreadTerminal}
+                  chrome="bare"
+                  width={3}
+                  justifyContent="flex-end"
+                  iconColor={
+                    activeThreadTerminalState.runningTerminalIds.length > 0
+                      ? PALETTE.success
+                      : PALETTE.muted
+                  }
+                  onPress={toggleTerminalVisibility}
+                />
+                <ToolbarButton
+                  icon="±"
                   active={diffOpen}
                   disabled={!isGitRepo}
                   chrome="bare"
@@ -8777,6 +9825,8 @@ export function App({
                   )}
                 </box>
               </scrollbox>
+            ) : terminalFullScreen ? (
+              renderTerminalPane(true)
             ) : showFullDiffView ? (
               <scrollbox
                 focused={focusArea === "diff"}
@@ -9909,6 +10959,7 @@ export function App({
                     </box>
                   ) : null}
                 </box>
+                {terminalPaneHeight > 0 ? renderTerminalPane(false) : null}
               </>
             )}
           </box>

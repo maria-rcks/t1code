@@ -8,5 +8,7 @@ export * from "./sidebarStatus";
 export * from "./sidebarSort";
 export * from "./sessionLogic";
 export * from "./slashCommands";
+export * from "./terminalActivity";
+export * from "./threadTerminalState";
 export * from "./types";
 export * from "./wsTransport";
