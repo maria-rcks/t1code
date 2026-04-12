@@ -194,6 +194,8 @@ import {
   shouldClearPendingCreatedThread,
 } from "./threadSelection";
 import { resolveWorkEntryIcon } from "./workEntryIcons";
+import { createProfile, PROFILE_ICON_OPTIONS } from "./profiles";
+import { BORING_THEME_ID } from "./theme";
 
 type FocusArea =
   | "projects"
@@ -213,7 +215,8 @@ type OverlayMenu =
   | "sidebar-sort"
   | "git-actions"
   | "composer-env"
-  | "composer-branch";
+  | "composer-branch"
+  | "chat-settings";
 type SettingsSelectKind =
   | "theme"
   | "theme-preset"
@@ -1311,6 +1314,41 @@ function AttachmentPill({
       }}
     >
       <text content={label} style={{ fg: tone.textColor }} />
+    </box>
+  );
+}
+
+function ChatCategoryButton(props: {
+  icon: string;
+  label: string;
+  onPress: () => void;
+}) {
+  const [hoveredCategory, setHoveredCategory] = useState(false);
+  return (
+    <box
+      onMouseOver={() => setHoveredCategory(true)}
+      onMouseOut={() => setHoveredCategory(false)}
+      onMouseDown={props.onPress}
+      style={{
+        backgroundColor: hoveredCategory ? RGBA.fromHex("#a23b67") : PALETTE.surfaceAlt,
+        paddingLeft: 2,
+        paddingRight: 2,
+        paddingTop: 0,
+        paddingBottom: 0,
+        marginRight: 1,
+        marginBottom: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        border: true,
+        borderStyle: "rounded",
+        borderColor: hoveredCategory ? RGBA.fromHex("#a23b67") : PALETTE.border,
+      }}
+    >
+      <text content={props.icon} style={{ fg: hoveredCategory ? RGBA.fromHex("#ffffff") : PALETTE.text, marginRight: 1 }} />
+      <text
+        content={props.label}
+        style={{ fg: hoveredCategory ? RGBA.fromHex("#ffffff") : PALETTE.text }}
+      />
     </box>
   );
 }
@@ -2800,6 +2838,20 @@ export function App({
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const previewAttachmentCacheRef = useRef<Map<string, string>>(new Map());
   const composerDraftsByThreadIdRef = useRef<Readonly<Record<string, ComposerDraftState>>>({});
+
+  const [isChatMode, setIsChatMode] = useState(process.env.T1CODE_CHAT_MODE === "1");
+  const [tempChatMode, setTempChatMode] = useState(false);
+  const [sidebarSearchQuery, setSidebarSearchQuery] = useState("");
+  const [chatProfiles, setChatProfiles] = useState<import("./profiles").Profile[]>([
+    { id: "default", name: "Default", icon: "󰭹" },
+  ]);
+  const [activeProfileId, setActiveProfileId] = useState("default");
+  const [threadProfileMap, setThreadProfileMap] = useState<Record<string, string>>({});
+  const [showProfileCreate, setShowProfileCreate] = useState(false);
+  const [newProfileName, setNewProfileName] = useState("");
+  const [newProfileIconIndex, setNewProfileIconIndex] = useState(0);
+  const [profileNameFocused, setProfileNameFocused] = useState(false);
+  const [profileIconFocused, setProfileIconFocused] = useState(false);
   const updateAppSettings = useCallback((patch: Partial<AppSettings>) => {
     setAppSettings((current) => normalizeAppSettings({ ...current, ...patch }));
   }, []);
@@ -3370,6 +3422,7 @@ export function App({
   const responsiveLayout = resolveTuiResponsiveLayout({
     viewportColumns: totalColumns,
     sidebarCollapsedPreference,
+    isChatMode,
   });
   const showSidebarOverlay = !responsiveLayout.showSidebar && sidebarOverlayOpen;
   const showFullDiffView = mainView === "thread" && diffOpen;
@@ -4053,7 +4106,7 @@ export function App({
 
   const requestAppExit = useCallback(() => {
     setConfirmDialog({
-      title: "Quit T1 Code?",
+      title: isChatMode ? "Quit T1 Chat?" : "Quit T1 Code?",
       body: "Press Ctrl-C again or Enter to quit. Press Escape to stay in the session.",
       confirmLabel: "Quit",
       escapeBehavior: "cancel",
@@ -5744,6 +5797,9 @@ export function App({
     setExpandedProjectIds((current) => ensureProjectExpanded(current, projectId));
     setFocusArea("composer");
     setStatus("New thread");
+    if (isChatMode) {
+      setThreadProfileMap((current) => ({ ...current, [existingDraft.id]: activeProfileId }));
+    }
     setTimeout(() => {
       composerRef.current?.focus();
     }, 0);
@@ -7107,7 +7163,7 @@ export function App({
             ? activeDraftThread
               ? "Start a new thread with a prompt"
               : "Ask for follow-up changes or attach images"
-            : COMPOSER_PLACEHOLDER;
+            : isChatMode ? "Type your message here..." : COMPOSER_PLACEHOLDER;
   const composerPathTrigger = detectTrailingComposerPathTrigger(composer);
   const showPathSuggestions =
     composerIsFocused &&
@@ -7722,7 +7778,7 @@ export function App({
           style={{
             width: responsiveLayout.showSidebar ? responsiveLayout.sidebarWidth : TUI_SIDEBAR_WIDTH,
             backgroundColor: sidebarBg,
-            border: ["right"],
+            border: isChatMode ? [] : ["right"],
             borderColor: PALETTE.divider,
             flexDirection: "column",
             ...(showSidebarOverlay
@@ -7745,8 +7801,8 @@ export function App({
               paddingRight: 2,
             }}
           >
-            <box style={{ flexDirection: "row", alignItems: "center" }}>
-              {responsiveLayout.showWindowDots ? <WindowDots /> : null}
+            <box style={{ flexDirection: "row", alignItems: "center", justifyContent: isChatMode ? "center" : "flex-start", flexGrow: isChatMode ? 1 : 0 }}>
+              {responsiveLayout.showWindowDots && !isChatMode ? <WindowDots /> : null}
               <text
                 content={responsiveLayout.sidebarTitle}
                 style={{
@@ -7757,6 +7813,63 @@ export function App({
             </box>
           </box>
 
+          {isChatMode ? (
+            <box style={{ paddingLeft: 1, paddingRight: 1, flexDirection: "column" }}>
+              <box
+                onMouseDown={() => {
+                  if (activeProjectId) {
+                    openDraftThread(activeProjectId);
+                  }
+                }}
+                style={{
+                  backgroundColor: RGBA.fromHex("#a23b67"),
+                  height: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  paddingTop: 0,
+                  paddingBottom: 0,
+                }}
+              >
+                <text content="New Chat" style={{ fg: "#ffffff" }} />
+              </box>
+              <box
+                onMouseDown={() => setFocusArea("projects")}
+                style={{
+                  height: 1,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginTop: 1,
+                  paddingBottom: 0,
+                  position: "relative",
+                }}
+              >
+                <text content="󰍉" style={{ fg: sidebarSearchQuery ? PALETTE.muted : PALETTE.text, marginRight: 1 }} />
+                {sidebarSearchQuery ? null : (
+                  <text
+                    content="Search your threads..."
+                    style={{ fg: PALETTE.text, position: "absolute", left: 2 }}
+                  />
+                )}
+                <input
+                  value={sidebarSearchQuery}
+                  placeholder=""
+                  cursorColor={PALETTE.muted}
+                  onInput={(value) => setSidebarSearchQuery(value)}
+                  style={{
+                    flexGrow: 1,
+                    backgroundColor: sidebarBg,
+                    textColor: PALETTE.muted,
+                    focusedTextColor: PALETTE.muted,
+                    focusedBackgroundColor: sidebarBg,
+                  }}
+                />
+              </box>
+              <box style={{ height: 1, marginTop: 1, paddingLeft: 0, paddingRight: 0 }}>
+                <text content={"─".repeat(TUI_SIDEBAR_WIDTH - 2)} style={{ fg: PALETTE.text }} />
+              </box>
+            </box>
+          ) : null}
+
           <scrollbox
             focused={focusArea === "projects" || focusArea === "threads"}
             style={{
@@ -7764,9 +7877,10 @@ export function App({
               ...themedScrollboxStyle(sidebarBg),
               paddingLeft: 1,
               paddingRight: 1,
+              paddingTop: isChatMode ? 1 : 0,
             }}
           >
-            <SectionLabel
+            {isChatMode ? null : <SectionLabel
               label="PROJECTS"
               actions={[
                 {
@@ -7783,9 +7897,9 @@ export function App({
                   },
                 },
               ]}
-            />
+            />}
 
-            {projects.length === 0 ? (
+            {!isChatMode && projects.length === 0 ? (
               <box
                 style={{
                   paddingLeft: 2,
@@ -7801,7 +7915,125 @@ export function App({
               </box>
             ) : null}
 
-            {sortedProjects.map((project) => {
+            {isChatMode ? (() => {
+              const allThreads = sortedProjects.flatMap((project) => {
+                const projectThreads = threadsByProject.get(project.id) ?? [];
+                return projectThreads.map((thread) => ({ ...thread, projectId: project.id }));
+              });
+              allThreads.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+              const profileThreads = allThreads.filter((t) => {
+                const threadProfile = threadProfileMap[t.id];
+                if (!threadProfile) return activeProfileId === "default";
+                return threadProfile === activeProfileId;
+              });
+              const searchLower = sidebarSearchQuery.toLowerCase().trim();
+              const filteredThreads = searchLower
+                ? profileThreads.filter((t) => t.title.toLowerCase().includes(searchLower))
+                : profileThreads;
+
+              const now = new Date();
+              const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const yesterdayStart = new Date(todayStart.getTime() - 86400000);
+              const weekStart = new Date(todayStart.getTime() - 7 * 86400000);
+              const monthStart = new Date(todayStart.getTime() - 30 * 86400000);
+
+              type TimeGroup = { label: string; threads: typeof allThreads };
+              const groups: TimeGroup[] = [
+                { label: "Today", threads: [] },
+                { label: "Yesterday", threads: [] },
+                { label: "Last 7 Days", threads: [] },
+                { label: "Last 30 Days", threads: [] },
+                { label: "Older", threads: [] },
+              ];
+
+              for (const thread of filteredThreads) {
+                const date = new Date(thread.updatedAt);
+                if (date >= todayStart) groups[0]!.threads.push(thread);
+                else if (date >= yesterdayStart) groups[1]!.threads.push(thread);
+                else if (date >= weekStart) groups[2]!.threads.push(thread);
+                else if (date >= monthStart) groups[3]!.threads.push(thread);
+                else groups[4]!.threads.push(thread);
+              }
+
+              return groups.filter((g) => g.threads.length > 0).map((group) => (
+                <box key={group.label} style={{ flexDirection: "column" }}>
+                  <SectionLabel label={group.label} actions={[]} />
+                  {group.threads.map((thread) => {
+                    const isActive = thread.id === activeThreadId;
+                    const isSelected = selectedThreadIds.has(thread.id);
+                    const status = threadStatus(thread, {
+                      forceUnread: locallyUnreadThreadIds.has(thread.id),
+                      locallyVisitedAt: locallyVisitedThreads[thread.id],
+                    });
+                    return (
+                      <SidebarRow
+                        key={thread.id}
+                        active={isActive}
+                        selected={isSelected}
+                        activeBackgroundColor={PALETTE.controlActiveStrong}
+                        compact
+                        onPress={(event) => {
+                          closeSidebarContextMenu();
+                          handleThreadClick(
+                            event,
+                            thread.projectId,
+                            thread.id,
+                            allThreads.map((t) => t.id),
+                          );
+                        }}
+                        onSecondaryPress={(event) => {
+                          openThreadContextMenu(thread.projectId, thread.id, event);
+                        }}
+                      >
+                        <box
+                          style={{
+                            width: 1,
+                            marginRight: 1,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {status ? (
+                            <text
+                              content="●"
+                              style={{
+                                fg: resolveThreadStatusDotColor(status, sidebarPulseTick),
+                                flexShrink: 0,
+                              }}
+                            />
+                          ) : null}
+                        </box>
+                        <box
+                          style={{
+                            width: SIDEBAR_THREAD_TITLE_WIDTH,
+                            flexShrink: 0,
+                            overflow: "hidden",
+                            height: 1,
+                          }}
+                        >
+                          <text
+                            content={truncateTitleForDisplay(
+                              thread.title,
+                              SIDEBAR_THREAD_TITLE_WIDTH,
+                            )}
+                            style={{
+                              fg: isSelected
+                                ? ACTIVE_TUI_THEME.colors.selectedText
+                                : isActive
+                                  ? PALETTE.text
+                                  : PALETTE.muted,
+                            }}
+                          />
+                        </box>
+                      </SidebarRow>
+                    );
+                  })}
+                </box>
+              ));
+            })() : null}
+
+            {!isChatMode ? sortedProjects.map((project) => {
               const projectThreads = threadsByProject.get(project.id) ?? [];
               const orderedProjectThreadIds = projectThreads.map((thread) => thread.id);
               const isProjectExpanded = expandedProjectIds.has(project.id);
@@ -7996,9 +8228,157 @@ export function App({
                   ) : null}
                 </box>
               );
-            })}
+            }) : null}
           </scrollbox>
 
+          {isChatMode ? (
+            <box
+              style={{
+                paddingLeft: 1,
+                paddingRight: 1,
+                paddingTop: 1,
+                paddingBottom: 1,
+                flexDirection: "column",
+                position: "relative",
+              }}
+            >
+              {showProfileCreate ? (
+                <box
+                  style={{
+                    position: "absolute",
+                    bottom: 4,
+                    left: 0,
+                    right: 0,
+                    backgroundColor: PALETTE.surfaceAlt,
+                    border: ["top"],
+                    borderColor: PALETTE.divider,
+                    flexDirection: "column",
+                    padding: 1,
+                    zIndex: 100,
+                  }}
+                >
+                  <text content="Create a Profile" style={{ fg: PALETTE.text, marginBottom: 0 }} />
+                  <text content="Profiles have separate threads" style={{ fg: PALETTE.subtle, marginBottom: 1 }} />
+                  <box style={{ height: 3, flexDirection: "row", marginBottom: 1 }}>
+                    <box
+                      onMouseDown={() => {
+                        setNewProfileIconIndex((i) => (i > 0 ? i - 1 : PROFILE_ICON_OPTIONS.length - 1));
+                        setProfileIconFocused(true);
+                        setProfileNameFocused(false);
+                      }}
+                      style={{
+                        border: true,
+                        borderStyle: "rounded",
+                        borderColor: profileIconFocused ? PALETTE.composerBorder : PALETTE.border,
+                        paddingLeft: 1,
+                        paddingRight: 1,
+                        marginRight: 1,
+                        backgroundColor: PALETTE.surfaceAlt,
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
+                    >
+                      <text
+                        content={PROFILE_ICON_OPTIONS[newProfileIconIndex]?.icon ?? "󰭹"}
+                        style={{ fg: PALETTE.text }}
+                      />
+                    </box>
+                    <box
+                      onMouseDown={() => { setProfileNameFocused(true); setProfileIconFocused(false); }}
+                      style={{ flexGrow: 1, border: true, borderStyle: "rounded", borderColor: profileNameFocused ? PALETTE.composerBorder : PALETTE.border, backgroundColor: PALETTE.surfaceAlt, justifyContent: "center", paddingLeft: 1 }}
+                    >
+                      <input
+                        value={newProfileName}
+                        placeholder="Profile name"
+                        cursorColor={PALETTE.text}
+                        onInput={(value) => {
+                          setNewProfileName(value.slice(0, 50));
+                          setProfileNameFocused(true);
+                        }}
+                        style={{
+                          flexGrow: 1,
+                          backgroundColor: PALETTE.surfaceAlt,
+                          textColor: PALETTE.text,
+                          focusedTextColor: PALETTE.text,
+                          focusedBackgroundColor: PALETTE.surfaceAlt,
+                        }}
+                      />
+                    </box>
+                  </box>
+                  <box
+                    onMouseDown={() => {
+                      if (newProfileName.trim()) {
+                        const icon = PROFILE_ICON_OPTIONS[newProfileIconIndex]?.icon ?? "󰭹";
+                        const profile = createProfile(newProfileName.trim(), icon);
+                        setChatProfiles((prev) => [...prev, profile]);
+                        setActiveProfileId(profile.id);
+                        setNewProfileName("");
+                        setNewProfileIconIndex(0);
+                        setProfileNameFocused(false);
+                        setProfileIconFocused(false);
+                        setShowProfileCreate(false);
+                      }
+                    }}
+                    style={{
+                      backgroundColor: newProfileName.trim() ? PALETTE.composerSend : PALETTE.controlActive,
+                      height: 1,
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                  >
+                    <text content="Create Profile" style={{ fg: newProfileName.trim() ? "#ffffff" : "#ffffff80" }} />
+                  </box>
+                </box>
+              ) : null}
+              <box style={{ height: 3, flexDirection: "row", alignItems: "center" }}>
+                <box style={{ flexGrow: 1, flexDirection: "row", justifyContent: "center", alignItems: "center" }}>
+                  {chatProfiles.map((profile) => (
+                    <box
+                      key={profile.id}
+                      onMouseDown={() => setActiveProfileId(profile.id)}
+                      style={{
+                        marginRight: 1,
+                        width: 3,
+                        height: 3,
+                        justifyContent: "center",
+                        alignItems: "center",
+                        backgroundColor:
+                          profile.id === activeProfileId ? PALETTE.controlActive : "transparent",
+                      }}
+                    >
+                      <text
+                        content={profile.icon}
+                        style={{
+                          fg: profile.id === activeProfileId ? PALETTE.text : PALETTE.muted,
+                        }}
+                      />
+                    </box>
+                  ))}
+                </box>
+                <box
+                  onMouseDown={() => {
+                    setShowProfileCreate((v) => !v);
+                    if (showProfileCreate) {
+                      setNewProfileName("");
+                      setNewProfileIconIndex(0);
+                      setProfileNameFocused(false);
+                    }
+                  }}
+                  style={{
+                    width: 3,
+                    height: 3,
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
+                >
+                  <text
+                    content={showProfileCreate ? "✕" : "󰙃"}
+                    style={{ fg: PALETTE.muted }}
+                  />
+                </box>
+              </box>
+            </box>
+          ) : (
           <box
             style={{
               paddingLeft: 1,
@@ -8052,6 +8432,7 @@ export function App({
               />
             </SidebarRow>
           </box>
+          )}
         </box>
       ) : null}
 
@@ -8062,6 +8443,46 @@ export function App({
           backgroundColor: PALETTE.main,
         }}
       >
+        {isChatMode && responsiveLayout.showSidebar ? (
+          <>
+            {/* Row 1: top bar, full sidebar bg connects to sidebar */}
+            <box style={{ height: 1, backgroundColor: sidebarBg }} />
+            {/* Row 2: icons row, main bg on left, sidebar bg with icons on right */}
+            <box style={{ height: 1, flexDirection: "row", backgroundColor: PALETTE.main }}>
+              <box style={{ flexGrow: 1 }} />
+              <box style={{ flexDirection: "row", alignItems: "center", backgroundColor: sidebarBg, paddingLeft: 1, paddingRight: 1 }}>
+                <ToolbarButton
+                  icon="󰔟"
+                  compact
+                  chrome="bare"
+                  width={4}
+                  justifyContent="flex-end"
+                  iconColor={tempChatMode ? PALETTE.accent : PALETTE.muted}
+                  active={tempChatMode}
+                  onPress={() => setTempChatMode((prev) => !prev)}
+                />
+                <ToolbarButton
+                  icon="󰒓"
+                  compact
+                  chrome="bare"
+                  width={4}
+                  justifyContent="flex-end"
+                  iconColor={overlayMenu === "chat-settings" ? PALETTE.text : PALETTE.muted}
+                  active={overlayMenu === "chat-settings"}
+                  onPress={() => {
+                    setOverlayMenu((current) => current === "chat-settings" ? null : "chat-settings");
+                  }}
+                />
+              </box>
+            </box>
+            {/* Row 3: bottom padding, sidebar bg only on right to match icon area */}
+            <box style={{ height: 1, flexDirection: "row", backgroundColor: PALETTE.main }}>
+              <box style={{ flexGrow: 1 }} />
+              <box style={{ width: 10, backgroundColor: sidebarBg }} />
+            </box>
+          </>
+        ) : null}
+        {isChatMode && responsiveLayout.showSidebar ? null : (
         <box
           style={{
             height: 3,
@@ -8069,13 +8490,14 @@ export function App({
             alignItems: "center",
             paddingLeft: responsiveLayout.showSidebarToggle ? 1 : 2,
             paddingRight: 0,
-            paddingTop: 1,
+            paddingTop: 0,
             paddingBottom: 1,
             backgroundColor: PALETTE.main,
             border: ["bottom"],
             borderColor: PALETTE.divider,
           }}
         >
+          {isChatMode && responsiveLayout.showSidebar ? null : (
           <box
             style={{
               flexDirection: "row",
@@ -8101,7 +8523,9 @@ export function App({
               <Badge label={activeProject.title} />
             ) : null}
           </box>
+          )}
 
+          {isChatMode && responsiveLayout.showSidebar ? null : (
           <box
             style={{
               flexDirection: "row",
@@ -8120,7 +8544,31 @@ export function App({
                 marginRight={1}
                 onPress={() => restoreDefaultSettings()}
               />
-            ) : mainView === "keybindings" ? null : (
+            ) : mainView === "keybindings" ? null : isChatMode ? (
+              <>
+                <ToolbarButton
+                  icon="󰔟"
+                  compact
+                  chrome="bare"
+                  width={4}
+                  justifyContent="flex-end"
+                  iconColor={tempChatMode ? PALETTE.accent : PALETTE.muted}
+                  active={tempChatMode}
+                  onPress={() => setTempChatMode((prev) => !prev)}
+                />
+                <ToolbarButton
+                  icon="󰒓"
+                  compact
+                  chrome="bare"
+                  width={4}
+                  justifyContent="flex-end"
+                  iconColor={PALETTE.muted}
+                  onPress={() => {
+                    openMainView("settings");
+                  }}
+                />
+              </>
+            ) : (
               <>
                 <ToolbarButton
                   icon={gitActionBusy ? "󱦟" : "󰊢"}
@@ -8151,7 +8599,9 @@ export function App({
               </>
             )}
           </box>
+          )}
         </box>
+        )}
 
         <box style={{ flexDirection: "row", flexGrow: 1 }}>
           <box
@@ -8163,7 +8613,7 @@ export function App({
               paddingLeft: 2,
               paddingRight: 2,
               paddingTop: 1,
-              paddingBottom: 1,
+              paddingBottom: isChatMode ? 0 : 1,
               minHeight: 0,
             }}
           >
@@ -8186,6 +8636,17 @@ export function App({
                   {mainView === "settings" ? (
                     <>
                       <SettingsSection title="General">
+                        <SettingsRow
+                          title="Mode"
+                          description="Switch between T1 Code (coding) and T1 Chat (conversation) modes."
+                          control={
+                            <ToolbarButton
+                              label={isChatMode ? "T1 Chat" : "T1 Code"}
+                              surface="inset"
+                              onPress={() => setIsChatMode((v) => !v)}
+                            />
+                          }
+                        />
                         <SettingsRow
                           title="Theme"
                           description="Choose how T3 Code looks across the app."
@@ -8936,7 +9397,82 @@ export function App({
                     paddingRight: 1,
                   }}
                 >
-                  {!activeProject && !activeThread && !activeDraftThread ? (
+                  {isChatMode && (!activeThread || activeThread.messages.length === 0) ? (
+                    <box
+                      style={{
+                        flexGrow: 1,
+                        flexDirection: "column",
+                        justifyContent: "flex-start",
+                        alignItems: "flex-start",
+                        paddingLeft: 2,
+                        paddingRight: 2,
+                        paddingTop: 4,
+                      }}
+                    >
+                      <box style={{ flexDirection: "row", marginBottom: 2 }}>
+                        {tempChatMode ? (
+                          <box style={{ flexDirection: "row", alignItems: "center" }}>
+                            <text content="󰔟" style={{ fg: RGBA.fromHex("#a23b67"), marginRight: 1 }} />
+                            <text content="Temporary chat" style={{ fg: RGBA.fromHex("#a23b67") }} />
+                          </box>
+                        ) : (
+                          <text content="How can I help you?" style={{ fg: PALETTE.text }} />
+                        )}
+                      </box>
+
+                      <box style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-start", marginBottom: 1 }}>
+                        {[
+                          { icon: "󰛕", label: "Create" },
+                          { icon: "󰎕", label: "Explore" },
+                          { icon: "󰅪", label: "Code" },
+                          { icon: "󰑴", label: "Learn" },
+                        ].map((item) => (
+                          <ChatCategoryButton
+                            key={item.label}
+                            icon={item.icon}
+                            label={item.label}
+                            onPress={() => {
+                              syncComposerValueRefSoon();
+                              setComposer(`${item.label} `);
+                              setTimeout(() => composerRef.current?.focus(), 0);
+                            }}
+                          />
+                        ))}
+                      </box>
+
+                      <box style={{ flexDirection: "column", width: "100%", alignItems: "flex-start" }}>
+                        {[
+                          "How does AI work?",
+                          "Are black holes real?",
+                          'How many Rs are in the word "strawberry"?',
+                          "What is the meaning of life?",
+                        ].map((q, i) => (
+                          <box
+                            key={q}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              syncComposerValueRefSoon();
+                              setComposer(q);
+                              setTimeout(() => composerRef.current?.focus(), 0);
+                            }}
+                            style={{
+                              border: i > 0 ? ["top"] : [],
+                              borderColor: PALETTE.divider,
+                              paddingTop: 0,
+                              paddingBottom: 0,
+                              height: i === 0 ? 1 : 2,
+                              alignItems: "flex-start",
+                              justifyContent: "center",
+                              width: "100%",
+                            }}
+                          >
+                            <text content={q} style={{ fg: PALETTE.muted }} />
+                          </box>
+                        ))}
+                      </box>
+                    </box>
+                  ) : !activeProject && !activeThread && !activeDraftThread ? (
                     <box
                       style={{
                         backgroundColor: PALETTE.surface,
@@ -9346,7 +9882,7 @@ export function App({
                     </box>
                   </box>
                 ) : (
-                  <box style={{ height: 1 }} />
+                  <box style={{ height: isChatMode ? 0 : 1 }} />
                 )}
 
                 <box
@@ -9367,7 +9903,7 @@ export function App({
                     position: "relative",
                     zIndex: 20,
                     backgroundColor: PALETTE.composerPanel,
-                    border: true,
+                    border: isChatMode ? ["top", "left", "right"] : true,
                     borderStyle: "rounded",
                     borderColor: activePendingProgress
                       ? focusArea === "composer"
@@ -9401,7 +9937,7 @@ export function App({
 
                   <box
                     style={{
-                      marginBottom: activePendingProgress ? 0 : 1,
+                      marginBottom: activePendingProgress ? 0 : isChatMode ? 0 : 1,
                       height: activePendingProgress ? "auto" : composerTextareaHeight,
                       minHeight: activePendingProgress
                         ? COMPOSER_PENDING_TEXTAREA_MIN_HEIGHT
@@ -9696,6 +10232,7 @@ export function App({
                       alignItems: "center",
                     }}
                   >
+                    {null}
                     {activePendingApproval ? (
                       <>
                         <box style={{ flexGrow: 1 }} />
@@ -9769,8 +10306,8 @@ export function App({
                               />
                             </>
                           ) : null}
-                          {responsiveLayout.showComposerDividers ? <FooterDivider /> : null}
-                          <ToolbarButton
+                          {!isChatMode && responsiveLayout.showComposerDividers ? <FooterDivider /> : null}
+                          {!isChatMode ? <ToolbarButton
                             icon={interactionIcon(draftInteractionMode)}
                             label={
                               responsiveLayout.showComposerModeLabels
@@ -9780,9 +10317,9 @@ export function App({
                             compact={!responsiveLayout.showComposerModeLabels}
                             active={draftInteractionMode === "plan"}
                             onPress={toggleInteractionMode}
-                          />
-                          {responsiveLayout.showComposerDividers ? <FooterDivider /> : null}
-                          <ToolbarButton
+                          /> : null}
+                          {!isChatMode && responsiveLayout.showComposerDividers ? <FooterDivider /> : null}
+                          {!isChatMode ? <ToolbarButton
                             icon={runtimeFooterIcon(draftRuntimeMode)}
                             label={
                               responsiveLayout.showComposerModeLabels
@@ -9792,7 +10329,7 @@ export function App({
                             compact={!responsiveLayout.showComposerModeLabels}
                             active={draftRuntimeMode === "approval-required"}
                             onPress={toggleRuntimeMode}
-                          />
+                          /> : null}
                         </box>
                         {activePendingProgress ? (
                           <>
@@ -9852,7 +10389,7 @@ export function App({
                       </>
                     )}
                   </box>
-                  {activeProjectId && isGitRepo ? (
+                  {activeProjectId && isGitRepo && !isChatMode ? (
                     <box
                       style={{
                         position: "absolute",
@@ -10500,6 +11037,100 @@ export function App({
               content="Press Enter to save or Escape to cancel."
               style={{ fg: PALETTE.subtle, marginTop: 1 }}
             />
+          </box>
+        </box>
+      ) : null}
+
+      {overlayMenu === "chat-settings" ? (
+        <box
+          style={{
+            position: "absolute",
+            top: 4,
+            right: 1,
+            width: 28,
+            backgroundColor: PALETTE.popup,
+            border: true,
+            borderStyle: "rounded",
+            borderColor: PALETTE.border,
+            paddingTop: 0,
+            paddingBottom: 0,
+            paddingLeft: 1,
+            paddingRight: 1,
+            zIndex: 200,
+            flexDirection: "column",
+          }}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation?.();
+          }}
+        >
+          <box style={{ height: 1, flexDirection: "row", alignItems: "center" }}>
+            <text content="Theme" style={{ fg: PALETTE.text, marginRight: 1 }} />
+            <box
+              onMouseDown={() => {
+                updateAppSettings({ theme: "light" });
+                setOverlayMenu(null);
+              }}
+              style={{
+                paddingLeft: 1,
+                paddingRight: 1,
+                backgroundColor: appSettings.theme === "light" ? PALETTE.controlActive : "transparent",
+              }}
+            >
+              <text content="󰖙" style={{ fg: appSettings.theme === "light" ? PALETTE.text : PALETTE.muted }} />
+            </box>
+            <box
+              onMouseDown={() => {
+                updateAppSettings({ theme: "system" });
+                setOverlayMenu(null);
+              }}
+              style={{
+                paddingLeft: 1,
+                paddingRight: 1,
+                backgroundColor: appSettings.theme === "system" || !appSettings.theme ? PALETTE.controlActive : "transparent",
+              }}
+            >
+              <text content="󰍹" style={{ fg: appSettings.theme === "system" || !appSettings.theme ? PALETTE.text : PALETTE.muted }} />
+            </box>
+            <box
+              onMouseDown={() => {
+                updateAppSettings({ theme: "dark" });
+                setOverlayMenu(null);
+              }}
+              style={{
+                paddingLeft: 1,
+                paddingRight: 1,
+                backgroundColor: appSettings.theme === "dark" ? PALETTE.controlActive : "transparent",
+              }}
+            >
+              <text content="󰖔" style={{ fg: appSettings.theme === "dark" ? PALETTE.text : PALETTE.muted }} />
+            </box>
+          </box>
+          <box
+            onMouseDown={() => {
+              setTuiThemeId((current) => current === BORING_THEME_ID ? "default" : BORING_THEME_ID);
+            }}
+            style={{ height: 1, flexDirection: "row", alignItems: "center" }}
+          >
+            <text content="󰏘" style={{ fg: PALETTE.muted, marginRight: 1 }} />
+            <text content="Boring Mode" style={{ fg: PALETTE.text, flexGrow: 1 }} />
+            <text
+              content={tuiThemeId === BORING_THEME_ID ? "●" : "○"}
+              style={{ fg: tuiThemeId === BORING_THEME_ID ? PALETTE.accent : PALETTE.subtle }}
+            />
+          </box>
+          <box style={{ height: 1 }}>
+            <text content={"─".repeat(26)} style={{ fg: PALETTE.divider }} />
+          </box>
+          <box
+            onMouseDown={() => {
+              openMainView("settings");
+              setOverlayMenu(null);
+            }}
+            style={{ height: 1, flexDirection: "row", alignItems: "center" }}
+          >
+            <text content="󰒓" style={{ fg: PALETTE.muted, marginRight: 1 }} />
+            <text content="Settings" style={{ fg: PALETTE.text }} />
           </box>
         </box>
       ) : null}

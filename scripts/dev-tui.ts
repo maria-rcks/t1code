@@ -231,6 +231,7 @@ const tui = spawn("bun", ["--silent", "--watch", "run", TUI_ENTRY], {
     T1CODE_PORT: String(port),
     T1CODE_AUTH_TOKEN: authToken,
     T1CODE_TUI_ATTACH_ONLY: "1",
+    ...(process.env.T1CODE_CHAT_MODE ? { T1CODE_CHAT_MODE: process.env.T1CODE_CHAT_MODE } : {}),
   },
   stdio: "inherit",
 });
