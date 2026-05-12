@@ -3567,7 +3567,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
               >
                 <div
                   className={cn(
-                    "rounded-[20px] border bg-card transition-colors duration-200 focus-within:border-ring/45",
+                    "rounded-[20px] border bg-card transition-colors duration-200 has-focus-visible:border-ring/45",
                     isDragOverComposer ? "border-primary/70 bg-accent/30" : "border-border",
                     composerProviderState.composerSurfaceClassName,
                   )}
@@ -4014,7 +4014,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                           ) : (
                             <button
                               type="submit"
-                              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/90 text-primary-foreground transition-all duration-150 hover:bg-primary hover:scale-105 disabled:opacity-30 disabled:hover:scale-100 sm:h-8 sm:w-8"
+                              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/90 text-primary-foreground transition-all duration-150 enabled:cursor-pointer hover:bg-primary hover:scale-105 disabled:pointer-events-none disabled:opacity-30 disabled:hover:scale-100 sm:h-8 sm:w-8"
                               disabled={
                                 isSendBusy || isConnecting || !composerSendState.hasSendableContent
                               }
