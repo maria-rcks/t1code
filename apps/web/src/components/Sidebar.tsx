@@ -79,6 +79,7 @@ import {
   SidebarMenuSubItem,
   SidebarSeparator,
   SidebarTrigger,
+  useSidebar,
 } from "./ui/sidebar";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
@@ -273,6 +274,7 @@ export default function Sidebar() {
   const isOnSettings = useLocation({ select: (loc) => loc.pathname === "/settings" });
   const { settings: appSettings } = useAppSettings();
   const sidebarThreadPreviewCount = appSettings.sidebarThreadPreviewCount;
+  const { isMobile, setOpenMobile } = useSidebar();
   const { handleNewThread } = useHandleNewThread();
   const routeThreadId = useParams({
     strict: false,
@@ -1371,7 +1373,7 @@ export default function Sidebar() {
                           <div className="group/project-header relative">
                             <SidebarMenuButton
                               size="sm"
-                              className="gap-2 px-2 py-1.5 text-left cursor-grab active:cursor-grabbing hover:bg-accent group-hover/project-header:bg-accent group-hover/project-header:text-sidebar-accent-foreground"
+                              className="gap-2 px-2 py-1.5 pr-8 text-left cursor-grab active:cursor-grabbing hover:bg-accent group-hover/project-header:bg-accent group-hover/project-header:text-sidebar-accent-foreground max-sm:pr-14"
                               {...dragHandleProps.attributes}
                               {...dragHandleProps.listeners}
                               onPointerDownCapture={handleProjectTitlePointerDownCapture}
@@ -1424,7 +1426,7 @@ export default function Sidebar() {
                                       />
                                     }
                                     showOnHover
-                                    className="top-1 right-1 size-5 rounded-md p-0 text-muted-foreground/70 hover:bg-secondary hover:text-foreground"
+                                    className="top-1 right-1 size-5 rounded-md p-0 text-muted-foreground/60 hover:bg-secondary hover:text-foreground max-sm:opacity-100"
                                     onClick={(event) => {
                                       event.preventDefault();
                                       event.stopPropagation();
@@ -1697,7 +1699,12 @@ export default function Sidebar() {
               <SidebarMenuButton
                 size="sm"
                 className="gap-2 px-2 py-1.5 text-muted-foreground/70 hover:bg-accent hover:text-foreground"
-                onClick={() => void navigate({ to: "/settings" })}
+                onClick={() => {
+                  if (isMobile) {
+                    setOpenMobile(false);
+                  }
+                  void navigate({ to: "/settings" });
+                }}
               >
                 <SettingsIcon className="size-3.5" />
                 <span className="text-xs">Settings</span>
