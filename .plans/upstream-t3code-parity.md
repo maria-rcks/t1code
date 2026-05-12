@@ -1,6 +1,6 @@
 # Upstream T3Code Parity Plan
 
-Source: `pingdotgg/t3code` at `a41f4895` (`upstream-t3code/main`).
+Source: `pingdotgg/t3code` at `b83e9c95` (`upstream-t3code/origin/main`).
 Fork baseline: `b3bca04c`.
 
 This fork intentionally preserves local TUI-only surfaces such as `apps/tui` and
@@ -86,6 +86,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Mobile input zoom prevention: align with upstream `9acf46a7` by keeping
   composer and thread rename inputs at 16px on mobile while preserving compact
   desktop sizing, preventing iOS Safari focus zoom.
+- Git action dialog footer layout: align with upstream `4ceabac7` by letting
+  default-branch dialog footer actions wrap and use full-width mobile buttons so
+  long labels do not clip.
 
 ## Remaining upstream groups
 
