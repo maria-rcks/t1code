@@ -320,6 +320,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
   by adding app-server backed Codex provider probing, account/model/skill
   projection, custom model fallbacks, CODEX_HOME expansion, and pending/error
   snapshot coverage for the new driver path.
+- Provider text-generation core: partially align with upstream `08e6d4cf` by
+  adding instance-routed text-generation service contracts, shared prompt
+  builders, text-generation policies/presets, contract-level
+  `TextGenerationError`, and focused registry/prompt regression tests.
 
 ## Remaining upstream groups
 
