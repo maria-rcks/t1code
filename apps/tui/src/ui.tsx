@@ -130,7 +130,6 @@ import {
   isDiffLikeCodeBlockFiletype,
   parseMessageMarkdownSegments,
   resolveCodeBlockFiletype,
-  truncateCodeBlockContent,
 } from "./messageMarkdown";
 import { openExternalUrl } from "./openExternal";
 import { type TuiPrefs, readPrefs, writePrefs } from "./prefs";
@@ -1496,7 +1495,6 @@ export function MessageMarkdown({
         }
 
         const segmentKey = `${segment.kind}:${segment.language ?? ""}:${segment.content}`;
-        const displayedCode = truncateCodeBlockContent(segment.content);
         const codeBlockFiletype = resolveCodeBlockFiletype(segment.language);
         const codeBlockSyntax = isDiffLikeCodeBlockFiletype(codeBlockFiletype)
           ? DIFF_SYNTAX
@@ -1531,10 +1529,11 @@ export function MessageMarkdown({
                 />
               ) : null}
               <code
-                content={displayedCode || " "}
+                content={segment.content || " "}
                 {...(codeBlockFiletype ? { filetype: codeBlockFiletype } : {})}
                 syntaxStyle={codeBlockSyntax}
                 conceal={true}
+                wrapMode="char"
                 style={{
                   width: "auto",
                   minWidth: 0,

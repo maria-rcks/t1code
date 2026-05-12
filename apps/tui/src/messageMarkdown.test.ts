@@ -4,7 +4,6 @@ import {
   isDiffLikeCodeBlockFiletype,
   parseMessageMarkdownSegments,
   resolveCodeBlockFiletype,
-  truncateCodeBlockContent,
 } from "./messageMarkdown";
 
 describe("parseMessageMarkdownSegments", () => {
@@ -32,12 +31,6 @@ describe("parseMessageMarkdownSegments", () => {
     expect(parseMessageMarkdownSegments("```js\nconsole.log('x')")).toEqual([
       { kind: "code", content: "console.log('x')", language: "js" },
     ]);
-  });
-
-  it("truncates long code lines without changing line count", () => {
-    const content = `short\n${"x".repeat(100)}`;
-
-    expect(truncateCodeBlockContent(content)).toEqual(`short\n${"x".repeat(87)}…`);
   });
 
   it("normalizes patch-style fence languages to diff", () => {

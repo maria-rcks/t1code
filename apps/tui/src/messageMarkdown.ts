@@ -99,19 +99,6 @@ export function parseMessageMarkdownSegments(content: string): MessageMarkdownSe
   return segments;
 }
 
-const CODE_BLOCK_MAX_LINE_LENGTH = 88;
-
-export function truncateCodeBlockContent(content: string): string {
-  return content
-    .split("\n")
-    .map((line) =>
-      line.length > CODE_BLOCK_MAX_LINE_LENGTH
-        ? `${line.slice(0, CODE_BLOCK_MAX_LINE_LENGTH - 1)}…`
-        : line,
-    )
-    .join("\n");
-}
-
 export function resolveCodeBlockFiletype(language: string | null): string | undefined {
   if (!language) {
     return undefined;
