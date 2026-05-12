@@ -5,6 +5,7 @@ import {
   countAnsweredPendingUserInputQuestions,
   derivePendingUserInputProgress,
   findFirstUnansweredPendingUserInputQuestionIndex,
+  formatPendingUserInputPrimaryActionLabel,
   resolvePendingUserInputAnswer,
   setPendingUserInputCustomAnswer,
 } from "./pendingUserInput";
@@ -188,5 +189,56 @@ describe("pending user input question progress", () => {
       isComplete: false,
       canAdvance: true,
     });
+  });
+});
+
+describe("formatPendingUserInputPrimaryActionLabel", () => {
+  it("returns submitting while responding", () => {
+    expect(
+      formatPendingUserInputPrimaryActionLabel({
+        compact: false,
+        isLastQuestion: true,
+        isResponding: true,
+        questionIndex: 0,
+      }),
+    ).toBe("Submitting...");
+  });
+
+  it("returns compact labels", () => {
+    expect(
+      formatPendingUserInputPrimaryActionLabel({
+        compact: true,
+        isLastQuestion: false,
+        isResponding: false,
+        questionIndex: 0,
+      }),
+    ).toBe("Next");
+    expect(
+      formatPendingUserInputPrimaryActionLabel({
+        compact: true,
+        isLastQuestion: true,
+        isResponding: false,
+        questionIndex: 1,
+      }),
+    ).toBe("Submit");
+  });
+
+  it("distinguishes singular and plural final submit labels", () => {
+    expect(
+      formatPendingUserInputPrimaryActionLabel({
+        compact: false,
+        isLastQuestion: true,
+        isResponding: false,
+        questionIndex: 0,
+      }),
+    ).toBe("Submit answer");
+    expect(
+      formatPendingUserInputPrimaryActionLabel({
+        compact: false,
+        isLastQuestion: true,
+        isResponding: false,
+        questionIndex: 1,
+      }),
+    ).toBe("Submit answers");
   });
 });

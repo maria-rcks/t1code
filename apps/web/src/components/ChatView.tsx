@@ -64,6 +64,7 @@ import { isScrollContainerNearBottom } from "../chat-scroll";
 import {
   buildPendingUserInputAnswers,
   derivePendingUserInputProgress,
+  formatPendingUserInputPrimaryActionLabel,
   setPendingUserInputCustomAnswer,
   type PendingUserInputDraftAnswer,
 } from "../pendingUserInput";
@@ -3903,11 +3904,12 @@ export default function ChatView({ threadId }: ChatViewProps) {
                                   : !activePendingProgress.canAdvance)
                               }
                             >
-                              {activePendingIsResponding
-                                ? "Submitting..."
-                                : activePendingProgress.isLastQuestion
-                                  ? "Submit answers"
-                                  : "Next question"}
+                              {formatPendingUserInputPrimaryActionLabel({
+                                compact: false,
+                                isLastQuestion: activePendingProgress.isLastQuestion,
+                                isResponding: activePendingIsResponding,
+                                questionIndex: activePendingProgress.questionIndex,
+                              })}
                             </Button>
                           </div>
                         ) : phase === "running" ? (
