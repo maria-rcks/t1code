@@ -71,6 +71,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Background fetch askpass: suppress SSH askpass prompts during upstream status
   refreshes so background git checks cannot steal focus or hang waiting for UI
   credentials.
+- Hosted channel branding: recognize `VITE_HOSTED_APP_CHANNEL=latest|nightly`
+  and surface the matching stage/display name in the web app.
 
 ## Remaining upstream groups
 
@@ -115,8 +117,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
 
 7. Tooling and release parity
    - Oxlint plugin package and stricter Effect LSP rules.
-   - Release workflow changes, Discord release notifications, and nightly tag
-     behavior.
+   - Release workflow changes, router-domain aliasing, Discord release
+     notifications, and nightly tag behavior.
    - `packages/client-runtime` replacement/adaptation while preserving TUI
      compatibility.
 
