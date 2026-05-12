@@ -328,6 +328,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
   per-instance `codex exec` text generation with model option forwarding,
   CODEX_HOME expansion, structured output decoding, attachment image
   materialization, cleanup, and focused fake-binary coverage.
+- Claude text generation: partially align with upstream `08e6d4cf` by adding
+  per-instance `claude -p` structured-output text generation with effort,
+  fast-mode/thinking settings, Claude HOME environment resolution, schema
+  decoding, and focused fake-binary coverage.
 
 ## Remaining upstream groups
 
