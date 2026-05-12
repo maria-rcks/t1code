@@ -280,6 +280,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
   adding the provider driver/instance SPI, provider-instance environment
   merging, provider snapshot source typing, and unavailable shadow snapshot
   helpers.
+- Provider instance registry: partially align with upstream `08e6d4cf` by
+  adding the live provider instance registry/mutator, per-instance scopes,
+  same-driver multi-instance boot, unknown-driver shadow snapshots, and
+  reconcile teardown semantics.
 
 ## Remaining upstream groups
 
@@ -287,7 +291,7 @@ removing those fork surfaces unless a replacement has been implemented and wired
    - Effect 4 catalog migration and patch.
    - `effect-acp` and `effect-codex-app-server` packages.
    - ACP/Cursor provider support and OpenCode lifecycle fixes.
-   - Provider instance registry and built-in driver catalog.
+   - Built-in driver catalog and provider registry aggregation.
    - Provider update execution runners/coordinators and newer provider snapshot
      architecture.
 
