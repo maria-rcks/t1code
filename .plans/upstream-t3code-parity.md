@@ -142,6 +142,11 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Pending user input digit shortcuts: adapt upstream `5467d119` by detecting
   nested contenteditable targets while preserving this fork's empty-editor
   number-key option shortcuts.
+- Claude AskUserQuestion answer keys: align with upstream `44b39fe2` by using
+  full question text as the UI answer id so Claude SDK answer lookup renders a
+  non-empty tool result.
+- Default-branch PR status: adapt upstream `69d9a659` by hiding stale
+  merged/closed PR metadata when status is computed on common default branches.
 
 ## Remaining upstream groups
 
