@@ -182,6 +182,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Hidden thread status indicator: partially align with upstream `d5f23331` by
   showing the aggregated status for hidden preview threads beside the sidebar
   "Show more" control.
+- Worktree branch publishing refspec: align with upstream `d2822a88` by using
+  `HEAD:refs/heads/<branch>` when first pushing a branch with upstream setup,
+  avoiding ambiguous slashed branch names from linked worktrees.
 
 ## Remaining upstream groups
 

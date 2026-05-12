@@ -1463,6 +1463,44 @@ it.layer(TestLayer)("git integration", (it) => {
       }),
     );
 
+    it.effect("pushes slashed worktree branches with an explicit HEAD refspec", () =>
+      Effect.gen(function* () {
+        const tmp = yield* makeTmpDir();
+        const remote = yield* makeTmpDir();
+        const worktreeRoot = yield* makeTmpDir("git-worktrees-");
+        const worktree = path.join(worktreeRoot, "linked");
+        const featureBranch = "t3code/pr-488/statemachine";
+
+        yield* git(remote, ["init", "--bare"]);
+        const { initialBranch } = yield* initRepoWithCommit(tmp);
+        yield* git(tmp, ["remote", "add", "origin", remote]);
+        yield* git(tmp, ["push", "-u", "origin", initialBranch]);
+        yield* git(tmp, ["worktree", "add", "-b", featureBranch, worktree]);
+        yield* git(worktree, ["config", "user.email", "test@test.com"]);
+        yield* git(worktree, ["config", "user.name", "Test"]);
+        yield* writeTextFile(path.join(worktree, "feature.txt"), "worktree feature\n");
+        yield* git(worktree, ["add", "feature.txt"]);
+        yield* git(worktree, ["commit", "-m", "worktree feature"]);
+
+        const realGitCore = yield* GitCore;
+        let pushArgs: ReadonlyArray<string> | null = null;
+        const core = yield* makeIsolatedGitCore((input) => {
+          if (input.operation === "GitCore.pushCurrentBranch.pushWithUpstream") {
+            pushArgs = input.args;
+            return Effect.succeed({ code: 0, stdout: "", stderr: "" });
+          }
+          return realGitCore.execute(input);
+        });
+
+        const pushed = yield* core.pushCurrentBranch(worktree, null);
+
+        expect(pushed.status).toBe("pushed");
+        expect(pushed.setUpstream).toBe(true);
+        expect(pushed.upstreamBranch).toBe(`origin/${featureBranch}`);
+        expect(pushArgs).toEqual(["push", "-u", "origin", `HEAD:refs/heads/${featureBranch}`]);
+      }),
+    );
+
     it.effect("pushes with upstream setup to the only configured non-origin remote", () =>
       Effect.gen(function* () {
         const tmp = yield* makeTmpDir();

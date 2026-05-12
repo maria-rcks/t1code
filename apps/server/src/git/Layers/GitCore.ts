@@ -1283,7 +1283,7 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
             "push",
             "-u",
             publishRemoteName,
-            branch,
+            `HEAD:refs/heads/${branch}`,
           ]);
           return {
             status: "pushed" as const,
