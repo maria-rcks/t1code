@@ -2,6 +2,7 @@ import {
   ArrowLeftIcon,
   ChevronRightIcon,
   FolderIcon,
+  FolderPlusIcon,
   GitPullRequestIcon,
   PlusIcon,
   RocketIcon,
@@ -1250,11 +1251,11 @@ export default function Sidebar() {
                   />
                 }
               >
-                <PlusIcon
-                  className={`size-3.5 transition-transform duration-150 ${
-                    shouldShowProjectPathEntry ? "rotate-45" : "rotate-0"
-                  }`}
-                />
+                {shouldShowProjectPathEntry ? (
+                  <PlusIcon className="size-3.5 rotate-45 transition-transform duration-150" />
+                ) : (
+                  <FolderPlusIcon className="size-3.5 transition-transform duration-150" />
+                )}
               </TooltipTrigger>
               <TooltipPopup side="right">
                 {shouldShowProjectPathEntry ? "Cancel add project" : "Add project"}
