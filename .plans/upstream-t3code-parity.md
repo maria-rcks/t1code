@@ -103,6 +103,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Orchestration decider Effect idioms: partially align with upstream
   `1bcfc88f` by using Effect `DateTime.now` for generated orchestration event
   timestamps and removing stale module-load metadata defaults.
+- Provider skill inline chips: partially align with upstream `11f40556` by
+  adding provider skill contracts and rendering `$skill` references as inline
+  chips in assistant markdown and user messages when the active provider
+  advertises skills.
 
 ## Remaining upstream groups
 
@@ -142,7 +146,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
    - Sidebar performance and grouping changes.
    - Diff renderer updates beyond collapsible file sections, whitespace
      filtering, and panel sizing.
-   - Skill chips and broader composer action refactors.
+   - Skill discovery, composer skill autocomplete, and broader composer action
+     refactors.
    - Mobile/iOS layout fixes beyond input focus zoom prevention.
 
 7. Tooling and release parity
