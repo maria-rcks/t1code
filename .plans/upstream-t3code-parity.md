@@ -116,6 +116,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
   send button pointer affordance while disabling pointer events when inactive.
 - Localized Windows command errors: align with upstream `b0b7b38d` by matching
   localized `cmd.exe` command-not-found output in the shared process runner.
+- Chat header flex distribution: align with upstream `02989fe6` by keeping the
+  title/project badge area flexible and delaying header action labels until
+  wider containers.
 
 ## Remaining upstream groups
 
