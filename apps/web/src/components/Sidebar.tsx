@@ -857,6 +857,9 @@ export default function Sidebar() {
         clearSelection();
       }
       setSelectionAnchor(threadId);
+      if (isMobile) {
+        setOpenMobile(false);
+      }
       void navigate({
         to: "/$threadId",
         params: { threadId },
@@ -864,9 +867,11 @@ export default function Sidebar() {
     },
     [
       clearSelection,
+      isMobile,
       navigate,
       rangeSelectTo,
       selectedThreadIds.size,
+      setOpenMobile,
       setSelectionAnchor,
       toggleThreadSelection,
     ],
@@ -1470,6 +1475,9 @@ export default function Sidebar() {
                                     onClick={(event) => {
                                       event.preventDefault();
                                       event.stopPropagation();
+                                      if (isMobile) {
+                                        setOpenMobile(false);
+                                      }
                                       void handleNewThread(project.id, {
                                         envMode: resolveSidebarNewThreadEnvMode({
                                           defaultEnvMode: appSettings.defaultThreadEnvMode,
@@ -1538,6 +1546,9 @@ export default function Sidebar() {
                                           clearSelection();
                                         }
                                         setSelectionAnchor(thread.id);
+                                        if (isMobile) {
+                                          setOpenMobile(false);
+                                        }
                                         void navigate({
                                           to: "/$threadId",
                                           params: { threadId: thread.id },

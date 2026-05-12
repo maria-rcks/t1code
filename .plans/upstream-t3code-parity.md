@@ -168,6 +168,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Git branch column parsing: align with upstream `19eb9e72` by passing
   `--no-column` when listing branches so `column.ui=always` cannot merge
   multiple branch names into one parsed row.
+- Mobile sidebar dismissal: adapt upstream `a4298f1c` by closing the mobile
+  sidebar after plain thread selection, keyboard thread activation, or sidebar
+  new-thread creation.
 
 ## Remaining upstream groups
 
