@@ -4064,6 +4064,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
             splitShortcutLabel={splitTerminalShortcutLabel ?? undefined}
             newShortcutLabel={newTerminalShortcutLabel ?? undefined}
             closeShortcutLabel={closeTerminalShortcutLabel ?? undefined}
+            keybindings={keybindings}
             onActiveTerminalChange={activateTerminal}
             onCloseTerminal={closeTerminal}
             onHeightChange={setTerminalHeight}

@@ -1,10 +1,49 @@
 import { describe, expect, it } from "vitest";
+import { type ResolvedKeybindingsConfig } from "@t3tools/contracts";
 
 import {
   resolveTerminalSelectionActionPosition,
+  shouldBypassXtermForGlobalTerminalShortcut,
   shouldHandleTerminalSelectionMouseUp,
   terminalSelectionActionDelayForClickCount,
 } from "./ThreadTerminalDrawer";
+import { type ShortcutEventLike } from "../keybindings";
+
+function keyEvent(overrides: Partial<ShortcutEventLike> = {}): ShortcutEventLike {
+  return {
+    key: "j",
+    metaKey: false,
+    ctrlKey: false,
+    shiftKey: false,
+    altKey: false,
+    ...overrides,
+  };
+}
+
+const terminalKeybindings: ResolvedKeybindingsConfig = [
+  {
+    command: "terminal.toggle",
+    shortcut: {
+      key: "j",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      modKey: false,
+    },
+  },
+  {
+    command: "diff.toggle",
+    shortcut: {
+      key: "d",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      modKey: false,
+    },
+  },
+];
 
 describe("resolveTerminalSelectionActionPosition", () => {
   it("prefers the selection rect over the last pointer position", () => {
@@ -71,5 +110,26 @@ describe("resolveTerminalSelectionActionPosition", () => {
     expect(shouldHandleTerminalSelectionMouseUp(true, 0)).toBe(true);
     expect(shouldHandleTerminalSelectionMouseUp(false, 0)).toBe(false);
     expect(shouldHandleTerminalSelectionMouseUp(true, 1)).toBe(false);
+  });
+
+  it("bypasses xterm for global terminal shortcuts", () => {
+    expect(
+      shouldBypassXtermForGlobalTerminalShortcut(
+        keyEvent({ key: "j", metaKey: true }),
+        terminalKeybindings,
+      ),
+    ).toBe(true);
+    expect(
+      shouldBypassXtermForGlobalTerminalShortcut(
+        keyEvent({ key: "d", metaKey: true }),
+        terminalKeybindings,
+      ),
+    ).toBe(true);
+    expect(
+      shouldBypassXtermForGlobalTerminalShortcut(
+        keyEvent({ key: "l", ctrlKey: true }),
+        terminalKeybindings,
+      ),
+    ).toBe(false);
   });
 });

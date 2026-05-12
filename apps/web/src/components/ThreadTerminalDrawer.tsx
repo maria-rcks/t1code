@@ -1,6 +1,6 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Plus, SquareSplitHorizontal, TerminalSquare, Trash2, XIcon } from "lucide-react";
-import { type ThreadId } from "@t3tools/contracts";
+import { type ResolvedKeybindingsConfig, type ThreadId } from "@t3tools/contracts";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import {
   type PointerEvent as ReactPointerEvent,
@@ -22,7 +22,16 @@ import {
   resolveWrappedTerminalLinkRange,
   wrappedTerminalLinkRangeIntersectsBufferLine,
 } from "../terminal-links";
-import { isTerminalClearShortcut, terminalNavigationShortcutData } from "../keybindings";
+import {
+  isDiffToggleShortcut,
+  isTerminalClearShortcut,
+  isTerminalCloseShortcut,
+  isTerminalNewShortcut,
+  isTerminalSplitShortcut,
+  isTerminalToggleShortcut,
+  terminalNavigationShortcutData,
+  type ShortcutEventLike,
+} from "../keybindings";
 import {
   DEFAULT_THREAD_TERMINAL_HEIGHT,
   DEFAULT_THREAD_TERMINAL_ID,
@@ -183,6 +192,20 @@ export function shouldHandleTerminalSelectionMouseUp(
   return selectionGestureActive && button === 0;
 }
 
+export function shouldBypassXtermForGlobalTerminalShortcut(
+  event: ShortcutEventLike,
+  keybindings: ResolvedKeybindingsConfig,
+): boolean {
+  const options = { context: { terminalFocus: true, terminalOpen: true } };
+  return (
+    isTerminalToggleShortcut(event, keybindings, options) ||
+    isTerminalSplitShortcut(event, keybindings, options) ||
+    isTerminalNewShortcut(event, keybindings, options) ||
+    isTerminalCloseShortcut(event, keybindings, options) ||
+    isDiffToggleShortcut(event, keybindings, options)
+  );
+}
+
 interface TerminalViewportProps {
   threadId: ThreadId;
   terminalId: string;
@@ -195,6 +218,7 @@ interface TerminalViewportProps {
   autoFocus: boolean;
   resizeEpoch: number;
   drawerHeight: number;
+  keybindings: ResolvedKeybindingsConfig;
 }
 
 function TerminalViewport({
@@ -209,6 +233,7 @@ function TerminalViewport({
   autoFocus,
   resizeEpoch,
   drawerHeight,
+  keybindings,
 }: TerminalViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -222,6 +247,7 @@ function TerminalViewport({
   const selectionActionRequestIdRef = useRef(0);
   const selectionActionOpenRef = useRef(false);
   const selectionActionTimerRef = useRef<number | null>(null);
+  const keybindingsRef = useRef(keybindings);
 
   useEffect(() => {
     onSessionExitedRef.current = onSessionExited;
@@ -234,6 +260,10 @@ function TerminalViewport({
   useEffect(() => {
     terminalLabelRef.current = terminalLabel;
   }, [terminalLabel]);
+
+  useEffect(() => {
+    keybindingsRef.current = keybindings;
+  }, [keybindings]);
 
   useEffect(() => {
     const mount = containerRef.current;
@@ -346,6 +376,10 @@ function TerminalViewport({
     };
 
     terminal.attachCustomKeyEventHandler((event) => {
+      if (shouldBypassXtermForGlobalTerminalShortcut(event, keybindingsRef.current)) {
+        return false;
+      }
+
       const navigationData = terminalNavigationShortcutData(event);
       if (navigationData !== null) {
         event.preventDefault();
@@ -666,6 +700,7 @@ interface ThreadTerminalDrawerProps {
   splitShortcutLabel?: string | undefined;
   newShortcutLabel?: string | undefined;
   closeShortcutLabel?: string | undefined;
+  keybindings: ResolvedKeybindingsConfig;
   onActiveTerminalChange: (terminalId: string) => void;
   onCloseTerminal: (terminalId: string) => void;
   onHeightChange: (height: number) => void;
@@ -716,6 +751,7 @@ export default function ThreadTerminalDrawer({
   splitShortcutLabel,
   newShortcutLabel,
   closeShortcutLabel,
+  keybindings,
   onActiveTerminalChange,
   onCloseTerminal,
   onHeightChange,
@@ -1025,6 +1061,7 @@ export default function ThreadTerminalDrawer({
                         autoFocus={terminalId === resolvedActiveTerminalId}
                         resizeEpoch={resizeEpoch}
                         drawerHeight={drawerHeight}
+                        keybindings={keybindings}
                       />
                     </div>
                   </div>
@@ -1045,6 +1082,7 @@ export default function ThreadTerminalDrawer({
                   autoFocus
                   resizeEpoch={resizeEpoch}
                   drawerHeight={drawerHeight}
+                  keybindings={keybindings}
                 />
               </div>
             )}

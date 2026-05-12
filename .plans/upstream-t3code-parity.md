@@ -191,6 +191,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Pending approval projection guard: align with upstream `d22c6f52` by ignoring
   non-approval activities that carry `requestId`, such as user-input requests,
   when populating pending approval rows.
+- Terminal global shortcut bypass: align with upstream `39ca3ee8` by passing
+  resolved keybindings into the terminal viewport and letting global terminal
+  and diff shortcuts bypass xterm handling while focused.
 
 ## Remaining upstream groups
 
