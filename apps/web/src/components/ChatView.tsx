@@ -57,6 +57,7 @@ import {
   deriveWorkLogEntries,
   hasActionableProposedPlan,
   hasToolActivityForTurn,
+  isSessionActivelyRunningTurn,
   isLatestTurnSettled,
   formatElapsed,
 } from "../session-logic";
@@ -662,12 +663,16 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const phase = derivePhase(activeThread?.session ?? null);
   const isSendBusy = sendPhase !== "idle";
   const isPreparingWorktree = sendPhase === "preparing-worktree";
-  const isWorking = phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint;
+  const isTurnRunning = isSessionActivelyRunningTurn(
+    activeLatestTurn,
+    activeThread?.session ?? null,
+  );
+  const isWorking = isTurnRunning || isSendBusy || isConnecting || isRevertingCheckpoint;
   const showTimelineWorkingIndicator = shouldShowTimelineWorkingIndicator({
     isWorking,
     isConnecting,
     isSendBusy,
-    sessionRunning: phase === "running",
+    sessionRunning: isTurnRunning,
   });
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
     activeLatestTurn,
@@ -766,7 +771,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     if (activePendingProgress) {
       return `pending:${activePendingProgress.questionIndex}:${activePendingProgress.isLastQuestion}:${activePendingIsResponding}`;
     }
-    if (phase === "running") {
+    if (isTurnRunning) {
       return "running";
     }
     if (showPlanFollowUpPrompt) {
@@ -780,7 +785,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     isConnecting,
     isPreparingWorktree,
     isSendBusy,
-    phase,
+    isTurnRunning,
     prompt,
     showPlanFollowUpPrompt,
   ]);
@@ -1901,10 +1906,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
     scheduleStickToBottom();
   }, [messageCount, scheduleStickToBottom]);
   useEffect(() => {
-    if (phase !== "running") return;
+    if (!isTurnRunning) return;
     if (!shouldAutoScrollRef.current) return;
     scheduleStickToBottom();
-  }, [phase, scheduleStickToBottom, timelineEntries]);
+  }, [isTurnRunning, scheduleStickToBottom, timelineEntries]);
 
   useEffect(() => {
     setExpandedWorkGroups({});
@@ -2372,7 +2377,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       const api = readNativeApi();
       if (!api || !activeThread || isRevertingCheckpoint) return;
 
-      if (phase === "running" || isSendBusy || isConnecting) {
+      if (isTurnRunning || isSendBusy || isConnecting) {
         setThreadError(activeThread.id, "Interrupt the current turn before reverting checkpoints.");
         return;
       }
@@ -2405,7 +2410,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       }
       setIsRevertingCheckpoint(false);
     },
-    [activeThread, isConnecting, isRevertingCheckpoint, isSendBusy, phase, setThreadError],
+    [activeThread, isConnecting, isRevertingCheckpoint, isSendBusy, isTurnRunning, setThreadError],
   );
 
   const onSend = async (e?: { preventDefault: () => void }) => {
@@ -3966,7 +3971,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                                 }
                               : null
                           }
-                          isRunning={phase === "running"}
+                          isRunning={isTurnRunning}
                           showPlanFollowUpPrompt={
                             pendingUserInputs.length === 0 && showPlanFollowUpPrompt
                           }

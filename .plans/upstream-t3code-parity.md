@@ -176,6 +176,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Changed-files collapse scroll anchoring: align with upstream `d4178198` by
   ignoring changed-file tree toggles as scroll anchors and avoiding virtualizer
   scroll correction for rows intersecting the viewport.
+- Stale send spinner guard: adapt upstream `48481aa9` in shared session logic
+  so a completed latest turn is settled even if the session status briefly
+  remains `running`.
 
 ## Remaining upstream groups
 

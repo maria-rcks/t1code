@@ -162,15 +162,30 @@ export function isThreadSessionActivelyWorking(session: ThreadSessionActivityLik
   );
 }
 
+export function isSessionActivelyRunningTurn(
+  latestTurn: LatestTurnTiming | null,
+  session: SessionActivityState | null,
+): boolean {
+  if (!session || session.orchestrationStatus !== "running") return false;
+  if (!latestTurn) return true;
+
+  const activeTurnId = session.activeTurnId;
+  if (activeTurnId === undefined) {
+    return latestTurn.completedAt === null;
+  }
+  if (latestTurn.turnId !== activeTurnId) {
+    return true;
+  }
+  return latestTurn.completedAt === null;
+}
+
 export function isLatestTurnSettled(
   latestTurn: LatestTurnTiming | null,
   session: SessionActivityState | null,
 ): boolean {
   if (!latestTurn?.startedAt) return false;
   if (!latestTurn.completedAt) return false;
-  if (!session) return true;
-  if (session.orchestrationStatus === "running") return false;
-  return true;
+  return !isSessionActivelyRunningTurn(latestTurn, session);
 }
 
 type CompletionState = Pick<Thread, "latestTurn" | "lastVisitedAt">;
