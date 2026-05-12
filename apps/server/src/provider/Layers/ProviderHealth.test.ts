@@ -1,10 +1,12 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, it, assert } from "@effect/vitest";
-import { Effect, FileSystem, Layer, Path, Sink, Stream } from "effect";
+import { Duration, Effect, Fiber, FileSystem, Layer, Path, Ref, Sink, Stream } from "effect";
 import * as PlatformError from "effect/PlatformError";
+import { TestClock } from "effect/testing";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
 import {
+  AUTH_PROBE_TIMEOUT_MS,
   checkClaudeProviderStatus,
   checkCodexProviderStatus,
   hasCustomModelProvider,
@@ -27,6 +29,21 @@ function mockHandle(result: { stdout: string; stderr: string; code: number }) {
     stdout: Stream.make(encoder.encode(result.stdout)),
     stderr: Stream.make(encoder.encode(result.stderr)),
     all: Stream.empty,
+    getInputFd: () => Sink.drain,
+    getOutputFd: () => Stream.empty,
+  });
+}
+
+function hangingHandle() {
+  return ChildProcessSpawner.makeHandle({
+    pid: ChildProcessSpawner.ProcessId(1),
+    exitCode: Effect.never,
+    isRunning: Effect.succeed(true),
+    kill: () => Effect.void,
+    stdin: Sink.drain,
+    stdout: Stream.never,
+    stderr: Stream.never,
+    all: Stream.never,
     getInputFd: () => Sink.drain,
     getOutputFd: () => Stream.empty,
   });
@@ -232,6 +249,53 @@ it.layer(NodeServices.layer)("ProviderHealth", (it) => {
             }
             throw new Error(`Unexpected args: ${joined}`);
           }),
+        ),
+      ),
+    );
+
+    it.effect("uses an extended timeout for the Codex auth probe", () =>
+      Effect.gen(function* () {
+        yield* withTempCodexHome();
+        const completed = yield* Ref.make(false);
+        const fiber = yield* checkCodexProviderStatus.pipe(
+          Effect.tap(() => Ref.set(completed, true)),
+          Effect.forkChild,
+        );
+
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust(Duration.millis(4_000));
+        assert.strictEqual(yield* Ref.get(completed), false);
+
+        yield* TestClock.adjust(Duration.millis(AUTH_PROBE_TIMEOUT_MS - 4_000));
+        const status = yield* Fiber.join(fiber);
+        assert.strictEqual(status.status, "warning");
+        assert.strictEqual(status.available, true);
+        assert.strictEqual(status.authStatus, "unknown");
+        assert.strictEqual(
+          status.message,
+          "Could not verify Codex authentication status. Timed out while running command.",
+        );
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            TestClock.layer(),
+            Layer.succeed(
+              ChildProcessSpawner.ChildProcessSpawner,
+              ChildProcessSpawner.make((command) => {
+                const cmd = command as unknown as { args: ReadonlyArray<string> };
+                const joined = cmd.args.join(" ");
+                if (joined === "--version") {
+                  return Effect.succeed(
+                    mockHandle({ stdout: "codex 1.0.0\n", stderr: "", code: 0 }),
+                  );
+                }
+                if (joined === "login status") {
+                  return Effect.succeed(hangingHandle());
+                }
+                return Effect.die(new Error(`Unexpected args: ${joined}`));
+              }),
+            ),
+          ),
         ),
       ),
     );

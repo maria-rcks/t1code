@@ -25,6 +25,8 @@ import {
 import { ProviderHealth, type ProviderHealthShape } from "../Services/ProviderHealth";
 
 const DEFAULT_TIMEOUT_MS = 4_000;
+// Auth status checks can involve disk and network lookups and are slow on first run, especially on Windows.
+export const AUTH_PROBE_TIMEOUT_MS = 10_000;
 const CODEX_PROVIDER = "codex" as const;
 const CLAUDE_AGENT_PROVIDER = "claudeAgent" as const;
 
@@ -366,7 +368,7 @@ export const checkCodexProviderStatus: Effect.Effect<
   }
 
   const authProbe = yield* runCodexCommand(["login", "status"]).pipe(
-    Effect.timeoutOption(DEFAULT_TIMEOUT_MS),
+    Effect.timeoutOption(AUTH_PROBE_TIMEOUT_MS),
     Effect.result,
   );
 
