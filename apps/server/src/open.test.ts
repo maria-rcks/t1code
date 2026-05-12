@@ -211,6 +211,37 @@ it.layer(NodeServices.layer)("resolveEditorLaunch", (it) => {
       });
     }),
   );
+
+  it.effect("falls back to zeditor when zed is not installed", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-open-test-" });
+      yield* fs.writeFileString(path.join(dir, "zeditor"), "#!/bin/sh\nexit 0\n");
+      yield* fs.chmod(path.join(dir, "zeditor"), 0o755);
+
+      const result = yield* resolveEditorLaunch({ cwd: "/tmp/workspace", editor: "zed" }, "linux", {
+        PATH: dir,
+      });
+
+      assert.deepEqual(result, {
+        command: "zeditor",
+        args: ["/tmp/workspace"],
+      });
+    }),
+  );
+
+  it.effect("falls back to the primary command when no alias is installed", () =>
+    Effect.gen(function* () {
+      const result = yield* resolveEditorLaunch({ cwd: "/tmp/workspace", editor: "zed" }, "linux", {
+        PATH: "",
+      });
+      assert.deepEqual(result, {
+        command: "zed",
+        args: ["/tmp/workspace"],
+      });
+    }),
+  );
 });
 
 it.layer(NodeServices.layer)("launchDetached", (it) => {
@@ -321,4 +352,29 @@ it.layer(NodeServices.layer)("resolveAvailableEditors", (it) => {
       assert.deepEqual(editors, ["trae", "vscode-insiders", "vscodium", "file-manager"]);
     }),
   );
+
+  it.effect("includes zed when only the zeditor command is installed", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-editors-" });
+
+      yield* fs.writeFileString(path.join(dir, "zeditor"), "#!/bin/sh\nexit 0\n");
+      yield* fs.writeFileString(path.join(dir, "xdg-open"), "#!/bin/sh\nexit 0\n");
+      yield* fs.chmod(path.join(dir, "zeditor"), 0o755);
+      yield* fs.chmod(path.join(dir, "xdg-open"), 0o755);
+
+      const editors = resolveAvailableEditors("linux", {
+        PATH: dir,
+      });
+      assert.deepEqual(editors, ["zed", "file-manager"]);
+    }),
+  );
+
+  it("omits file-manager when the platform opener is unavailable", () => {
+    const editors = resolveAvailableEditors("linux", {
+      PATH: "",
+    });
+    assert.deepEqual(editors, []);
+  });
 });
