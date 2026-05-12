@@ -119,6 +119,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Chat header flex distribution: align with upstream `02989fe6` by keeping the
   title/project badge area flexible and delaying header action labels until
   wider containers.
+- Add-project icon parity: align with upstream `7da6522f` by using the folder
+  add icon for the sidebar add-project action while preserving this fork's
+  rotated plus cancel affordance while the path entry is open.
 
 ## Remaining upstream groups
 
