@@ -97,6 +97,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - UI primitive context cleanup: partially align with upstream `b83e9c95` by
   using React 19 context shorthand and `React.use` in local shared UI
   primitives that map directly to this fork.
+- Git and terminal test stabilization: align with upstream `25c9d267` by
+  rewriting GitHub-looking test remotes to local bare repositories, shortening
+  hook sleeps, and using a short default terminal shutdown grace in tests.
 
 ## Remaining upstream groups
 
