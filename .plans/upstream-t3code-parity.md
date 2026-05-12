@@ -107,6 +107,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
   adding provider skill contracts and rendering `$skill` references as inline
   chips in assistant markdown and user messages when the active provider
   advertises skills.
+- Mobile safe-area chrome: partially align with upstream `d649ccf7` by enabling
+  `viewport-fit=cover`/interactive keyboard resizing, adding safe-area
+  utilities, applying safe insets to the mobile sidebar, and keeping the chat
+  header/composer/branch toolbar clear of iOS browser chrome.
 
 ## Remaining upstream groups
 
@@ -148,7 +152,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
      filtering, and panel sizing.
    - Skill discovery, composer skill autocomplete, and broader composer action
      refactors.
-   - Mobile/iOS layout fixes beyond input focus zoom prevention.
+   - Remaining mobile/iOS layout fixes beyond safe-area chrome and input focus
+     zoom prevention.
 
 7. Tooling and release parity
    - Oxlint plugin package and stricter Effect LSP rules.
