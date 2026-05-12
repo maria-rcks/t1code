@@ -94,6 +94,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Effect language service prepare hook: align with upstream `02dd47ea` by
   centralizing `effect-language-service patch` at the monorepo root so `bun
   install` does not run duplicate workspace prepare hooks.
+- UI primitive context cleanup: partially align with upstream `b83e9c95` by
+  using React 19 context shorthand and `React.use` in local shared UI
+  primitives that map directly to this fork.
 
 ## Remaining upstream groups
 
