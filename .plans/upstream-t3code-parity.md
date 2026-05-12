@@ -133,6 +133,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Composer footer overflow: align with upstream `0bc94bc2` by measuring footer
   content fit, compacting primary actions independently for wide states, and
   keeping the send/action cluster inside the composer at narrow widths.
+- Composer footer focus rings: align with upstream `66d76b5d` and `f2205bdc`
+  by allowing visible footer focus rings and padding the model-picker controls
+  row so focus outlines are not clipped.
 
 ## Remaining upstream groups
 
