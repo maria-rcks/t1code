@@ -47,6 +47,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
   implementation starts in a new thread.
 - Markdown highlight stability: keep code highlighting hook order stable across
   cache hits and uncached renders.
+- Long user message collapse: collapse verbose user prompts by default while
+  keeping copy/revert controls available.
 
 ## Remaining upstream groups
 
