@@ -7,6 +7,7 @@ import {
   isCommandAvailable,
   launchDetached,
   resolveAvailableEditors,
+  resolveBrowserLaunch,
   resolveEditorLaunch,
 } from "./open";
 
@@ -264,6 +265,63 @@ it.layer(NodeServices.layer)("launchDetached", (it) => {
       assert.equal(result._tag, "Failure");
     }),
   );
+});
+
+it("resolveBrowserLaunch uses platform-specific detached browser commands", () => {
+  assert.deepEqual(resolveBrowserLaunch("https://example.com", "darwin"), {
+    command: "open",
+    args: ["https://example.com"],
+    options: {
+      detached: true,
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+    },
+  });
+
+  assert.deepEqual(resolveBrowserLaunch("https://example.com", "linux", {}), {
+    command: "xdg-open",
+    args: ["https://example.com"],
+    options: {
+      detached: true,
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+    },
+  });
+});
+
+it("resolveBrowserLaunch uses PowerShell for Windows browser launches", () => {
+  const launch = resolveBrowserLaunch("https://example.com/path?quote='yes'", "win32", {
+    SYSTEMROOT: "C:\\Windows",
+  });
+
+  assert.equal(launch.command, "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+  assert.deepEqual(launch.args.slice(0, 5), [
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-EncodedCommand",
+  ]);
+  assert.equal(launch.options.shell, false);
+});
+
+it("resolveBrowserLaunch uses the Windows browser from interactive WSL", () => {
+  const launch = resolveBrowserLaunch("https://example.com", "linux", {
+    WSL_DISTRO_NAME: "Ubuntu",
+  });
+
+  assert.equal(launch.command, "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe");
+});
+
+it("resolveBrowserLaunch keeps xdg-open for WSL over SSH", () => {
+  const launch = resolveBrowserLaunch("https://example.com", "linux", {
+    WSL_DISTRO_NAME: "Ubuntu",
+    SSH_TTY: "/dev/pts/1",
+  });
+
+  assert.equal(launch.command, "xdg-open");
 });
 
 it.layer(NodeServices.layer)("isCommandAvailable", (it) => {
