@@ -20,7 +20,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@lexical/react": "^0.41.0",
-    "@pierre/diffs": "^1.1.0-beta.16",
+    "@pierre/diffs": "catalog:",
     "@t3tools/client-core": "workspace:*",
     "@t3tools/contracts": "workspace:*",
     "@t3tools/shared": "workspace:*",

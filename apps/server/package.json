@@ -26,7 +26,7 @@
     "@anthropic-ai/claude-agent-sdk": "^0.2.77",
     "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-bun": "catalog:",
-    "@pierre/diffs": "^1.1.0-beta.16",
+    "@pierre/diffs": "catalog:",
     "effect": "catalog:",
     "node-pty": "^1.1.0",
     "open": "^10.1.0",
