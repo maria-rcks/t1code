@@ -64,6 +64,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
   align `@pierre/diffs` on the upstream catalog pin.
 - Codex auth probe timeout: give `codex login status` a 10 second timeout while
   keeping CLI reachability checks fast, with virtual-clock regression coverage.
+- Diff whitespace toggle: add the default "hide whitespace changes" setting,
+  diff panel override, query cache key, contracts, and git diff flag plumbing.
 
 ## Remaining upstream groups
 
@@ -100,7 +102,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
 
 6. Web UI parity
    - Sidebar performance and grouping changes.
-   - Diff renderer updates beyond collapsible file sections.
+   - Diff renderer updates beyond collapsible file sections and whitespace
+     filtering.
    - Skill chips and broader composer action refactors.
    - Mobile/iOS layout fixes.
 
