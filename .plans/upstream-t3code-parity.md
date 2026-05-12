@@ -235,6 +235,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Pull request checkout references: partially align with upstream `d8a485ea`
   by accepting `gh pr checkout ...` inputs in PR reference parsing and keeping
   the synthetic checkout-PR branch picker item visible for those queries.
+- Pull request reference canonicalization: align with upstream `cd7980b4` by
+  normalizing `#123` inputs to the raw numeric PR reference before resolving or
+  preparing a PR thread.
 
 ## Remaining upstream groups
 
