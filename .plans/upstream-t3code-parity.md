@@ -295,6 +295,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Shared server settings helpers: partially align with upstream `08e6d4cf` by
   adding lenient settings JSON parsing, deep settings patch merging,
   instance-based model-selection helpers, and observability settings extraction.
+- Server secret store: partially align with upstream `08e6d4cf` by adding a
+  filesystem-backed secret store and derived settings/secrets config paths for
+  redacted provider environment variables.
 
 ## Remaining upstream groups
 

@@ -19,6 +19,7 @@ export interface ServerDerivedPaths {
   readonly stateDir: string;
   readonly dbPath: string;
   readonly keybindingsConfigPath: string;
+  readonly settingsPath: string;
   readonly providerStatusCacheDir: string;
   readonly worktreesDir: string;
   readonly attachmentsDir: string;
@@ -28,6 +29,7 @@ export interface ServerDerivedPaths {
   readonly providerEventLogPath: string;
   readonly terminalLogsDir: string;
   readonly anonymousIdPath: string;
+  readonly secretsDir: string;
 }
 
 /**
@@ -62,6 +64,7 @@ export const deriveServerPaths = Effect.fn(function* (
     stateDir,
     dbPath,
     keybindingsConfigPath: join(stateDir, "keybindings.json"),
+    settingsPath: join(stateDir, "settings.json"),
     providerStatusCacheDir,
     worktreesDir: join(baseDir, "worktrees"),
     attachmentsDir,
@@ -71,6 +74,7 @@ export const deriveServerPaths = Effect.fn(function* (
     providerEventLogPath: join(providerLogsDir, "events.log"),
     terminalLogsDir: join(logsDir, "terminals"),
     anonymousIdPath: join(stateDir, "anonymous-id"),
+    secretsDir: join(stateDir, "secrets"),
   };
 });
 
@@ -97,6 +101,7 @@ export class ServerConfig extends ServiceMap.Service<ServerConfig, ServerConfigS
         yield* fs.makeDirectory(derivedPaths.logsDir, { recursive: true });
         yield* fs.makeDirectory(derivedPaths.attachmentsDir, { recursive: true });
         yield* fs.makeDirectory(derivedPaths.providerStatusCacheDir, { recursive: true });
+        yield* fs.makeDirectory(derivedPaths.secretsDir, { recursive: true });
 
         return {
           cwd,
