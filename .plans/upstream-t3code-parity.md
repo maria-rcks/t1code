@@ -163,6 +163,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - macOS project context-menu drag guard: align with upstream `64d21bd6` by
   treating Ctrl-primary-click as a context-menu gesture on macOS and preventing
   it from arming sidebar project drag.
+- Settings Escape navigation: adapt upstream `c4264522` by letting Escape leave
+  the settings page, with a router fallback when there is no browser history.
 
 ## Remaining upstream groups
 
