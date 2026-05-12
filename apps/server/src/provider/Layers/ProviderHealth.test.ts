@@ -111,6 +111,23 @@ function withTempCodexHome(configContent?: string) {
   });
 }
 
+function withProcessPlatform<T, E, R>(platform: NodeJS.Platform, effect: Effect.Effect<T, E, R>) {
+  return Effect.acquireRelease(
+    Effect.sync(() => {
+      const originalPlatform = process.platform;
+      Object.defineProperty(process, "platform", { value: platform, configurable: true });
+      return originalPlatform;
+    }),
+    (originalPlatform) =>
+      Effect.sync(() => {
+        Object.defineProperty(process, "platform", {
+          value: originalPlatform,
+          configurable: true,
+        });
+      }),
+  ).pipe(Effect.flatMap(() => effect));
+}
+
 it.layer(NodeServices.layer)("ProviderHealth", (it) => {
   // ── checkCodexProviderStatus tests ────────────────────────────────
   //
@@ -151,6 +168,38 @@ it.layer(NodeServices.layer)("ProviderHealth", (it) => {
         assert.strictEqual(status.authStatus, "unknown");
         assert.strictEqual(status.message, "Codex CLI (`codex`) is not installed or not on PATH.");
       }).pipe(Effect.provide(failingSpawnerLayer("spawn codex ENOENT"))),
+    );
+
+    it.effect("returns unavailable when Windows shell reports codex is missing", () =>
+      withProcessPlatform(
+        "win32",
+        Effect.gen(function* () {
+          yield* withTempCodexHome();
+          const status = yield* checkCodexProviderStatus;
+          assert.strictEqual(status.provider, "codex");
+          assert.strictEqual(status.status, "error");
+          assert.strictEqual(status.available, false);
+          assert.strictEqual(status.authStatus, "unknown");
+          assert.strictEqual(
+            status.message,
+            "Codex CLI (`codex`) is not installed or not on PATH.",
+          );
+        }),
+      ).pipe(
+        Effect.provide(
+          mockSpawnerLayer((args) => {
+            const joined = args.join(" ");
+            if (joined === "--version") {
+              return {
+                stdout: "",
+                stderr: "'codex' is not recognized as an internal or external command",
+                code: 9009,
+              };
+            }
+            throw new Error(`Unexpected args: ${joined}`);
+          }),
+        ),
+      ),
     );
 
     it.effect("returns unavailable when codex is below the minimum supported version", () =>
@@ -570,6 +619,37 @@ it.layer(NodeServices.layer)("ProviderHealth", (it) => {
           "Claude Agent CLI (`claude`) is not installed or not on PATH.",
         );
       }).pipe(Effect.provide(failingSpawnerLayer("spawn claude ENOENT"))),
+    );
+
+    it.effect("returns unavailable when Windows shell reports claude is missing", () =>
+      withProcessPlatform(
+        "win32",
+        Effect.gen(function* () {
+          const status = yield* checkClaudeProviderStatus;
+          assert.strictEqual(status.provider, "claudeAgent");
+          assert.strictEqual(status.status, "error");
+          assert.strictEqual(status.available, false);
+          assert.strictEqual(status.authStatus, "unknown");
+          assert.strictEqual(
+            status.message,
+            "Claude Agent CLI (`claude`) is not installed or not on PATH.",
+          );
+        }),
+      ).pipe(
+        Effect.provide(
+          mockSpawnerLayer((args) => {
+            const joined = args.join(" ");
+            if (joined === "--version") {
+              return {
+                stdout: "",
+                stderr: "'claude' is not recognized as an internal or external command",
+                code: 9009,
+              };
+            }
+            throw new Error(`Unexpected args: ${joined}`);
+          }),
+        ),
+      ),
     );
 
     it.effect("returns error when version check fails with non-zero exit code", () =>
