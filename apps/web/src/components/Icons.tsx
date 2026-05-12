@@ -309,6 +309,28 @@ export const AntigravityIcon: Icon = (props) => (
   </svg>
 );
 
+export const IntelliJIdeaIcon: Icon = (props) => (
+  <svg {...props} viewBox="0 0 70 70" fill="none">
+    <path
+      d="M0 40.8 8.9 24.4 0 27.4 10 0 31.8 2.7 48 1.1 70 18.7 68.7 59.2 41.8 70 25.6 59.6 5.6 68.3 10.1 52.5Z"
+      fill="#087CFA"
+    />
+    <path
+      d="M0 40.8 8.9 24.4 31.8 2.7 53.7 27.4 33.7 58.1 5.6 68.3 10.1 52.5Z"
+      fill="#FE315D"
+      opacity=".9"
+    />
+    <path d="M70 18.7 48.7 43.9 38.9 12.3 48.2 1.1Z" fill="#F97A12" opacity=".9" />
+    <rect x="13.7" y="13.5" width="43.2" height="43.2" fill="#000" />
+    <rect x="17.7" y="48.6" width="16.2" height="2.7" fill="#fff" />
+    <path d="M29.4 22.4v-3.3h-9v3.3h2.6v11.3h-2.6V37h9v-3.3h-2.5V22.4h2.5Z" fill="#fff" />
+    <path
+      d="M38 37.3c-1.4 0-2.6-.3-3.5-.8-.9-.5-1.7-1.2-2.3-1.9l2.5-2.8c.5.6 1 1 1.5 1.3.5.3 1.1.5 1.7.5.7 0 1.3-.2 1.8-.7.4-.5.6-1.2.6-2.3V19.1h4v11.7c0 1.1-.1 2-.4 2.8-.3.8-.7 1.4-1.3 2-.5.5-1.2 1-2 1.2-.8.3-1.6.5-2.6.5Z"
+      fill="#fff"
+    />
+  </svg>
+);
+
 export const OpenCodeIcon: Icon = (props) => (
   <svg {...props} viewBox="0 0 32 40" fill="none" xmlns="http://www.w3.org/2000/svg">
     <g clipPath="url(#opencode__clip0_1311_94969)">
