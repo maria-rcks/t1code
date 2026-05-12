@@ -112,6 +112,138 @@ export function getModelSelectionBooleanOptionValue(
   return getProviderOptionBooleanSelectionValue(modelSelection?.options, id);
 }
 
+function resolveDescriptorChoiceValue(
+  descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>,
+  raw: string | null | undefined,
+): string | undefined {
+  const trimmed = trimOrNull(raw);
+  if (!trimmed) {
+    return descriptor.currentValue ?? descriptor.options.find((option) => option.isDefault)?.id;
+  }
+  if (descriptor.options.length === 0) {
+    return trimmed;
+  }
+  if (
+    descriptor.promptInjectedValues?.includes(trimmed) &&
+    descriptor.options.some((option) => option.id === trimmed)
+  ) {
+    return descriptor.options.find((option) => option.isDefault)?.id;
+  }
+  if (descriptor.options.some((option) => option.id === trimmed)) {
+    return trimmed;
+  }
+  return descriptor.currentValue ?? descriptor.options.find((option) => option.isDefault)?.id;
+}
+
+function withDescriptorCurrentValue(
+  descriptor: ProviderOptionDescriptor,
+  rawCurrentValue: string | boolean | undefined,
+): ProviderOptionDescriptor {
+  if (descriptor.type === "boolean") {
+    if (typeof rawCurrentValue === "boolean") {
+      return {
+        ...descriptor,
+        currentValue: rawCurrentValue,
+      };
+    }
+    return descriptor;
+  }
+  const currentValue =
+    typeof rawCurrentValue === "string"
+      ? resolveDescriptorChoiceValue(descriptor, rawCurrentValue)
+      : resolveDescriptorChoiceValue(descriptor, descriptor.currentValue);
+  if (!currentValue) {
+    const { currentValue: _unusedCurrentValue, ...rest } = descriptor;
+    return rest;
+  }
+  return {
+    ...descriptor,
+    currentValue,
+  };
+}
+
+export function getProviderOptionDescriptors(input: {
+  caps: ModelCapabilities;
+  selections?: ReadonlyArray<ProviderOptionSelection> | null | undefined;
+}): ReadonlyArray<ProviderOptionDescriptor> {
+  const { caps, selections } = input;
+  const baseDescriptors = (caps.optionDescriptors ?? []).map(cloneDescriptor);
+
+  return baseDescriptors.map((descriptor) =>
+    withDescriptorCurrentValue(
+      descriptor,
+      getRawSelectionValueById(selections, descriptor.id) ?? descriptor.currentValue,
+    ),
+  );
+}
+
+export function getProviderOptionCurrentValue(
+  descriptor: ProviderOptionDescriptor | null | undefined,
+): string | boolean | undefined {
+  if (!descriptor) {
+    return undefined;
+  }
+  if (descriptor.type === "boolean") {
+    return descriptor.currentValue;
+  }
+  if (descriptor.currentValue) {
+    return descriptor.currentValue;
+  }
+  return descriptor.options.find((option) => option.isDefault)?.id;
+}
+
+export function getProviderOptionCurrentLabel(
+  descriptor: ProviderOptionDescriptor | null | undefined,
+): string | undefined {
+  if (!descriptor) {
+    return undefined;
+  }
+  if (descriptor.type === "boolean") {
+    return typeof descriptor.currentValue === "boolean"
+      ? descriptor.currentValue
+        ? "On"
+        : "Off"
+      : undefined;
+  }
+  const currentValue = getProviderOptionCurrentValue(descriptor);
+  if (typeof currentValue !== "string") {
+    return undefined;
+  }
+  return descriptor.options.find((option) => option.id === currentValue)?.label;
+}
+
+export function buildProviderOptionSelectionsFromDescriptors(
+  descriptors: ReadonlyArray<ProviderOptionDescriptor> | null | undefined,
+): Array<ProviderOptionSelection> | undefined {
+  if (!descriptors || descriptors.length === 0) {
+    return undefined;
+  }
+
+  const nextSelections: Array<ProviderOptionSelection> = [];
+
+  for (const descriptor of descriptors) {
+    const value = getProviderOptionCurrentValue(descriptor);
+    if (typeof value === "string" || typeof value === "boolean") {
+      nextSelections.push({ id: descriptor.id, value });
+    }
+  }
+
+  return nextSelections.length > 0 ? nextSelections : undefined;
+}
+
+export function getModelSelectionOptionDescriptors(
+  modelSelection: ModelSelection | null | undefined,
+  caps?: ModelCapabilities | null | undefined,
+): ReadonlyArray<ProviderOptionDescriptor> {
+  if (!modelSelection || !caps) {
+    return [];
+  }
+  return getProviderOptionDescriptors({
+    caps,
+    selections: modelSelection.options,
+  });
+}
+
 export function getModelOptions(provider: ProviderKind = "codex") {
   return MODEL_OPTIONS_BY_PROVIDER[provider];
 }
@@ -143,6 +275,12 @@ export function supportsClaudeThinkingToggle(model: string | null | undefined): 
 
 export function isClaudeUltrathinkPrompt(text: string | null | undefined): boolean {
   return typeof text === "string" && /\bultrathink\b/i.test(text);
+}
+
+export function trimOrNull<T extends string>(value: T | null | undefined): T | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim() as T;
+  return trimmed || null;
 }
 
 export function normalizeModelSlug(

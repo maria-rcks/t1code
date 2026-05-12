@@ -15,12 +15,17 @@ import {
   applyClaudePromptEffortPrefix,
   createModelCapabilities,
   createModelSelection,
+  buildProviderOptionSelectionsFromDescriptors,
   getEffectiveClaudeCodeEffort,
   getDefaultModel,
   getDefaultReasoningEffort,
+  getModelSelectionOptionDescriptors,
   getModelSelectionBooleanOptionValue,
   getModelSelectionStringOptionValue,
   getModelOptions,
+  getProviderOptionCurrentLabel,
+  getProviderOptionCurrentValue,
+  getProviderOptionDescriptors,
   getReasoningEffortOptions,
   inferProviderForModel,
   isClaudeUltrathinkPrompt,
@@ -130,6 +135,74 @@ describe("createModelSelection", () => {
       instanceId: "codex",
       model: "gpt-5.4",
     });
+  });
+});
+
+describe("provider option descriptors", () => {
+  const caps = createModelCapabilities({
+    optionDescriptors: [
+      {
+        id: "effort",
+        label: "Reasoning",
+        type: "select",
+        options: [
+          { id: "low", label: "Low" },
+          { id: "high", label: "High", isDefault: true },
+          { id: "ultrathink", label: "Ultrathink" },
+        ],
+        promptInjectedValues: ["ultrathink"],
+      },
+      {
+        id: "fastMode",
+        label: "Fast Mode",
+        type: "boolean",
+      },
+    ],
+  });
+
+  it("applies selections onto cloned descriptors", () => {
+    const descriptors = getProviderOptionDescriptors({
+      caps,
+      selections: [
+        { id: "effort", value: "low" },
+        { id: "fastMode", value: true },
+      ],
+    });
+
+    expect(descriptors).toMatchObject([
+      { id: "effort", currentValue: "low" },
+      { id: "fastMode", currentValue: true },
+    ]);
+    expect(getProviderOptionCurrentValue(descriptors[0])).toBe("low");
+    expect(getProviderOptionCurrentLabel(descriptors[0])).toBe("Low");
+    expect(getProviderOptionCurrentLabel(descriptors[1])).toBe("On");
+  });
+
+  it("resets prompt-injected values to the default option", () => {
+    const descriptors = getProviderOptionDescriptors({
+      caps,
+      selections: [{ id: "effort", value: "ultrathink" }],
+    });
+
+    expect(getProviderOptionCurrentValue(descriptors[0])).toBe("high");
+  });
+
+  it("builds selections from descriptors and applies them to model selections", () => {
+    const descriptors = getProviderOptionDescriptors({
+      caps,
+      selections: [{ id: "fastMode", value: true }],
+    });
+    const selections = buildProviderOptionSelectionsFromDescriptors(descriptors);
+    const selection = createModelSelection(
+      decodeProviderInstanceId("claudeAgent"),
+      "claude-opus-4-6",
+      selections,
+    );
+
+    expect(getModelSelectionOptionDescriptors(selection, caps)).toMatchObject([
+      { id: "effort", currentValue: "high" },
+      { id: "fastMode", currentValue: true },
+    ]);
   });
 });
 
