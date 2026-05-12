@@ -136,6 +136,12 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Composer footer focus rings: align with upstream `66d76b5d` and `f2205bdc`
   by allowing visible footer focus rings and padding the model-picker controls
   row so focus outlines are not clipped.
+- Dynamic tool approvals: align with upstream `0ee302e2` by classifying
+  `dynamic_tool_call` permission requests as command approvals in shared
+  session logic.
+- Pending user input digit shortcuts: adapt upstream `5467d119` by detecting
+  nested contenteditable targets while preserving this fork's empty-editor
+  number-key option shortcuts.
 
 ## Remaining upstream groups
 
