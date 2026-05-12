@@ -305,6 +305,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Provider event loggers service: partially align with upstream `08e6d4cf` by
   adding the shared native/canonical provider event logger service expected by
   provider drivers and the normalized provider runtime.
+- Provider home layout helpers: partially align with upstream `08e6d4cf` by
+  adding Codex shared/shadow home materialization and Claude HOME resolution,
+  continuation keys, and capabilities cache keys for built-in driver instances.
 
 ## Remaining upstream groups
 
