@@ -211,6 +211,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
   user-authored ultrathink text.
 - Sidebar empty project state: align with upstream `7b676b76` by showing a
   muted "No threads yet" row when an expanded project has no threads.
+- Branch selector hover state: align with upstream `fc650706` by letting
+  selected/highlighted combobox item states own the active branch styling
+  instead of forcing a static active background.
 
 ## Remaining upstream groups
 
