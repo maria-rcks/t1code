@@ -209,6 +209,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
   traits picker to strip an injected `Ultrathink:` prefix when selecting a
   normal effort, while preserving a warning when the prompt body contains
   user-authored ultrathink text.
+- Sidebar empty project state: align with upstream `7b676b76` by showing a
+  muted "No threads yet" row when an expanded project has no threads.
 
 ## Remaining upstream groups
 

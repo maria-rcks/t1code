@@ -34,6 +34,13 @@ export function isContextMenuPointerDown(input: {
   return input.isMac && input.button === 0 && input.ctrlKey;
 }
 
+export function shouldShowEmptyThreadState(input: {
+  projectExpanded: boolean;
+  threadCount: number;
+}): boolean {
+  return input.projectExpanded && input.threadCount === 0;
+}
+
 export function resolveThreadRowClassName(input: {
   isActive: boolean;
   isSelected: boolean;

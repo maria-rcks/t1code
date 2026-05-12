@@ -100,6 +100,7 @@ import {
   resolveThreadRowClassName,
   resolveThreadStatusPill,
   shouldClearThreadSelectionOnMouseDown,
+  shouldShowEmptyThreadState,
 } from "./Sidebar.logic";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 
@@ -1446,6 +1447,10 @@ export default function Sidebar() {
                   );
                   const isThreadListExpanded = expandedThreadListsByProject.has(project.id);
                   const hasHiddenThreads = projectThreads.length > sidebarThreadPreviewCount;
+                  const showEmptyThreadState = shouldShowEmptyThreadState({
+                    projectExpanded: project.expanded,
+                    threadCount: projectThreads.length,
+                  });
                   const visibleThreads =
                     hasHiddenThreads && !isThreadListExpanded
                       ? projectThreads.slice(0, sidebarThreadPreviewCount)
@@ -1549,6 +1554,16 @@ export default function Sidebar() {
 
                           <CollapsibleContent keepMounted>
                             <SidebarMenuSub className="mx-1 my-0 w-full translate-x-0 gap-0.5 px-1.5 py-0">
+                              {showEmptyThreadState ? (
+                                <SidebarMenuSubItem className="w-full" data-thread-selection-safe>
+                                  <div
+                                    data-thread-selection-safe
+                                    className="flex h-6 w-full translate-x-0 items-center px-2 text-left text-[10px] text-muted-foreground/60"
+                                  >
+                                    <span>No threads yet</span>
+                                  </div>
+                                </SidebarMenuSubItem>
+                              ) : null}
                               {visibleThreads.map((thread) => {
                                 const isActive = routeThreadId === thread.id;
                                 const isSelected = selectedThreadIds.has(thread.id);

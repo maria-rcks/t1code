@@ -8,6 +8,7 @@ import {
   resolveThreadRowClassName,
   resolveThreadStatusPill,
   shouldClearThreadSelectionOnMouseDown,
+  shouldShowEmptyThreadState,
 } from "./Sidebar.logic";
 
 function makeLatestTurn(overrides?: {
@@ -114,6 +115,14 @@ describe("isContextMenuPointerDown", () => {
         isMac: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe("shouldShowEmptyThreadState", () => {
+  it("shows only for expanded projects with no threads", () => {
+    expect(shouldShowEmptyThreadState({ projectExpanded: true, threadCount: 0 })).toBe(true);
+    expect(shouldShowEmptyThreadState({ projectExpanded: false, threadCount: 0 })).toBe(false);
+    expect(shouldShowEmptyThreadState({ projectExpanded: true, threadCount: 1 })).toBe(false);
   });
 });
 
