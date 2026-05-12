@@ -1,5 +1,4 @@
 import * as fs from "node:fs/promises";
-import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type {
@@ -123,6 +122,7 @@ import {
   type ResolvedComposerImageAttachment,
 } from "./composerSubmit";
 import { saveClipboardImageToFile } from "./clipboardImage";
+import { copyTextToClipboard } from "./clipboardText";
 import { KEYBINDING_GUIDE_SECTIONS, isCtrlC, shouldClearComposerOnCtrlC } from "./keyboardBehavior";
 import { createT1Logger } from "./log";
 import { resolveUserMessageBubbleWidth } from "./messageLayout";
@@ -684,51 +684,6 @@ async function listDirectorySuggestions(input: string, homeDir: string): Promise
   } catch {
     return [];
   }
-}
-
-async function copyTextToClipboard(value: string): Promise<void> {
-  const commands =
-    process.platform === "darwin"
-      ? [["pbcopy"]]
-      : process.platform === "linux"
-        ? [["wl-copy"], ["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]]
-        : [];
-
-  if (commands.length === 0) {
-    throw new Error(`Clipboard copy is not supported on ${process.platform}.`);
-  }
-
-  let lastError: Error | null = null;
-  for (const command of commands) {
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const child = spawn(command[0]!, command.slice(1), {
-          stdio: ["pipe", "ignore", "pipe"],
-        });
-
-        let stderr = "";
-        child.on("error", (error) => {
-          reject(error);
-        });
-        child.stderr?.on("data", (chunk) => {
-          stderr += chunk.toString();
-        });
-        child.on("close", (code) => {
-          if (code === 0) {
-            resolve();
-            return;
-          }
-          reject(new Error(stderr.trim() || `Clipboard helper exited with code ${code ?? -1}.`));
-        });
-        child.stdin?.end(value);
-      });
-      return;
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-    }
-  }
-
-  throw lastError ?? new Error("No clipboard helper was available.");
 }
 
 function formatRelativeTime(iso: string | null | undefined): string {
