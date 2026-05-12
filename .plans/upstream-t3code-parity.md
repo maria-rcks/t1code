@@ -268,6 +268,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Shared command path resolution: partially align with upstream shell helpers
   by adding `resolveCommandPath`/`isCommandAvailable` for provider maintenance
   install-source detection.
+- Provider maintenance advisories: partially align with upstream `08e6d4cf` by
+  adding provider maintenance capability resolution, npm latest-version
+  advisory enrichment, update command selection for npm/bun/pnpm/vite-plus,
+  Homebrew, native installers, and manual/custom binaries.
 
 ## Remaining upstream groups
 
@@ -275,7 +279,7 @@ removing those fork surfaces unless a replacement has been implemented and wired
    - Effect 4 catalog migration and patch.
    - `effect-acp` and `effect-codex-app-server` packages.
    - ACP/Cursor provider support and OpenCode lifecycle fixes.
-   - Provider maintenance/update advisories and newer provider snapshot
+   - Provider update execution runners/coordinators and newer provider snapshot
      architecture.
 
 2. Terminal and shell state parity
