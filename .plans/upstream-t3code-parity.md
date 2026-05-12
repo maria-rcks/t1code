@@ -68,6 +68,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
   diff panel override, query cache key, contracts, and git diff flag plumbing.
 - Right diff panel sizing: narrow the inline and sheet diff panel widths and
   delay sheet mode until narrower viewports.
+- Background fetch askpass: suppress SSH askpass prompts during upstream status
+  refreshes so background git checks cannot steal focus or hang waiting for UI
+  credentials.
 
 ## Remaining upstream groups
 
@@ -88,6 +91,7 @@ removing those fork surfaces unless a replacement has been implemented and wired
    - Pluggable VCS foundation.
    - GitLab, Bitbucket, and Azure DevOps source control providers.
    - Faster VCS diff loading and PR state fixes.
+   - Configurable automatic git fetch interval setting and UI.
    - New source control docs and settings UI.
 
 4. Settings and remote access parity
