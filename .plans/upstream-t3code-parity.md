@@ -72,7 +72,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
   refreshes so background git checks cannot steal focus or hang waiting for UI
   credentials.
 - Hosted channel branding: recognize `VITE_HOSTED_APP_CHANNEL=latest|nightly`
-  and surface the matching stage/display name in the web app.
+  and surface the matching stage/display name in the web app; Vite forwards
+  release-provided `APP_VERSION` and hosted-channel metadata into the bundle.
 - Chat timeline timer updates: move streaming elapsed-time labels to
   self-updating text nodes so the chat view no longer commits every second
   while a turn is running.
