@@ -43,6 +43,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Proposed plan copy action: add clipboard copy to the plan card action menu.
 - Sidebar logo navigation: make the sidebar wordmark link back to the thread
   list.
+- New-thread plan consumption: mark proposed plans as consumed when
+  implementation starts in a new thread.
+- Markdown highlight stability: keep code highlighting hook order stable across
+  cache hits and uncached renders.
 
 ## Remaining upstream groups
 
