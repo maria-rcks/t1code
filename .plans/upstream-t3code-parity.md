@@ -91,6 +91,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
   long labels do not clip.
 - Claude system prompt preset: align with upstream `cb8015a3` by starting Claude
   SDK sessions with the `claude_code` system prompt preset.
+- Effect language service prepare hook: align with upstream `02dd47ea` by
+  centralizing `effect-language-service patch` at the monorepo root so `bun
+  install` does not run duplicate workspace prepare hooks.
 
 ## Remaining upstream groups
 
