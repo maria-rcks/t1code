@@ -66,6 +66,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
   keeping CLI reachability checks fast, with virtual-clock regression coverage.
 - Diff whitespace toggle: add the default "hide whitespace changes" setting,
   diff panel override, query cache key, contracts, and git diff flag plumbing.
+- Right diff panel sizing: narrow the inline and sheet diff panel widths and
+  delay sheet mode until narrower viewports.
 
 ## Remaining upstream groups
 
@@ -102,8 +104,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
 
 6. Web UI parity
    - Sidebar performance and grouping changes.
-   - Diff renderer updates beyond collapsible file sections and whitespace
-     filtering.
+   - Diff renderer updates beyond collapsible file sections, whitespace
+     filtering, and panel sizing.
    - Skill chips and broader composer action refactors.
    - Mobile/iOS layout fixes.
 
