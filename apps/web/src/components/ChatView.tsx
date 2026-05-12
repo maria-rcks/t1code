@@ -345,7 +345,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
   // When set, the thread-change reset effect will open the sidebar instead of closing it.
   // Used by "Implement in a new thread" to carry the sidebar-open intent across navigation.
   const planSidebarOpenOnNextThreadRef = useRef(false);
-  const [nowTick, setNowTick] = useState(() => Date.now());
   const [terminalFocusRequestId, setTerminalFocusRequestId] = useState(0);
   const [composerHighlightedItemId, setComposerHighlightedItemId] = useState<string | null>(null);
   const [pullRequestDialogState, setPullRequestDialogState] =
@@ -661,7 +660,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
     isSendBusy,
     sessionRunning: phase === "running",
   });
-  const nowIso = new Date(nowTick).toISOString();
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
     activeLatestTurn,
     activeThread?.session ?? null,
@@ -2055,16 +2053,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
     : isLocalDraftThread
       ? (draftThread?.envMode ?? "local")
       : "local";
-
-  useEffect(() => {
-    if (phase !== "running") return;
-    const timer = window.setInterval(() => {
-      setNowTick(Date.now());
-    }, 1000);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [phase]);
 
   const beginSendPhase = useCallback((nextPhase: Exclude<SendPhase, "idle">) => {
     setSendStartedAt((current) => current ?? new Date().toISOString());
@@ -3520,7 +3508,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
                 completionDividerBeforeEntryId={completionDividerBeforeEntryId}
                 completionSummary={completionSummary}
                 turnDiffSummaryByAssistantMessageId={turnDiffSummaryByAssistantMessageId}
-                nowIso={nowIso}
                 expandedWorkGroups={expandedWorkGroups}
                 onToggleWorkGroup={onToggleWorkGroup}
                 onOpenTurnDiff={onOpenTurnDiff}
