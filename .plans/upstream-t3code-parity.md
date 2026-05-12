@@ -324,6 +324,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
   adding instance-routed text-generation service contracts, shared prompt
   builders, text-generation policies/presets, contract-level
   `TextGenerationError`, and focused registry/prompt regression tests.
+- Codex text generation: partially align with upstream `08e6d4cf` by adding
+  per-instance `codex exec` text generation with model option forwarding,
+  CODEX_HOME expansion, structured output decoding, attachment image
+  materialization, cleanup, and focused fake-binary coverage.
 
 ## Remaining upstream groups
 
