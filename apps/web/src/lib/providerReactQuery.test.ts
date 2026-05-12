@@ -64,6 +64,7 @@ describe("checkpointDiffQueryOptions", () => {
       threadId,
       fromTurnCount: 3,
       toTurnCount: 4,
+      ignoreWhitespace: true,
     });
     expect(getFullThreadDiff).not.toHaveBeenCalled();
   });
@@ -86,8 +87,33 @@ describe("checkpointDiffQueryOptions", () => {
     expect(getFullThreadDiff).toHaveBeenCalledWith({
       threadId,
       toTurnCount: 2,
+      ignoreWhitespace: true,
     });
     expect(getTurnDiff).not.toHaveBeenCalled();
+  });
+
+  it("forwards explicit whitespace diff preference", async () => {
+    const getTurnDiff = vi.fn().mockResolvedValue({ diff: "patch" });
+    const getFullThreadDiff = vi.fn().mockResolvedValue({ diff: "patch" });
+    mockNativeApi({ getTurnDiff, getFullThreadDiff });
+
+    const options = checkpointDiffQueryOptions({
+      threadId,
+      fromTurnCount: 3,
+      toTurnCount: 4,
+      ignoreWhitespace: false,
+      cacheScope: "turn:abc",
+    });
+
+    const queryClient = new QueryClient();
+    await queryClient.fetchQuery(options);
+
+    expect(getTurnDiff).toHaveBeenCalledWith({
+      threadId,
+      fromTurnCount: 3,
+      toTurnCount: 4,
+      ignoreWhitespace: false,
+    });
   });
 
   it("fails fast on invalid range and does not call provider RPC", async () => {

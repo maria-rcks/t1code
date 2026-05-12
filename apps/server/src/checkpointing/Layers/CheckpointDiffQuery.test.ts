@@ -119,6 +119,7 @@ describe("CheckpointDiffQueryLive", () => {
       readonly fromCheckpointRef: CheckpointRef;
       readonly toCheckpointRef: CheckpointRef;
       readonly cwd: string;
+      readonly ignoreWhitespace: boolean | undefined;
     }> = [];
 
     const snapshot = makeSnapshot({
@@ -139,9 +140,9 @@ describe("CheckpointDiffQueryLive", () => {
           return true;
         }),
       restoreCheckpoint: () => Effect.succeed(true),
-      diffCheckpoints: ({ fromCheckpointRef, toCheckpointRef, cwd }) =>
+      diffCheckpoints: ({ fromCheckpointRef, toCheckpointRef, cwd, ignoreWhitespace }) =>
         Effect.sync(() => {
-          diffCheckpointsCalls.push({ fromCheckpointRef, toCheckpointRef, cwd });
+          diffCheckpointsCalls.push({ fromCheckpointRef, toCheckpointRef, cwd, ignoreWhitespace });
           return "diff patch";
         }),
       deleteCheckpointRefs: () => Effect.void,
@@ -175,6 +176,7 @@ describe("CheckpointDiffQueryLive", () => {
         cwd: "/tmp/workspace",
         fromCheckpointRef: expectedFromRef,
         toCheckpointRef,
+        ignoreWhitespace: true,
       },
     ]);
     expect(result).toEqual({
@@ -193,6 +195,7 @@ describe("CheckpointDiffQueryLive", () => {
       readonly fromCheckpointRef: CheckpointRef;
       readonly toCheckpointRef: CheckpointRef;
       readonly cwd: string;
+      readonly ignoreWhitespace: boolean | undefined;
     }> = [];
 
     const snapshot = makeSnapshot({
@@ -209,9 +212,9 @@ describe("CheckpointDiffQueryLive", () => {
       captureCheckpoint: () => Effect.void,
       hasCheckpointRef: () => Effect.succeed(true),
       restoreCheckpoint: () => Effect.succeed(true),
-      diffCheckpoints: ({ fromCheckpointRef, toCheckpointRef, cwd }) =>
+      diffCheckpoints: ({ fromCheckpointRef, toCheckpointRef, cwd, ignoreWhitespace }) =>
         Effect.sync(() => {
-          diffCheckpointsCalls.push({ fromCheckpointRef, toCheckpointRef, cwd });
+          diffCheckpointsCalls.push({ fromCheckpointRef, toCheckpointRef, cwd, ignoreWhitespace });
           return "diff patch";
         }),
       deleteCheckpointRefs: () => Effect.void,
@@ -238,6 +241,7 @@ describe("CheckpointDiffQueryLive", () => {
         return yield* query.getFullThreadDiff({
           threadId,
           toTurnCount: 1,
+          ignoreWhitespace: false,
         });
       }).pipe(Effect.provide(layer)),
     );
@@ -247,6 +251,7 @@ describe("CheckpointDiffQueryLive", () => {
         cwd: "/tmp/live-worktree-session",
         fromCheckpointRef: checkpointRefForThreadTurn(threadId, 0),
         toCheckpointRef,
+        ignoreWhitespace: false,
       },
     ]);
   });

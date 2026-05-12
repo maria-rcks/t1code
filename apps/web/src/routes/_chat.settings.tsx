@@ -264,6 +264,9 @@ function SettingsRouteView() {
     ...(settings.sidebarThreadPreviewCount !== defaults.sidebarThreadPreviewCount
       ? ["Visible threads"]
       : []),
+    ...(settings.diffIgnoreWhitespace !== defaults.diffIgnoreWhitespace
+      ? ["Diff whitespace changes"]
+      : []),
     ...(settings.enableAssistantStreaming !== defaults.enableAssistantStreaming
       ? ["Assistant output"]
       : []),
@@ -545,6 +548,34 @@ function SettingsRouteView() {
                         sidebarThreadPreviewCount: clampSidebarThreadPreviewCount(nextValue),
                       });
                     }}
+                  />
+                }
+              />
+
+              <SettingsRow
+                title="Hide whitespace changes"
+                description="Ignore whitespace-only edits in the diff panel by default."
+                resetAction={
+                  settings.diffIgnoreWhitespace !== defaults.diffIgnoreWhitespace ? (
+                    <SettingResetButton
+                      label="diff whitespace changes"
+                      onClick={() =>
+                        updateSettings({
+                          diffIgnoreWhitespace: defaults.diffIgnoreWhitespace,
+                        })
+                      }
+                    />
+                  ) : null
+                }
+                control={
+                  <Switch
+                    checked={settings.diffIgnoreWhitespace}
+                    onCheckedChange={(checked) =>
+                      updateSettings({
+                        diffIgnoreWhitespace: Boolean(checked),
+                      })
+                    }
+                    aria-label="Hide whitespace changes by default"
                   />
                 }
               />

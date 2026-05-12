@@ -8,6 +8,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   Columns2Icon,
+  PilcrowIcon,
   Rows3Icon,
 } from "lucide-react";
 import {
@@ -183,6 +184,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
   const { resolvedTheme } = useTheme();
   const { settings } = useAppSettings();
   const [diffRenderMode, setDiffRenderMode] = useState<DiffRenderMode>("stacked");
+  const [diffIgnoreWhitespace, setDiffIgnoreWhitespace] = useState(settings.diffIgnoreWhitespace);
   const [collapsedDiffFileKeys, setCollapsedDiffFileKeys] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -280,6 +282,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
       threadId: activeThreadId,
       fromTurnCount: activeCheckpointRange?.fromTurnCount ?? null,
       toTurnCount: activeCheckpointRange?.toTurnCount ?? null,
+      ignoreWhitespace: diffIgnoreWhitespace,
       cacheScope: selectedTurn ? `turn:${selectedTurn.turnId}` : conversationCacheScope,
       enabled: isGitRepo,
     }),
@@ -316,6 +319,10 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
       }),
     );
   }, [renderablePatch]);
+
+  useEffect(() => {
+    setDiffIgnoreWhitespace(settings.diffIgnoreWhitespace);
+  }, [settings.diffIgnoreWhitespace]);
 
   useEffect(() => {
     if (renderableFiles.length === 0) {
@@ -538,25 +545,38 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
           ))}
         </div>
       </div>
-      <ToggleGroup
-        className="shrink-0 [-webkit-app-region:no-drag]"
-        variant="outline"
-        size="xs"
-        value={[diffRenderMode]}
-        onValueChange={(value) => {
-          const next = value[0];
-          if (next === "stacked" || next === "split") {
-            setDiffRenderMode(next);
-          }
-        }}
-      >
-        <Toggle aria-label="Stacked diff view" value="stacked">
-          <Rows3Icon className="size-3" />
+      <div className="flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
+        <ToggleGroup
+          variant="outline"
+          size="xs"
+          value={[diffRenderMode]}
+          onValueChange={(value) => {
+            const next = value[0];
+            if (next === "stacked" || next === "split") {
+              setDiffRenderMode(next);
+            }
+          }}
+        >
+          <Toggle aria-label="Stacked diff view" value="stacked">
+            <Rows3Icon className="size-3" />
+          </Toggle>
+          <Toggle aria-label="Split diff view" value="split">
+            <Columns2Icon className="size-3" />
+          </Toggle>
+        </ToggleGroup>
+        <Toggle
+          aria-label={diffIgnoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"}
+          title={diffIgnoreWhitespace ? "Show whitespace changes" : "Hide whitespace changes"}
+          variant="outline"
+          size="xs"
+          pressed={diffIgnoreWhitespace}
+          onPressedChange={(pressed) => {
+            setDiffIgnoreWhitespace(Boolean(pressed));
+          }}
+        >
+          <PilcrowIcon className="size-3" />
         </Toggle>
-        <Toggle aria-label="Split diff view" value="split">
-          <Columns2Icon className="size-3" />
-        </Toggle>
-      </ToggleGroup>
+      </div>
     </>
   );
 

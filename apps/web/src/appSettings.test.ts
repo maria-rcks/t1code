@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   AppSettingsSchema,
+  DEFAULT_DIFF_IGNORE_WHITESPACE,
   DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT,
   DEFAULT_SIDEBAR_PROJECT_SORT_ORDER,
   DEFAULT_SIDEBAR_THREAD_SORT_ORDER,
@@ -248,6 +249,7 @@ describe("AppSettingsSchema", () => {
       codexHomePath: "",
       defaultThreadEnvMode: "local",
       confirmThreadDelete: false,
+      diffIgnoreWhitespace: DEFAULT_DIFF_IGNORE_WHITESPACE,
       enableAssistantStreaming: false,
       timestampFormat: DEFAULT_TIMESTAMP_FORMAT,
       sidebarProjectSortOrder: DEFAULT_SIDEBAR_PROJECT_SORT_ORDER,
