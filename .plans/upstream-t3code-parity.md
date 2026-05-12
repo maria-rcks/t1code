@@ -24,6 +24,17 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Provider model picker offset: keep provider submenus from overlapping their
   parent menu.
 - Error toast copy action: make error details copyable from toast UI.
+- Claude model reset guard: avoid re-sending the same Claude model to the SDK on
+  every turn.
+- Claude stream exit handling: handle SDK stream exits inside the forked stream
+  effect.
+- Windows line endings: enforce LF checkouts for format stability.
+- Bootstrap fd fallback: read inherited bootstrap fds directly when fd-path
+  duplication fails.
+- Editor open parity: add VS Code Insiders, VSCodium, Trae, IntelliJ IDEA, Zed
+  command aliases, and Windows launch argument quoting.
+- Wrapped terminal links: resolve terminal URLs that wrap across physical buffer
+  rows.
 
 ## Remaining upstream groups
 
