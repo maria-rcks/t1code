@@ -251,6 +251,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Web React dependency pins: partially align with upstream `b83e9c95` by
   pinning the web app to React/React DOM 19.2.6, React type packages, and the
   stable React compiler package.
+- Provider instance contracts: partially align with upstream `08e6d4cf` by
+  adding open provider driver slugs, provider instance ids, config envelopes,
+  and environment-variable contracts as a foundation for multi-provider backend
+  routing.
 
 ## Remaining upstream groups
 
