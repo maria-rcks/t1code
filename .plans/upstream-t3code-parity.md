@@ -179,6 +179,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Stale send spinner guard: adapt upstream `48481aa9` in shared session logic
   so a completed latest turn is settled even if the session status briefly
   remains `running`.
+- Hidden thread status indicator: partially align with upstream `d5f23331` by
+  showing the aggregated status for hidden preview threads beside the sidebar
+  "Show more" control.
 
 ## Remaining upstream groups
 

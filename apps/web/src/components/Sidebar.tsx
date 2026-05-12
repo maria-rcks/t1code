@@ -130,6 +130,44 @@ interface PrStatusIndicator {
 
 type ThreadPr = GitStatusResult["pr"];
 
+function ThreadStatusLabel({
+  status,
+  compact = false,
+}: {
+  status: NonNullable<ReturnType<typeof resolveThreadStatusPill>>;
+  compact?: boolean;
+}) {
+  if (compact) {
+    return (
+      <span
+        title={status.label}
+        className={`inline-flex size-3.5 shrink-0 items-center justify-center ${status.colorClass}`}
+      >
+        <span
+          className={`size-[9px] rounded-full ${status.dotClass} ${
+            status.pulse ? "animate-pulse" : ""
+          }`}
+        />
+        <span className="sr-only">{status.label}</span>
+      </span>
+    );
+  }
+
+  return (
+    <span
+      title={status.label}
+      className={`inline-flex items-center gap-1 text-[10px] ${status.colorClass}`}
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${status.dotClass} ${
+          status.pulse ? "animate-pulse" : ""
+        }`}
+      />
+      <span className="hidden md:inline">{status.label}</span>
+    </span>
+  );
+}
+
 function terminalStatusFromRunningIds(
   runningTerminalIds: string[],
 ): TerminalStatusIndicator | null {
@@ -1393,14 +1431,18 @@ export default function Sidebar() {
                       if (byDate !== 0) return byDate;
                       return b.id.localeCompare(a.id);
                     });
-                  const projectStatus = resolveProjectStatusIndicator(
-                    projectThreads.map((thread) =>
+                  const threadStatuses = new Map(
+                    projectThreads.map((thread) => [
+                      thread.id,
                       resolveThreadStatusPill({
                         thread,
                         hasPendingApprovals: derivePendingApprovals(thread.activities).length > 0,
                         hasPendingUserInput: derivePendingUserInputs(thread.activities).length > 0,
                       }),
-                    ),
+                    ]),
+                  );
+                  const projectStatus = resolveProjectStatusIndicator(
+                    projectThreads.map((thread) => threadStatuses.get(thread.id) ?? null),
                   );
                   const isThreadListExpanded = expandedThreadListsByProject.has(project.id);
                   const hasHiddenThreads = projectThreads.length > sidebarThreadPreviewCount;
@@ -1408,6 +1450,14 @@ export default function Sidebar() {
                     hasHiddenThreads && !isThreadListExpanded
                       ? projectThreads.slice(0, sidebarThreadPreviewCount)
                       : projectThreads;
+                  const hiddenThreadStatus =
+                    hasHiddenThreads && !isThreadListExpanded
+                      ? resolveProjectStatusIndicator(
+                          projectThreads
+                            .slice(sidebarThreadPreviewCount)
+                            .map((thread) => threadStatuses.get(thread.id) ?? null),
+                        )
+                      : null;
                   const orderedProjectThreadIds = projectThreads.map((thread) => thread.id);
 
                   return (
@@ -1503,13 +1553,7 @@ export default function Sidebar() {
                                 const isActive = routeThreadId === thread.id;
                                 const isSelected = selectedThreadIds.has(thread.id);
                                 const isHighlighted = isActive || isSelected;
-                                const threadStatus = resolveThreadStatusPill({
-                                  thread,
-                                  hasPendingApprovals:
-                                    derivePendingApprovals(thread.activities).length > 0,
-                                  hasPendingUserInput:
-                                    derivePendingUserInputs(thread.activities).length > 0,
-                                });
+                                const threadStatus = threadStatuses.get(thread.id) ?? null;
                                 const prStatus = prStatusIndicator(
                                   prByThreadId.get(thread.id) ?? null,
                                 );
@@ -1598,18 +1642,7 @@ export default function Sidebar() {
                                           </Tooltip>
                                         )}
                                         {threadStatus && (
-                                          <span
-                                            className={`inline-flex items-center gap-1 text-[10px] ${threadStatus.colorClass}`}
-                                          >
-                                            <span
-                                              className={`h-1.5 w-1.5 rounded-full ${threadStatus.dotClass} ${
-                                                threadStatus.pulse ? "animate-pulse" : ""
-                                              }`}
-                                            />
-                                            <span className="hidden md:inline">
-                                              {threadStatus.label}
-                                            </span>
-                                          </span>
+                                          <ThreadStatusLabel status={threadStatus} />
                                         )}
                                         {renamingThreadId === thread.id ? (
                                           <input
@@ -1695,7 +1728,12 @@ export default function Sidebar() {
                                       expandThreadListForProject(project.id);
                                     }}
                                   >
-                                    <span>Show more</span>
+                                    <span className="flex min-w-0 flex-1 items-center gap-2">
+                                      {hiddenThreadStatus && (
+                                        <ThreadStatusLabel status={hiddenThreadStatus} compact />
+                                      )}
+                                      <span>Show more</span>
+                                    </span>
                                   </SidebarMenuSubButton>
                                 </SidebarMenuSubItem>
                               )}
