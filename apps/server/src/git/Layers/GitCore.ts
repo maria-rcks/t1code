@@ -35,6 +35,9 @@ const DEFAULT_MAX_OUTPUT_BYTES = 1_000_000;
 const STATUS_UPSTREAM_REFRESH_INTERVAL = Duration.seconds(15);
 const STATUS_UPSTREAM_REFRESH_TIMEOUT = Duration.seconds(5);
 const STATUS_UPSTREAM_REFRESH_CACHE_CAPACITY = 2_048;
+const STATUS_UPSTREAM_REFRESH_ENV = Object.freeze({
+  SSH_ASKPASS_REQUIRE: "never",
+} satisfies NodeJS.ProcessEnv);
 const DEFAULT_BASE_BRANCH_CANDIDATES = ["main", "master"] as const;
 
 type TraceTailState = {
@@ -53,6 +56,7 @@ interface ExecuteGitOptions {
   timeoutMs?: number | undefined;
   allowNonZeroExit?: boolean | undefined;
   fallbackErrorMessage?: string | undefined;
+  env?: NodeJS.ProcessEnv | undefined;
   progress?: ExecuteGitProgress | undefined;
 }
 
@@ -602,6 +606,7 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
         cwd,
         args,
         allowNonZeroExit: true,
+        ...(options.env !== undefined ? { env: options.env } : {}),
         ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
         ...(options.progress ? { progress: options.progress } : {}),
       }).pipe(
@@ -743,6 +748,7 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
         ["fetch", "--quiet", "--no-tags", upstream.remoteName, refspec],
         {
           allowNonZeroExit: true,
+          env: STATUS_UPSTREAM_REFRESH_ENV,
           timeoutMs: Duration.toMillis(STATUS_UPSTREAM_REFRESH_TIMEOUT),
         },
       ).pipe(Effect.asVoid);
