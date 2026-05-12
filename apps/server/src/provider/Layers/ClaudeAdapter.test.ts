@@ -2561,6 +2561,7 @@ describe("ClaudeAdapterLive", () => {
       assert.equal(typeof requestId, "string");
       assert.equal(requestedEvent.value.payload.questions.length, 1);
       assert.equal(requestedEvent.value.payload.questions[0]?.question, "Which framework?");
+      assert.equal(requestedEvent.value.payload.questions[0]?.id, "Which framework?");
       assert.deepEqual(requestedEvent.value.providerRefs, {
         providerItemId: ProviderItemId.makeUnsafe("tool-ask-1"),
       });
@@ -2597,6 +2598,19 @@ describe("ClaudeAdapterLive", () => {
       assert.deepEqual(updatedInput.answers, { "Which framework?": "React" });
       // Original questions should be passed through.
       assert.deepEqual(updatedInput.questions, askInput.questions);
+
+      const sdkAnswers = updatedInput.answers as Record<string, unknown>;
+      const sdkQuestions = updatedInput.questions as ReadonlyArray<{
+        readonly question: string;
+      }>;
+      const rendered = sdkQuestions
+        .map(({ question }) => {
+          const answer = sdkAnswers[question];
+          return answer === undefined ? null : `"${question}"="${String(answer)}"`;
+        })
+        .filter((entry): entry is string => entry !== null)
+        .join(", ");
+      assert.equal(rendered, '"Which framework?"="React"');
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),

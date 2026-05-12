@@ -2281,10 +2281,13 @@ function makeClaudeAdapter(options?: ClaudeAdapterLiveOptions) {
             const requestId = ApprovalRequestId.makeUnsafe(yield* Random.nextUUIDv4);
 
             // Parse questions from the SDK's AskUserQuestion input.
+            // `id` must equal the full question text: recent Claude SDKs look
+            // up answers by question text when rendering the tool result.
             const rawQuestions = Array.isArray(toolInput.questions) ? toolInput.questions : [];
             const questions: Array<UserInputQuestion> = rawQuestions.map(
               (q: Record<string, unknown>, idx: number) => ({
-                id: typeof q.header === "string" ? q.header : `q-${idx}`,
+                id:
+                  typeof q.question === "string" && q.question.length > 0 ? q.question : `q-${idx}`,
                 header: typeof q.header === "string" ? q.header : `Question ${idx + 1}`,
                 question: typeof q.question === "string" ? q.question : "",
                 options: Array.isArray(q.options)
