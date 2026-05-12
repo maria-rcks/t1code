@@ -27,6 +27,7 @@
     "@effect/sql-sqlite-bun": "catalog:",
     "@pierre/diffs": "catalog:",
     "effect": "catalog:",
+    "effect-codex-app-server": "workspace:*",
     "node-pty": "^1.1.0",
     "ws": "^8.18.0"
   },

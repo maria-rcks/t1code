@@ -316,6 +316,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
   adding the generated Codex app-server schema/rpc/protocol client package,
   adapting it to this fork's Effect 4 `Stdio` and `ServiceMap` APIs, and
   covering the JSON-RPC transport with focused protocol/client tests.
+- Codex provider snapshot wrapper: partially align with upstream `08e6d4cf`
+  by adding app-server backed Codex provider probing, account/model/skill
+  projection, custom model fallbacks, CODEX_HOME expansion, and pending/error
+  snapshot coverage for the new driver path.
 
 ## Remaining upstream groups
 

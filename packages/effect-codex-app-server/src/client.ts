@@ -75,7 +75,7 @@ export interface CodexAppServerClientShape {
 export class CodexAppServerClient extends ServiceMap.Service<
   CodexAppServerClient,
   CodexAppServerClientShape
->()("effect-codex-app-server/CodexAppServerClient") {}
+>()("effect-codex-app-server/client/CodexAppServerClient") {}
 
 type ServerRequestHandler = (
   payload: unknown,
