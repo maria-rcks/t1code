@@ -1,4 +1,5 @@
 import * as OS from "node:os";
+import * as nodePath from "node:path";
 import { Effect, Path } from "effect";
 import { readPathFromLoginShell } from "@t3tools/shared/shell";
 
@@ -16,16 +17,17 @@ export function fixPath(): void {
   }
 }
 
-export const expandHomePath = Effect.fn(function* (input: string) {
-  const { join } = yield* Path.Path;
+export function expandHomePathSync(input: string): string {
   if (input === "~") {
     return OS.homedir();
   }
   if (input.startsWith("~/") || input.startsWith("~\\")) {
-    return join(OS.homedir(), input.slice(2));
+    return nodePath.join(OS.homedir(), input.slice(2));
   }
   return input;
-});
+}
+
+export const expandHomePath = (input: string) => Effect.succeed(expandHomePathSync(input));
 
 export const resolveBaseDir = Effect.fn(function* (raw: string | undefined) {
   const { join, resolve } = yield* Path.Path;

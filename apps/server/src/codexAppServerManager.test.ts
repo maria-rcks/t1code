@@ -409,6 +409,47 @@ describe("startSession", () => {
       manager.stopAll();
     }
   });
+
+  it("expands a tilde CODEX_HOME before probing the Codex CLI", async () => {
+    const manager = new CodexAppServerManager();
+    const versionCheck = vi
+      .spyOn(
+        manager as unknown as {
+          assertSupportedCodexCliVersion: (input: {
+            binaryPath: string;
+            cwd: string;
+            homePath?: string;
+          }) => void;
+        },
+        "assertSupportedCodexCliVersion",
+      )
+      .mockImplementation(() => {
+        throw new Error("stop before process launch");
+      });
+
+    try {
+      await expect(
+        manager.startSession({
+          threadId: asThreadId("thread-1"),
+          provider: "codex",
+          runtimeMode: "full-access",
+          providerOptions: {
+            codex: {
+              homePath: "~/.codex-alt",
+            },
+          },
+        }),
+      ).rejects.toThrow("stop before process launch");
+      expect(versionCheck).toHaveBeenCalledWith(
+        expect.objectContaining({
+          homePath: path.join(os.homedir(), ".codex-alt"),
+        }),
+      );
+    } finally {
+      versionCheck.mockRestore();
+      manager.stopAll();
+    }
+  });
 });
 
 describe("sendTurn", () => {

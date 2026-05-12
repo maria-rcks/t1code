@@ -156,6 +156,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Visited timestamp clock skew: align with upstream `22b7d8c5` by recording
   the server turn completion timestamp when marking an active thread visited,
   preventing local clock skew from hiding unread completions.
+- Codex home tilde expansion: adapt upstream `aa2d385a` by expanding
+  `CODEX_HOME=~/...` before Codex CLI version checks and app-server launches.
 
 ## Remaining upstream groups
 

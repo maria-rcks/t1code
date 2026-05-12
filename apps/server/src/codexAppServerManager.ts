@@ -27,6 +27,7 @@ import {
   isCodexCliVersionSupported,
   parseCodexCliVersion,
 } from "./provider/codexCliVersion";
+import { expandHomePathSync } from "./os-jank";
 
 type PendingRequestKey = string;
 
@@ -543,7 +544,9 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
 
       const codexOptions = readCodexProviderOptions(input);
       const codexBinaryPath = codexOptions.binaryPath ?? "codex";
-      const codexHomePath = codexOptions.homePath;
+      const codexHomePath = codexOptions.homePath
+        ? expandHomePathSync(codexOptions.homePath)
+        : undefined;
       this.assertSupportedCodexCliVersion({
         binaryPath: codexBinaryPath,
         cwd: resolvedCwd,
