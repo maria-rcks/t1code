@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   hasUnseenCompletion,
+  isContextMenuPointerDown,
   resolveProjectStatusIndicator,
   resolveSidebarNewThreadEnvMode,
   resolveThreadRowClassName,
@@ -81,6 +82,38 @@ describe("resolveSidebarNewThreadEnvMode", () => {
         defaultEnvMode: "worktree",
       }),
     ).toBe("local");
+  });
+});
+
+describe("isContextMenuPointerDown", () => {
+  it("treats secondary-button presses as context menu gestures on all platforms", () => {
+    expect(
+      isContextMenuPointerDown({
+        button: 2,
+        ctrlKey: false,
+        isMac: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("treats ctrl+primary-click as a context menu gesture on macOS", () => {
+    expect(
+      isContextMenuPointerDown({
+        button: 0,
+        ctrlKey: true,
+        isMac: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not treat ctrl+primary-click as a context menu gesture off macOS", () => {
+    expect(
+      isContextMenuPointerDown({
+        button: 0,
+        ctrlKey: true,
+        isMac: false,
+      }),
+    ).toBe(false);
   });
 });
 

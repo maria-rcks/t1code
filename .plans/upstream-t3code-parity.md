@@ -160,6 +160,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
   `CODEX_HOME=~/...` before Codex CLI version checks and app-server launches.
 - Project path context action: align with upstream `ce463a53` by adding a
   sidebar project context-menu action that copies the project workspace path.
+- macOS project context-menu drag guard: align with upstream `64d21bd6` by
+  treating Ctrl-primary-click as a context-menu gesture on macOS and preventing
+  it from arming sidebar project drag.
 
 ## Remaining upstream groups
 
