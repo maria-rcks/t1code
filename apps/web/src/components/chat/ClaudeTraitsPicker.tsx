@@ -41,7 +41,7 @@ const CLAUDE_EFFORT_LABELS: Record<ClaudeCodeEffort, string> = {
 
 const ULTRATHINK_PROMPT_PREFIX = "Ultrathink:\n";
 
-function getSelectedClaudeTraits(
+export function getSelectedClaudeTraits(
   model: string | null | undefined,
   prompt: string,
   modelOptions: ClaudeModelOptions | null | undefined,
@@ -51,6 +51,7 @@ function getSelectedClaudeTraits(
   fastModeEnabled: boolean;
   options: ReadonlyArray<ClaudeCodeEffort>;
   ultrathinkPromptControlled: boolean;
+  ultrathinkInBodyText: boolean;
   supportsFastMode: boolean;
 } {
   const options = getReasoningEffortOptions(PROVIDER, model);
@@ -69,13 +70,17 @@ function getSelectedClaudeTraits(
     ? (modelOptions?.thinking ?? true)
     : null;
   const supportsFastMode = supportsClaudeFastMode(model);
+  const ultrathinkPromptControlled =
+    supportsClaudeUltrathinkKeyword(model) && isClaudeUltrathinkPrompt(prompt);
+  const ultrathinkInBodyText =
+    ultrathinkPromptControlled && isClaudeUltrathinkPrompt(prompt.replace(/^Ultrathink:\s*/i, ""));
   return {
     effort,
     thinkingEnabled,
     fastModeEnabled: supportsFastMode && modelOptions?.fastMode === true,
     options,
-    ultrathinkPromptControlled:
-      supportsClaudeUltrathinkKeyword(model) && isClaudeUltrathinkPrompt(prompt),
+    ultrathinkPromptControlled,
+    ultrathinkInBodyText,
     supportsFastMode,
   };
 }
@@ -101,13 +106,13 @@ export const ClaudeTraitsMenuContent = memo(function ClaudeTraitsMenuContentImpl
     fastModeEnabled,
     options,
     ultrathinkPromptControlled,
+    ultrathinkInBodyText,
     supportsFastMode,
   } = getSelectedClaudeTraits(model, prompt, modelOptions);
   const defaultReasoningEffort = getDefaultReasoningEffort(PROVIDER);
 
   const handleEffortChange = useCallback(
     (value: ClaudeCodeEffort) => {
-      if (ultrathinkPromptControlled) return;
       if (!value) return;
       const nextEffort = options.find((option) => option === value);
       if (!nextEffort) return;
@@ -118,6 +123,10 @@ export const ClaudeTraitsMenuContent = memo(function ClaudeTraitsMenuContentImpl
             : applyClaudePromptEffortPrefix(prompt, "ultrathink");
         onPromptChange(nextPrompt);
         return;
+      }
+      if (ultrathinkInBodyText) return;
+      if (ultrathinkPromptControlled) {
+        onPromptChange(prompt.replace(/^Ultrathink:\s*/i, ""));
       }
       setProviderModelOptions(
         threadId,
@@ -131,6 +140,7 @@ export const ClaudeTraitsMenuContent = memo(function ClaudeTraitsMenuContentImpl
     },
     [
       ultrathinkPromptControlled,
+      ultrathinkInBodyText,
       model,
       modelOptions,
       onPromptChange,
@@ -151,14 +161,17 @@ export const ClaudeTraitsMenuContent = memo(function ClaudeTraitsMenuContentImpl
         <>
           <MenuGroup>
             <div className="px-2 pt-1.5 pb-1 font-medium text-muted-foreground text-xs">Effort</div>
-            {ultrathinkPromptControlled ? (
+            {ultrathinkInBodyText ? (
               <div className="px-2 pb-1.5 text-muted-foreground/80 text-xs">
-                Remove Ultrathink from the prompt to change effort.
+                Your prompt contains &quot;ultrathink&quot; in the text. Remove it to change effort.
               </div>
             ) : null}
-            <MenuRadioGroup value={effort} onValueChange={handleEffortChange}>
+            <MenuRadioGroup
+              value={ultrathinkPromptControlled ? "ultrathink" : effort}
+              onValueChange={handleEffortChange}
+            >
               {options.map((option) => (
-                <MenuRadioItem key={option} value={option} disabled={ultrathinkPromptControlled}>
+                <MenuRadioItem key={option} value={option} disabled={ultrathinkInBodyText}>
                   {CLAUDE_EFFORT_LABELS[option]}
                   {option === defaultReasoningEffort ? " (default)" : ""}
                 </MenuRadioItem>

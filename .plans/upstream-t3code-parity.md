@@ -205,6 +205,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Composer command menu highlighting: align with upstream `63584449` by
   disabling automatic menu highlighting and using the composer's controlled
   active item state for hover styling.
+- Claude Ultrathink effort switching: adapt upstream `61f98309` by allowing the
+  traits picker to strip an injected `Ultrathink:` prefix when selecting a
+  normal effort, while preserving a warning when the prompt body contains
+  user-authored ultrathink text.
 
 ## Remaining upstream groups
 
