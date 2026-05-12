@@ -57,6 +57,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
   tinted to match their card background while scrolling.
 - Mobile command dialog scrolling: allow touch panning inside command-style
   dialogs and shared scroll areas.
+- Mobile sidebar actions: reserve space for project header actions, keep the
+  new-thread action visible on touch layouts, and close the mobile sidebar when
+  opening settings.
 
 ## Remaining upstream groups
 
@@ -94,7 +97,7 @@ removing those fork surfaces unless a replacement has been implemented and wired
    - Sidebar performance and grouping changes.
    - Collapsible file diffs, changed-files sticky header, and diff renderer
      updates.
-   - Skill chips and composer placeholder skill mentions.
+   - Skill chips and broader composer action refactors.
    - Mobile/iOS layout fixes.
 
 7. Tooling and release parity
