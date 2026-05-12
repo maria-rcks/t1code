@@ -130,6 +130,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
   users can close it.
 - Select cursor affordance: align with upstream `047a0a69` by giving shared
   select triggers a pointer cursor.
+- Composer footer overflow: align with upstream `0bc94bc2` by measuring footer
+  content fit, compacting primary actions independently for wide states, and
+  keeping the send/action cluster inside the composer at narrow widths.
 
 ## Remaining upstream groups
 
