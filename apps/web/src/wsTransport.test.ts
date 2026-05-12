@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WsTransport } from "./wsTransport";
 
 type WsEventType = "open" | "message" | "close" | "error";
-type WsListener = (event?: { data?: unknown }) => void;
+type WsEvent = { data?: unknown; type?: string };
+type WsListener = (event?: WsEvent) => void;
 
 const sockets: MockWebSocket[] = [];
 
@@ -46,7 +47,11 @@ class MockWebSocket {
     this.emit("message", { data });
   }
 
-  private emit(type: WsEventType, event?: { data?: unknown }) {
+  emitError() {
+    this.emit("error", { type: "error" });
+  }
+
+  private emit(type: WsEventType, event?: WsEvent) {
     const listeners = this.listeners.get(type);
     if (!listeners) return;
     for (const listener of listeners) {
@@ -252,5 +257,35 @@ describe("WsTransport", () => {
 
     await expect(requestPromise).rejects.toThrow("WebSocket connection closed.");
     transport.dispose();
+  });
+
+  it("ignores stale socket lifecycle events after reconnecting", () => {
+    vi.useFakeTimers();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const transport = new WsTransport("ws://localhost:3020");
+    const firstSocket = getSocket();
+    firstSocket.open();
+
+    firstSocket.close();
+    expect(transport.getState()).toBe("closed");
+
+    vi.advanceTimersByTime(500);
+    const secondSocket = getSocket();
+    expect(secondSocket).not.toBe(firstSocket);
+    expect(transport.getState()).toBe("reconnecting");
+
+    secondSocket.open();
+    expect(transport.getState()).toBe("open");
+
+    firstSocket.close();
+    firstSocket.serverMessage("{ invalid-json");
+    firstSocket.emitError();
+
+    expect(transport.getState()).toBe("open");
+    expect(sockets).toHaveLength(2);
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    transport.dispose();
+    vi.useRealTimers();
   });
 });

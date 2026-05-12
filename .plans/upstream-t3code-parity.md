@@ -229,6 +229,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Atomic config writes: partially align with upstream `e25db3a5` by adding a
   UUID temp-directory based atomic writer and using it for the local keybindings
   config writer, avoiding timestamp temp-path collisions.
+- WebSocket stale lifecycle events: adapt upstream `dbebc387` by marking the
+  currently active socket as soon as a connection attempt starts and ignoring
+  stale open/message/close/error events from superseded sockets after reconnect.
 
 ## Remaining upstream groups
 

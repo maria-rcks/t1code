@@ -200,17 +200,26 @@ export class WsTransport {
     }
     this.state = this.reconnectAttempt > 0 ? "reconnecting" : "connecting";
     const ws = new this.WebSocketCtor(this.url);
+    this.ws = ws;
 
     const handleOpen = () => {
-      this.ws = ws;
+      if (this.ws !== ws) {
+        return;
+      }
       this.state = "open";
       this.reconnectAttempt = 0;
       this.flushQueue();
     };
     const handleMessage = (event: { data?: unknown }) => {
+      if (this.ws !== ws) {
+        return;
+      }
       this.handleMessage(event.data);
     };
     const handleClose = () => {
+      if (this.ws !== ws) {
+        return;
+      }
       if (this.ws === ws) {
         this.ws = null;
         this.outboundQueue.length = 0;
@@ -230,6 +239,9 @@ export class WsTransport {
       this.scheduleReconnect();
     };
     const handleError = (event: { type?: string }) => {
+      if (this.ws !== ws) {
+        return;
+      }
       this.onWarning("WebSocket connection error", { type: event.type, url: this.url });
     };
 
