@@ -173,6 +173,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
   new-thread creation.
 - Git actions header sizing: align with upstream `2aa11ae0` by preventing the
   Git actions group from shrinking into the terminal toggle.
+- Changed-files collapse scroll anchoring: align with upstream `d4178198` by
+  ignoring changed-file tree toggles as scroll anchors and avoiding virtualizer
+  scroll correction for rows intersecting the viewport.
 
 ## Remaining upstream groups
 
