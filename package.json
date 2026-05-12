@@ -9,6 +9,7 @@
     ],
     "catalog": {
       "effect": "https://pkg.pr.new/Effect-TS/effect-smol/effect@8881a9b",
+      "@effect/openapi-generator": "4.0.0-beta.59",
       "@effect/platform-node": "https://pkg.pr.new/Effect-TS/effect-smol/@effect/platform-node@8881a9b",
       "@effect/sql-sqlite-bun": "https://pkg.pr.new/Effect-TS/effect-smol/@effect/sql-sqlite-bun@8881a9b",
       "@effect/vitest": "https://pkg.pr.new/Effect-TS/effect-smol/@effect/vitest@8881a9b",

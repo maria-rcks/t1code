@@ -312,12 +312,16 @@ removing those fork surfaces unless a replacement has been implemented and wired
   by adding Claude model capabilities, provider snapshot construction,
   pending snapshots, CLI effort normalization, API model id resolution, and
   SDK initialization capability probing for the new driver path.
+- Codex app-server client package: partially align with upstream `08e6d4cf` by
+  adding the generated Codex app-server schema/rpc/protocol client package,
+  adapting it to this fork's Effect 4 `Stdio` and `ServiceMap` APIs, and
+  covering the JSON-RPC transport with focused protocol/client tests.
 
 ## Remaining upstream groups
 
 1. Runtime and provider protocol parity
    - Effect 4 catalog migration and patch.
-   - `effect-acp` and `effect-codex-app-server` packages.
+   - `effect-acp` package.
    - ACP/Cursor provider support and OpenCode lifecycle fixes.
    - Built-in driver catalog and provider registry integration with current
      server/WebSocket config surfaces.
