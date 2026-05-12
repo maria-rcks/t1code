@@ -185,6 +185,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Worktree branch publishing refspec: align with upstream `d2822a88` by using
   `HEAD:refs/heads/<branch>` when first pushing a branch with upstream setup,
   avoiding ambiguous slashed branch names from linked worktrees.
+- Markdown code block copy spacing: align with upstream `1bf048eb` by reserving
+  space for the web markdown copy button so long code does not render under the
+  control.
 
 ## Remaining upstream groups
 
