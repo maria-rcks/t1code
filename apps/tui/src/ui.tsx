@@ -1167,6 +1167,14 @@ function resolvePreferredEditor(availableEditors: readonly EditorId[]): EditorId
   return availableEditors[0] ?? null;
 }
 
+function resolvePreferredCodeEditor(availableEditors: readonly EditorId[]): EditorId | null {
+  return availableEditors.find((editor) => editor !== "file-manager") ?? null;
+}
+
+function hasAvailableFileManager(availableEditors: readonly EditorId[]): boolean {
+  return availableEditors.includes("file-manager");
+}
+
 function renderMessageBody(entry: TimelineEntry): string {
   if (entry.kind === "message") {
     return entry.message.text || " ";
@@ -4708,6 +4716,57 @@ export function App({
     setStatus("Project removed");
   }
 
+  async function openWorkspacePathInEditor(targetPath: string | null | undefined) {
+    if (!api || !serverConfig) {
+      setStatus("Editor unavailable");
+      return;
+    }
+    if (!targetPath) {
+      setStatus("Path unavailable");
+      return;
+    }
+    const editor = resolvePreferredCodeEditor(serverConfig.availableEditors);
+    if (!editor) {
+      setStatus("No editor found");
+      return;
+    }
+    try {
+      await api.shell.openInEditor(targetPath, editor);
+      setStatus("Opened in editor");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to open editor");
+    }
+  }
+
+  async function openWorkspacePathInFileManager(targetPath: string | null | undefined) {
+    if (!api || !serverConfig) {
+      setStatus("File manager unavailable");
+      return;
+    }
+    if (!targetPath) {
+      setStatus("Path unavailable");
+      return;
+    }
+    if (!hasAvailableFileManager(serverConfig.availableEditors)) {
+      setStatus("No file manager found");
+      return;
+    }
+    try {
+      await api.shell.openInEditor(targetPath, "file-manager");
+      setStatus("Opened folder");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to open folder");
+    }
+  }
+
+  function resolveThreadWorkspacePath(thread: ThreadReadModel): string | null {
+    return (
+      thread.worktreePath ??
+      projects.find((project) => project.id === thread.projectId)?.workspaceRoot ??
+      null
+    );
+  }
+
   function promptConfirm(input: ConfirmDialogState) {
     closeSidebarContextMenu();
     setOverlayMenu(null);
@@ -4763,11 +4822,18 @@ export function App({
       return;
     }
 
+    if (actionId === "open-editor") {
+      await openWorkspacePathInEditor(resolveThreadWorkspacePath(thread));
+      return;
+    }
+
+    if (actionId === "open-folder") {
+      await openWorkspacePathInFileManager(resolveThreadWorkspacePath(thread));
+      return;
+    }
+
     if (actionId === "copy-path") {
-      const workspacePath =
-        thread.worktreePath ??
-        projects.find((project) => project.id === thread.projectId)?.workspaceRoot ??
-        null;
+      const workspacePath = resolveThreadWorkspacePath(thread);
       if (!workspacePath) {
         setStatus("Path unavailable");
         return;
@@ -4848,6 +4914,16 @@ export function App({
     project: ProjectReadModel,
   ) {
     closeSidebarContextMenu();
+    if (actionId === "open-editor") {
+      await openWorkspacePathInEditor(project.workspaceRoot);
+      return;
+    }
+
+    if (actionId === "open-folder") {
+      await openWorkspacePathInFileManager(project.workspaceRoot);
+      return;
+    }
+
     if (actionId !== "delete") return;
 
     const projectThreads = threadsByProject.get(project.id) ?? [];

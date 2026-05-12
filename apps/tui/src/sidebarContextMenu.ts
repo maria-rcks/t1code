@@ -3,6 +3,8 @@ import type { OrchestrationReadModel } from "@t3tools/contracts";
 export type SidebarContextMenuActionId =
   | "rename"
   | "mark-unread"
+  | "open-editor"
+  | "open-folder"
   | "copy-path"
   | "copy-thread-id"
   | "delete";
@@ -30,6 +32,8 @@ export function buildThreadContextMenuItems(): readonly SidebarContextMenuItem[]
   return [
     { id: "rename", label: "Rename thread" },
     { id: "mark-unread", label: "Mark unread" },
+    { id: "open-editor", label: "Open in Editor" },
+    { id: "open-folder", label: "Open Folder" },
     { id: "copy-path", label: "Copy Path" },
     { id: "copy-thread-id", label: "Copy Thread ID" },
     { id: "delete", label: "Delete", destructive: true },
@@ -37,7 +41,11 @@ export function buildThreadContextMenuItems(): readonly SidebarContextMenuItem[]
 }
 
 export function buildProjectContextMenuItems(): readonly SidebarContextMenuItem[] {
-  return [{ id: "delete", label: "Remove project", destructive: true }];
+  return [
+    { id: "open-editor", label: "Open in Editor" },
+    { id: "open-folder", label: "Open Folder" },
+    { id: "delete", label: "Remove project", destructive: true },
+  ];
 }
 
 export function buildProjectRemovalConfirmSteps(

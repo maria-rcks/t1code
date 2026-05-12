@@ -18,6 +18,8 @@ describe("sidebarContextMenu", () => {
     expect(buildThreadContextMenuItems()).toEqual([
       { id: "rename", label: "Rename thread" },
       { id: "mark-unread", label: "Mark unread" },
+      { id: "open-editor", label: "Open in Editor" },
+      { id: "open-folder", label: "Open Folder" },
       { id: "copy-path", label: "Copy Path" },
       { id: "copy-thread-id", label: "Copy Thread ID" },
       { id: "delete", label: "Delete", destructive: true },
@@ -26,6 +28,8 @@ describe("sidebarContextMenu", () => {
 
   it("matches the web project context menu item", () => {
     expect(buildProjectContextMenuItems()).toEqual([
+      { id: "open-editor", label: "Open in Editor" },
+      { id: "open-folder", label: "Open Folder" },
       { id: "delete", label: "Remove project", destructive: true },
     ]);
   });
