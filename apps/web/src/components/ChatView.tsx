@@ -3808,14 +3808,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
                       data-chat-composer-footer="true"
                       data-chat-composer-footer-compact={isComposerFooterCompact ? "true" : "false"}
                       className={cn(
-                        "flex min-w-0 flex-nowrap items-center justify-between gap-2 overflow-hidden px-2.5 pb-2.5 sm:px-3 sm:pb-3",
+                        "flex min-w-0 flex-nowrap items-center justify-between gap-2 overflow-visible px-2.5 pb-2.5 sm:px-3 sm:pb-3",
                         isComposerFooterCompact ? "gap-1.5" : "gap-2 sm:gap-0",
                       )}
                     >
                       <div
                         ref={composerFooterLeadingRef}
                         className={cn(
-                          "flex min-w-0 flex-1 items-center",
+                          "-m-1 flex min-w-0 flex-1 items-center p-1",
                           isComposerFooterCompact
                             ? "gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                             : "gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:min-w-max sm:overflow-visible",
