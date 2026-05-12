@@ -430,7 +430,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                           </Button>
                         )}
                       </div>
-                      <p className="text-right text-[10px] text-muted-foreground/30">
+                      <p className="text-right text-xs text-muted-foreground/50">
                         {formatTimestamp(row.message.createdAt, timestampFormat)}
                       </p>
                     </>
@@ -520,7 +520,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                     </div>
                   );
                 })()}
-                <p className="mt-1.5 text-[10px] text-muted-foreground/30">
+                <p className="mt-1.5 text-xs text-muted-foreground/50">
                   {row.message.streaming ? (
                     <LiveMessageMeta
                       createdAt={row.message.createdAt}
@@ -887,7 +887,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
         }
 
         return (
-          <div className="wrap-break-word whitespace-pre-wrap font-mono text-sm leading-relaxed text-foreground">
+          <div className="wrap-break-word whitespace-pre-wrap text-sm leading-relaxed text-foreground">
             {inlineNodes}
           </div>
         );
@@ -919,7 +919,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
     }
 
     return (
-      <div className="wrap-break-word whitespace-pre-wrap font-mono text-sm leading-relaxed text-foreground">
+      <div className="wrap-break-word whitespace-pre-wrap text-sm leading-relaxed text-foreground">
         {inlineNodes}
       </div>
     );
@@ -930,9 +930,9 @@ const UserMessageBody = memo(function UserMessageBody(props: {
   }
 
   return (
-    <pre className="whitespace-pre-wrap wrap-break-word font-mono text-sm leading-relaxed text-foreground">
+    <div className="whitespace-pre-wrap wrap-break-word text-sm leading-relaxed text-foreground">
       <SkillInlineText text={props.text} skills={props.skills} />
-    </pre>
+    </div>
   );
 });
 
@@ -1059,7 +1059,7 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
           <div className="max-w-full">
             <p
               className={cn(
-                "truncate text-[11px] leading-5",
+                "truncate text-xs leading-5",
                 workToneClass(workEntry.tone),
                 preview ? "text-muted-foreground/70" : "",
               )}

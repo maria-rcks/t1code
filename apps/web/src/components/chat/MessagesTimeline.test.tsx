@@ -114,6 +114,8 @@ describe("MessagesTimeline", () => {
 
     expect(markup).not.toContain("Show full message");
     expect(markup).toContain('data-user-message-collapsible="false"');
+    expect(markup).toContain("whitespace-pre-wrap wrap-break-word text-sm leading-relaxed");
+    expect(markup).not.toContain("whitespace-pre-wrap wrap-break-word font-mono text-sm");
   });
 
   it("keeps the copy button for collapsed long user messages", async () => {

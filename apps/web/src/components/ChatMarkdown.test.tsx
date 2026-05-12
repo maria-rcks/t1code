@@ -59,4 +59,12 @@ describe("ChatMarkdown", () => {
     expect(markup).toContain("<code>$planner</code>");
     expect(markup).toContain('href="https://example.com"');
   });
+
+  it("uses compact line height for fenced code blocks", () => {
+    const markup = renderToStaticMarkup(
+      <ChatMarkdown text={"```js\nconst value = 1;\n```"} cwd={undefined} />,
+    );
+
+    expect(markup).toContain("chat-markdown-codeblock leading-snug");
+  });
 });

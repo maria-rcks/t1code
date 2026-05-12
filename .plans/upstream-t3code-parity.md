@@ -220,6 +220,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Codex stderr warning projection: align with upstream `83eb396c` by emitting
   classified process stderr as notifications and mapping them to
   `runtime.warning` instead of active-turn runtime errors.
+- Chat message typography: align with upstream `7c0849fe` by using proportional
+  text for user-message bodies, slightly stronger timestamp metadata, compact
+  work-entry labels, and snug/smaller markdown code blocks.
 
 ## Remaining upstream groups
 
