@@ -100,6 +100,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Git and terminal test stabilization: align with upstream `25c9d267` by
   rewriting GitHub-looking test remotes to local bare repositories, shortening
   hook sleeps, and using a short default terminal shutdown grace in tests.
+- Orchestration decider Effect idioms: partially align with upstream
+  `1bcfc88f` by using Effect `DateTime.now` for generated orchestration event
+  timestamps and removing stale module-load metadata defaults.
 
 ## Remaining upstream groups
 
