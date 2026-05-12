@@ -584,7 +584,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     const lastVisitedAt = activeThread.lastVisitedAt ? Date.parse(activeThread.lastVisitedAt) : NaN;
     if (!Number.isNaN(lastVisitedAt) && lastVisitedAt >= turnCompletedAt) return;
 
-    markThreadVisited(activeThread.id);
+    markThreadVisited(activeThread.id, activeLatestTurn.completedAt);
   }, [
     activeThread?.id,
     activeThread?.lastVisitedAt,

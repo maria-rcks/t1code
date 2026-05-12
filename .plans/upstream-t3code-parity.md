@@ -153,6 +153,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Toast dismiss controls: partially align with upstream `3a1daa87` by adding
   dismiss buttons to standard and anchored toast bodies while leaving the
   broader stacked-toast helper migration for a later slice.
+- Visited timestamp clock skew: align with upstream `22b7d8c5` by recording
+  the server turn completion timestamp when marking an active thread visited,
+  preventing local clock skew from hiding unread completions.
 
 ## Remaining upstream groups
 

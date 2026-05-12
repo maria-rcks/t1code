@@ -8,6 +8,7 @@ import {
 import { describe, expect, it } from "vitest";
 
 import {
+  markThreadVisited,
   markThreadUnread,
   reorderProjects,
   resetServerReadModel,
@@ -116,6 +117,34 @@ function makeReadModelProject(
 }
 
 describe("store pure functions", () => {
+  it("markThreadVisited stores the provided server timestamp", () => {
+    const initialState = makeState(makeThread());
+
+    const next = markThreadVisited(
+      initialState,
+      ThreadId.makeUnsafe("thread-1"),
+      "2026-02-25T12:30:00.700Z",
+    );
+
+    expect(next.threads[0]?.lastVisitedAt).toBe("2026-02-25T12:30:00.700Z");
+  });
+
+  it("markThreadVisited does not move visit state backwards under clock skew", () => {
+    const initialState = makeState(
+      makeThread({
+        lastVisitedAt: "2026-02-25T12:30:00.700Z",
+      }),
+    );
+
+    const next = markThreadVisited(
+      initialState,
+      ThreadId.makeUnsafe("thread-1"),
+      "2026-02-25T12:30:00.000Z",
+    );
+
+    expect(next).toBe(initialState);
+  });
+
   it("markThreadUnread moves lastVisitedAt before completion for a completed thread", () => {
     const latestTurnCompletedAt = "2026-02-25T12:30:00.000Z";
     const initialState = makeState(
