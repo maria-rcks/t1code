@@ -154,6 +154,18 @@ function createBareRemote(): Effect.Effect<
   });
 }
 
+function configureVisibleRemoteUrlWithLocalRewrite(
+  cwd: string,
+  remoteName: string,
+  visibleUrl: string,
+  localRemotePath: string,
+): Effect.Effect<void, GitCommandError, GitCore> {
+  return Effect.gen(function* () {
+    yield* runGit(cwd, ["config", `remote.${remoteName}.url`, visibleUrl]);
+    yield* runGit(cwd, ["config", `url.${localRemotePath}.insteadOf`, visibleUrl]);
+  });
+}
+
 function createTextGeneration(overrides: Partial<FakeGitTextGeneration> = {}): TextGenerationShape {
   const implementation: FakeGitTextGeneration = {
     generateCommitMessage: (input) =>
@@ -582,11 +594,12 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         yield* runGit(repoDir, ["push", "-u", "fork-seed", "statemachine"]);
         yield* runGit(repoDir, ["checkout", "-b", "t3code/pr-488/statemachine"]);
         yield* runGit(repoDir, ["branch", "--set-upstream-to", "fork-seed/statemachine"]);
-        yield* runGit(repoDir, [
-          "config",
-          "remote.fork-seed.url",
+        yield* configureVisibleRemoteUrlWithLocalRewrite(
+          repoDir,
+          "fork-seed",
           "git@github.com:jasonLaster/codething-mvp.git",
-        ]);
+          forkDir,
+        );
 
         const { manager, ghCalls } = yield* makeManager({
           ghScenario: {
@@ -1101,11 +1114,12 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         const forkDir = yield* createBareRemote();
         yield* runGit(repoDir, ["remote", "add", "fork-seed", forkDir]);
         yield* runGit(repoDir, ["push", "-u", "fork-seed", "statemachine"]);
-        yield* runGit(repoDir, [
-          "config",
-          "remote.fork-seed.url",
+        yield* configureVisibleRemoteUrlWithLocalRewrite(
+          repoDir,
+          "fork-seed",
           "git@github.com:octocat/codething-mvp.git",
-        ]);
+          forkDir,
+        );
 
         const { manager, ghCalls } = yield* makeManager({
           ghScenario: {
@@ -1153,11 +1167,12 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         yield* runGit(repoDir, ["push", "-u", "fork-seed", "statemachine"]);
         yield* runGit(repoDir, ["checkout", "-b", "t3code/pr-142/statemachine"]);
         yield* runGit(repoDir, ["branch", "--set-upstream-to", "fork-seed/statemachine"]);
-        yield* runGit(repoDir, [
-          "config",
-          "remote.fork-seed.url",
+        yield* configureVisibleRemoteUrlWithLocalRewrite(
+          repoDir,
+          "fork-seed",
           "git@github.com:octocat/codething-mvp.git",
-        ]);
+          forkDir,
+        );
 
         const { manager, ghCalls } = yield* makeManager({
           ghScenario: {
@@ -1215,11 +1230,12 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         yield* runGit(repoDir, ["push", "-u", "fork-seed", "statemachine"]);
         yield* runGit(repoDir, ["checkout", "-b", "t3code/pr-142/statemachine"]);
         yield* runGit(repoDir, ["branch", "--set-upstream-to", "fork-seed/statemachine"]);
-        yield* runGit(repoDir, [
-          "config",
-          "remote.fork-seed.url",
+        yield* configureVisibleRemoteUrlWithLocalRewrite(
+          repoDir,
+          "fork-seed",
           "git@github.com:octocat/codething-mvp.git",
-        ]);
+          forkDir,
+        );
 
         const { manager, ghCalls } = yield* makeManager({
           ghScenario: {
@@ -1314,11 +1330,12 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
       yield* runGit(repoDir, ["push", "-u", "fork-seed", "statemachine"]);
       yield* runGit(repoDir, ["checkout", "-b", "t3code/pr-91/statemachine"]);
       yield* runGit(repoDir, ["branch", "--set-upstream-to", "fork-seed/statemachine"]);
-      yield* runGit(repoDir, [
-        "config",
-        "remote.fork-seed.url",
+      yield* configureVisibleRemoteUrlWithLocalRewrite(
+        repoDir,
+        "fork-seed",
         "git@github.com:octocat/codething-mvp.git",
-      ]);
+        forkDir,
+      );
 
       const { manager, ghCalls } = yield* makeManager({
         ghScenario: {
@@ -1977,7 +1994,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
       fs.writeFileSync(path.join(repoDir, "hooked.txt"), "hooked\n");
       fs.writeFileSync(
         path.join(repoDir, ".git", "hooks", "pre-commit"),
-        '#!/bin/sh\necho "hook: start" >&2\nsleep 1\necho "hook: end" >&2\n',
+        '#!/bin/sh\necho "hook: start" >&2\nsleep 0.05\necho "hook: end" >&2\n',
         { mode: 0o755 },
       );
 

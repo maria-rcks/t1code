@@ -201,7 +201,7 @@ describe("TerminalManager", () => {
       ...(options.subprocessPollIntervalMs
         ? { subprocessPollIntervalMs: options.subprocessPollIntervalMs }
         : {}),
-      ...(options.processKillGraceMs ? { processKillGraceMs: options.processKillGraceMs } : {}),
+      processKillGraceMs: options.processKillGraceMs ?? 1,
       ...(options.maxRetainedInactiveSessions
         ? { maxRetainedInactiveSessions: options.maxRetainedInactiveSessions }
         : {}),
