@@ -1,11 +1,56 @@
 import { Schema } from "effect";
 import type { ProviderKind } from "./orchestration";
+import { TrimmedNonEmptyString } from "./baseSchemas";
 
 export const CODEX_REASONING_EFFORT_OPTIONS = ["xhigh", "high", "medium", "low"] as const;
 export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORT_OPTIONS)[number];
 export const CLAUDE_CODE_EFFORT_OPTIONS = ["low", "medium", "high", "max", "ultrathink"] as const;
 export type ClaudeCodeEffort = (typeof CLAUDE_CODE_EFFORT_OPTIONS)[number];
 export type ProviderReasoningEffort = CodexReasoningEffort | ClaudeCodeEffort;
+
+export const ProviderOptionDescriptorType = Schema.Literals(["select", "boolean"]);
+export type ProviderOptionDescriptorType = typeof ProviderOptionDescriptorType.Type;
+
+export const ProviderOptionChoice = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  label: TrimmedNonEmptyString,
+  description: Schema.optional(TrimmedNonEmptyString),
+  isDefault: Schema.optional(Schema.Boolean),
+});
+export type ProviderOptionChoice = typeof ProviderOptionChoice.Type;
+
+const ProviderOptionDescriptorBase = {
+  id: TrimmedNonEmptyString,
+  label: TrimmedNonEmptyString,
+  description: Schema.optional(TrimmedNonEmptyString),
+} as const;
+
+export const SelectProviderOptionDescriptor = Schema.Struct({
+  ...ProviderOptionDescriptorBase,
+  type: Schema.Literal("select"),
+  options: Schema.Array(ProviderOptionChoice),
+  currentValue: Schema.optional(TrimmedNonEmptyString),
+  promptInjectedValues: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+});
+export type SelectProviderOptionDescriptor = typeof SelectProviderOptionDescriptor.Type;
+
+export const BooleanProviderOptionDescriptor = Schema.Struct({
+  ...ProviderOptionDescriptorBase,
+  type: Schema.Literal("boolean"),
+  currentValue: Schema.optional(Schema.Boolean),
+});
+export type BooleanProviderOptionDescriptor = typeof BooleanProviderOptionDescriptor.Type;
+
+export const ProviderOptionDescriptor = Schema.Union([
+  SelectProviderOptionDescriptor,
+  BooleanProviderOptionDescriptor,
+]);
+export type ProviderOptionDescriptor = typeof ProviderOptionDescriptor.Type;
+
+export const ModelCapabilities = Schema.Struct({
+  optionDescriptors: Schema.optional(Schema.Array(ProviderOptionDescriptor)),
+});
+export type ModelCapabilities = typeof ModelCapabilities.Type;
 
 export const CodexModelOptions = Schema.Struct({
   reasoningEffort: Schema.optional(Schema.Literals(CODEX_REASONING_EFFORT_OPTIONS)),

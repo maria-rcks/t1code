@@ -255,6 +255,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
   adding open provider driver slugs, provider instance ids, config envelopes,
   and environment-variable contracts as a foundation for multi-provider backend
   routing.
+- Provider snapshot contracts: partially align with upstream `08e6d4cf` by
+  adding rich server provider snapshots, model capabilities, slash commands,
+  availability shadows, version advisories, and update-state schemas alongside
+  the fork's existing legacy provider status payload.
 
 ## Remaining upstream groups
 
