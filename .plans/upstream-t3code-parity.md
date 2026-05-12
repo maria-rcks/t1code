@@ -147,6 +147,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
   non-empty tool result.
 - Default-branch PR status: adapt upstream `69d9a659` by hiding stale
   merged/closed PR metadata when status is computed on common default branches.
+- Windows provider health probes: adapt upstream `42ea7cfa` by treating
+  Windows shell command-not-found exit results from Codex/Claude health probes
+  as missing CLI errors instead of generic failed command output.
 
 ## Remaining upstream groups
 
