@@ -284,6 +284,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
   adding the live provider instance registry/mutator, per-instance scopes,
   same-driver multi-instance boot, unknown-driver shadow snapshots, and
   reconcile teardown semantics.
+- Provider registry aggregation: partially align with upstream `08e6d4cf` by
+  adding rich provider snapshot aggregation over live instances, unavailable
+  shadows, cache hydration/persistence, refresh routing, stream subscriptions,
+  and volatile provider update state.
 
 ## Remaining upstream groups
 
@@ -291,7 +295,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
    - Effect 4 catalog migration and patch.
    - `effect-acp` and `effect-codex-app-server` packages.
    - ACP/Cursor provider support and OpenCode lifecycle fixes.
-   - Built-in driver catalog and provider registry aggregation.
+   - Built-in driver catalog and provider registry integration with current
+     server/WebSocket config surfaces.
    - Provider update execution runners/coordinators and newer provider snapshot
      architecture.
 
