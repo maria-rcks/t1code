@@ -51,6 +51,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
   keeping copy/revert controls available.
 - Sidebar thread preview count: add configurable visible thread count per
   project and replace the hard-coded sidebar limit.
+- Composer skill mention placeholder: mention `$use skills` in the composer
+  empty-state prompt.
 
 ## Remaining upstream groups
 
