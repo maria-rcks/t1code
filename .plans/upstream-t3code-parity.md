@@ -114,6 +114,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Composer focus polish: align with upstream `bf1f3e1c` and `37cf0c11` by
   clearing the composer border after picker dismissal and giving the enabled
   send button pointer affordance while disabling pointer events when inactive.
+- Localized Windows command errors: align with upstream `b0b7b38d` by matching
+  localized `cmd.exe` command-not-found output in the shared process runner.
 
 ## Remaining upstream groups
 
