@@ -83,6 +83,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Turbo release env forwarding: include hosted-release version/channel env vars
   in Turbo's global environment and pass through `PATHEXT` for Windows command
   lookup.
+- Mobile input zoom prevention: align with upstream `9acf46a7` by keeping
+  composer and thread rename inputs at 16px on mobile while preserving compact
+  desktop sizing, preventing iOS Safari focus zoom.
 
 ## Remaining upstream groups
 
@@ -123,7 +126,7 @@ removing those fork surfaces unless a replacement has been implemented and wired
    - Diff renderer updates beyond collapsible file sections, whitespace
      filtering, and panel sizing.
    - Skill chips and broader composer action refactors.
-   - Mobile/iOS layout fixes.
+   - Mobile/iOS layout fixes beyond input focus zoom prevention.
 
 7. Tooling and release parity
    - Oxlint plugin package and stricter Effect LSP rules.
