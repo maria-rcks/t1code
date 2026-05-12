@@ -2569,6 +2569,7 @@ function makeClaudeAdapter(options?: ClaudeAdapterLiveOptions) {
           ...(input.cwd ? { cwd: input.cwd } : {}),
           ...(input.model ? { model: input.model } : {}),
           pathToClaudeCodeExecutable: providerOptions?.binaryPath ?? "claude",
+          systemPrompt: { type: "preset", preset: "claude_code" },
           settingSources: [...CLAUDE_SETTING_SOURCES],
           ...(effectiveEffort ? { effort: effectiveEffort } : {}),
           ...(permissionMode ? { permissionMode } : {}),
