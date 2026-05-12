@@ -248,6 +248,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Claude durable resume ids: partially align with upstream `188df6da` by
   ignoring transient Claude resume hook `session_id`s when updating the resume
   cursor and provider thread id.
+- Web React dependency pins: partially align with upstream `b83e9c95` by
+  pinning the web app to React/React DOM 19.2.6, React type packages, and the
+  stable React compiler package.
 
 ## Remaining upstream groups
 
