@@ -292,6 +292,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
   adding server/client settings schemas, per-driver provider setting schemas,
   instance-based model selections, and legacy option-selection decoding for the
   next provider driver and settings UI slices.
+- Shared server settings helpers: partially align with upstream `08e6d4cf` by
+  adding lenient settings JSON parsing, deep settings patch merging,
+  instance-based model-selection helpers, and observability settings extraction.
 
 ## Remaining upstream groups
 

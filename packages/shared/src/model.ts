@@ -14,8 +14,11 @@ import {
   type ProviderReasoningEffort,
   type ProviderKind,
   type ProviderDriverKind,
+  type ProviderInstanceId,
   type ModelCapabilities,
   type ProviderOptionDescriptor,
+  type ProviderOptionSelection,
+  type ModelSelection,
 } from "@t3tools/contracts";
 
 const MODEL_SLUG_SET_BY_PROVIDER: Record<ProviderKind, ReadonlySet<ModelSlug>> = {
@@ -51,6 +54,62 @@ function cloneDescriptor(descriptor: ProviderOptionDescriptor): ProviderOptionDe
     };
   }
   return { ...descriptor };
+}
+
+function cloneSelection(selection: ProviderOptionSelection): ProviderOptionSelection {
+  return { ...selection };
+}
+
+function getRawSelectionValueById(
+  selections: ReadonlyArray<ProviderOptionSelection> | null | undefined,
+  id: string,
+): string | boolean | undefined {
+  const selection = selections?.find((candidate) => candidate.id === id);
+  return selection?.value;
+}
+
+export function getProviderOptionSelectionValue(
+  selections: ReadonlyArray<ProviderOptionSelection> | null | undefined,
+  id: string,
+): string | boolean | undefined {
+  return getRawSelectionValueById(selections, id);
+}
+
+export function getProviderOptionStringSelectionValue(
+  selections: ReadonlyArray<ProviderOptionSelection> | null | undefined,
+  id: string,
+): string | undefined {
+  const value = getProviderOptionSelectionValue(selections, id);
+  return typeof value === "string" ? value : undefined;
+}
+
+export function getProviderOptionBooleanSelectionValue(
+  selections: ReadonlyArray<ProviderOptionSelection> | null | undefined,
+  id: string,
+): boolean | undefined {
+  const value = getProviderOptionSelectionValue(selections, id);
+  return typeof value === "boolean" ? value : undefined;
+}
+
+export function getModelSelectionOptionValue(
+  modelSelection: ModelSelection | null | undefined,
+  id: string,
+): string | boolean | undefined {
+  return getProviderOptionSelectionValue(modelSelection?.options, id);
+}
+
+export function getModelSelectionStringOptionValue(
+  modelSelection: ModelSelection | null | undefined,
+  id: string,
+): string | undefined {
+  return getProviderOptionStringSelectionValue(modelSelection?.options, id);
+}
+
+export function getModelSelectionBooleanOptionValue(
+  modelSelection: ModelSelection | null | undefined,
+  id: string,
+): boolean | undefined {
+  return getProviderOptionBooleanSelectionValue(modelSelection?.options, id);
 }
 
 export function getModelOptions(provider: ProviderKind = "codex") {
@@ -308,6 +367,19 @@ export function applyClaudePromptEffortPrefix(
     return trimmed;
   }
   return `Ultrathink:\n${trimmed}`;
+}
+
+export function createModelSelection(
+  instanceId: ProviderInstanceId,
+  model: string,
+  options?: ReadonlyArray<ProviderOptionSelection> | null,
+): ModelSelection {
+  const selections = options ? options.map(cloneSelection) : [];
+  const base: ModelSelection = {
+    instanceId,
+    model,
+  };
+  return selections.length > 0 ? { ...base, options: selections } : base;
 }
 
 export { CLAUDE_CODE_EFFORT_OPTIONS, CODEX_REASONING_EFFORT_OPTIONS };

@@ -5,16 +5,21 @@ import {
   DEFAULT_REASONING_EFFORT_BY_PROVIDER,
   MODEL_OPTIONS,
   MODEL_OPTIONS_BY_PROVIDER,
+  ProviderInstanceId,
   type ProviderDriverKind,
   REASONING_EFFORT_OPTIONS_BY_PROVIDER,
 } from "@t3tools/contracts";
+import { Schema } from "effect";
 
 import {
   applyClaudePromptEffortPrefix,
   createModelCapabilities,
+  createModelSelection,
   getEffectiveClaudeCodeEffort,
   getDefaultModel,
   getDefaultReasoningEffort,
+  getModelSelectionBooleanOptionValue,
+  getModelSelectionStringOptionValue,
   getModelOptions,
   getReasoningEffortOptions,
   inferProviderForModel,
@@ -32,6 +37,8 @@ import {
   supportsClaudeThinkingToggle,
   supportsClaudeUltrathinkKeyword,
 } from "./model";
+
+const decodeProviderInstanceId = Schema.decodeUnknownSync(ProviderInstanceId);
 
 describe("normalizeModelSlug", () => {
   it("maps known aliases to canonical slugs", () => {
@@ -94,6 +101,35 @@ describe("createModelCapabilities", () => {
         promptInjectedValues: ["fast"],
       },
     ]);
+  });
+});
+
+describe("createModelSelection", () => {
+  it("clones provider option selections", () => {
+    const options = [
+      { id: "reasoningEffort", value: "high" },
+      { id: "fastMode", value: true },
+    ] as const;
+
+    const selection = createModelSelection(decodeProviderInstanceId("codex"), "gpt-5.4", options);
+
+    expect(selection).toEqual({
+      instanceId: "codex",
+      model: "gpt-5.4",
+      options: [
+        { id: "reasoningEffort", value: "high" },
+        { id: "fastMode", value: true },
+      ],
+    });
+    expect(getModelSelectionStringOptionValue(selection, "reasoningEffort")).toBe("high");
+    expect(getModelSelectionBooleanOptionValue(selection, "fastMode")).toBe(true);
+  });
+
+  it("omits empty option selections", () => {
+    expect(createModelSelection(decodeProviderInstanceId("codex"), "gpt-5.4")).toEqual({
+      instanceId: "codex",
+      model: "gpt-5.4",
+    });
   });
 });
 
