@@ -262,6 +262,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Provider status cache: partially align with upstream `008ac5c3` and
   `08e6d4cf` by adding atomic read/write helpers for rich provider snapshots,
   instance-correlated hydration, and deterministic provider snapshot ordering.
+- Shared semver helpers: align with upstream provider-maintenance prerequisites
+  by adding semver normalization, comparison, and lightweight range checking to
+  `@t3tools/shared/semver`.
 
 ## Remaining upstream groups
 
