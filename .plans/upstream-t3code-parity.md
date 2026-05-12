@@ -128,6 +128,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Diff panel close availability: align with upstream `86c94b48` by keeping the
   diff toggle enabled when a non-git project already has the diff panel open so
   users can close it.
+- Select cursor affordance: align with upstream `047a0a69` by giving shared
+  select triggers a pointer cursor.
 
 ## Remaining upstream groups
 
