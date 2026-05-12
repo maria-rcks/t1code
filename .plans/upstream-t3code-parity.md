@@ -1,6 +1,6 @@
 # Upstream T3Code Parity Plan
 
-Source: `pingdotgg/t3code` at `d15909af` (`upstream-t3code/main`).
+Source: `pingdotgg/t3code` at `a41f4895` (`upstream-t3code/main`).
 Fork baseline: `b3bca04c`.
 
 This fork intentionally preserves local TUI-only surfaces such as `apps/tui` and
@@ -35,6 +35,14 @@ removing those fork surfaces unless a replacement has been implemented and wired
   command aliases, and Windows launch argument quoting.
 - Wrapped terminal links: resolve terminal URLs that wrap across physical buffer
   rows.
+- Composer draft image hydration: align persisted image hydration helper naming.
+- Markdown file URI links: rewrite `file://...` markdown hrefs into clickable
+  local file paths.
+- Windows shell command display: unwrap PowerShell/cmd/bash wrappers while
+  preserving the raw command in a tooltip.
+- Proposed plan copy action: add clipboard copy to the plan card action menu.
+- Sidebar logo navigation: make the sidebar wordmark link back to the thread
+  list.
 
 ## Remaining upstream groups
 
