@@ -202,6 +202,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Terminal shortcut capture phase: align with upstream `0f184c28` by installing
   the ChatView global shortcut handler in capture phase so terminal-focused
   Ctrl+J can still toggle the terminal on Windows.
+- Composer command menu highlighting: align with upstream `63584449` by
+  disabling automatic menu highlighting and using the composer's controlled
+  active item state for hover styling.
 
 ## Remaining upstream groups
 
