@@ -117,6 +117,41 @@ export class ProviderUnsupportedError extends Schema.TaggedErrorClass<ProviderUn
 }
 
 /**
+ * ProviderInstanceNotFoundError - Lookup against the instance registry failed.
+ *
+ * Distinct from ProviderUnsupportedError: the driver is registered, but no
+ * instance with the requested id has been bootstrapped.
+ */
+export class ProviderInstanceNotFoundError extends Schema.TaggedErrorClass<ProviderInstanceNotFoundError>()(
+  "ProviderInstanceNotFoundError",
+  {
+    instanceId: Schema.String,
+    cause: Schema.optional(Schema.Defect),
+  },
+) {
+  override get message(): string {
+    return `No provider instance bound to id '${this.instanceId}'`;
+  }
+}
+
+/**
+ * ProviderDriverError - A driver create call failed before producing an instance.
+ */
+export class ProviderDriverError extends Schema.TaggedErrorClass<ProviderDriverError>()(
+  "ProviderDriverError",
+  {
+    driver: Schema.String,
+    instanceId: Schema.String,
+    detail: Schema.String,
+    cause: Schema.optional(Schema.Defect),
+  },
+) {
+  override get message(): string {
+    return `Provider driver '${this.driver}' failed to create instance '${this.instanceId}': ${this.detail}`;
+  }
+}
+
+/**
  * ProviderSessionNotFoundError - Provider-facing session not found.
  */
 export class ProviderSessionNotFoundError extends Schema.TaggedErrorClass<ProviderSessionNotFoundError>()(
@@ -157,6 +192,7 @@ export type ProviderAdapterError =
 export type ProviderServiceError =
   | ProviderValidationError
   | ProviderUnsupportedError
+  | ProviderInstanceNotFoundError
   | ProviderSessionNotFoundError
   | ProviderSessionDirectoryPersistenceError
   | ProviderAdapterError

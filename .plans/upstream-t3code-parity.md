@@ -276,6 +276,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
   adding managed server-provider snapshot sources, provider snapshot helpers,
   byte-capped stream collection, and model-capability cloning for open provider
   drivers.
+- Provider driver scaffolding: partially align with upstream `08e6d4cf` by
+  adding the provider driver/instance SPI, provider-instance environment
+  merging, provider snapshot source typing, and unavailable shadow snapshot
+  helpers.
 
 ## Remaining upstream groups
 
@@ -283,7 +287,7 @@ removing those fork surfaces unless a replacement has been implemented and wired
    - Effect 4 catalog migration and patch.
    - `effect-acp` and `effect-codex-app-server` packages.
    - ACP/Cursor provider support and OpenCode lifecycle fixes.
-   - Provider driver SPI, instance registry, and built-in driver catalog.
+   - Provider instance registry and built-in driver catalog.
    - Provider update execution runners/coordinators and newer provider snapshot
      architecture.
 
