@@ -111,6 +111,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
   `viewport-fit=cover`/interactive keyboard resizing, adding safe-area
   utilities, applying safe insets to the mobile sidebar, and keeping the chat
   header/composer/branch toolbar clear of iOS browser chrome.
+- Composer focus polish: align with upstream `bf1f3e1c` and `37cf0c11` by
+  clearing the composer border after picker dismissal and giving the enabled
+  send button pointer affordance while disabling pointer events when inactive.
 
 ## Remaining upstream groups
 
