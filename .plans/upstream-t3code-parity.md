@@ -223,6 +223,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Chat message typography: align with upstream `7c0849fe` by using proportional
   text for user-message bodies, slightly stronger timestamp metadata, compact
   work-entry labels, and snug/smaller markdown code blocks.
+- Sidebar selection rerenders: partially align with upstream `7455472c` by
+  reading selection presence imperatively in sidebar click/global-dismiss
+  handlers so those callbacks do not resubscribe to selection-size changes.
 
 ## Remaining upstream groups
 

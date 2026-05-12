@@ -892,7 +892,7 @@ export default function Sidebar() {
       }
 
       // Plain click — clear selection, set anchor for future shift-clicks, and navigate
-      if (selectedThreadIds.size > 0) {
+      if (useThreadSelectionStore.getState().hasSelection()) {
         clearSelection();
       }
       setSelectionAnchor(threadId);
@@ -909,7 +909,6 @@ export default function Sidebar() {
       isMobile,
       navigate,
       rangeSelectTo,
-      selectedThreadIds.size,
       setOpenMobile,
       setSelectionAnchor,
       toggleThreadSelection,
@@ -1054,12 +1053,12 @@ export default function Sidebar() {
         event.stopPropagation();
         return;
       }
-      if (selectedThreadIds.size > 0) {
+      if (useThreadSelectionStore.getState().hasSelection()) {
         clearSelection();
       }
       toggleProject(projectId);
     },
-    [clearSelection, selectedThreadIds.size, toggleProject],
+    [clearSelection, toggleProject],
   );
 
   const handleProjectTitleKeyDown = useCallback(
@@ -1076,7 +1075,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     const onMouseDown = (event: globalThis.MouseEvent) => {
-      if (selectedThreadIds.size === 0) return;
+      if (!useThreadSelectionStore.getState().hasSelection()) return;
       const target = event.target instanceof HTMLElement ? event.target : null;
       if (!shouldClearThreadSelectionOnMouseDown(target)) return;
       clearSelection();
@@ -1086,7 +1085,7 @@ export default function Sidebar() {
     return () => {
       window.removeEventListener("mousedown", onMouseDown);
     };
-  }, [clearSelection, selectedThreadIds.size]);
+  }, [clearSelection]);
 
   useEffect(() => {
     if (!isElectron) return;
