@@ -113,7 +113,7 @@ function ChatRouteLayout() {
   }, [navigate]);
 
   return (
-    <SidebarProvider defaultOpen>
+    <SidebarProvider className="h-dvh! min-h-0!" defaultOpen>
       <ChatRouteGlobalShortcuts />
       <Sidebar
         side="left"
