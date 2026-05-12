@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   AppSettingsSchema,
+  DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT,
   DEFAULT_SIDEBAR_PROJECT_SORT_ORDER,
   DEFAULT_SIDEBAR_THREAD_SORT_ORDER,
   DEFAULT_TIMESTAMP_FORMAT,
@@ -13,6 +14,7 @@ import {
   getDefaultCustomModelsForProvider,
   getProviderStartOptions,
   MODEL_PROVIDER_SETTINGS,
+  normalizeAppSettings,
   normalizeCustomModelSlugs,
   patchCustomModels,
   resolveAppModelSelection,
@@ -250,8 +252,18 @@ describe("AppSettingsSchema", () => {
       timestampFormat: DEFAULT_TIMESTAMP_FORMAT,
       sidebarProjectSortOrder: DEFAULT_SIDEBAR_PROJECT_SORT_ORDER,
       sidebarThreadSortOrder: DEFAULT_SIDEBAR_THREAD_SORT_ORDER,
+      sidebarThreadPreviewCount: DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT,
       customCodexModels: [],
       customClaudeModels: [],
     });
+  });
+
+  it("normalizes sidebar thread preview count to the supported range", () => {
+    expect(
+      normalizeAppSettings({
+        ...Schema.decodeSync(Schema.fromJsonString(AppSettingsSchema))("{}"),
+        sidebarThreadPreviewCount: 999,
+      }).sidebarThreadPreviewCount,
+    ).toBe(15);
   });
 });

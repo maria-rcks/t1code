@@ -7,7 +7,9 @@ import { getModelOptions, normalizeModelSlug } from "@t3tools/shared/model";
 import {
   getAppModelOptions,
   getCustomModelsForProvider,
+  MAX_SIDEBAR_THREAD_PREVIEW_COUNT,
   MAX_CUSTOM_MODEL_LENGTH,
+  MIN_SIDEBAR_THREAD_PREVIEW_COUNT,
   MODEL_PROVIDER_SETTINGS,
   patchCustomModels,
   useAppSettings,
@@ -57,6 +59,13 @@ const TIMESTAMP_FORMAT_LABELS = {
   "12-hour": "12-hour",
   "24-hour": "24-hour",
 } as const;
+
+function clampSidebarThreadPreviewCount(value: number) {
+  return Math.min(
+    MAX_SIDEBAR_THREAD_PREVIEW_COUNT,
+    Math.max(MIN_SIDEBAR_THREAD_PREVIEW_COUNT, value),
+  );
+}
 
 type InstallBinarySettingsKey = "claudeBinaryPath" | "codexBinaryPath";
 type InstallProviderSettings = {
@@ -252,6 +261,9 @@ function SettingsRouteView() {
   const changedSettingLabels = [
     ...(theme !== "system" ? ["Theme"] : []),
     ...(settings.timestampFormat !== defaults.timestampFormat ? ["Time format"] : []),
+    ...(settings.sidebarThreadPreviewCount !== defaults.sidebarThreadPreviewCount
+      ? ["Visible threads"]
+      : []),
     ...(settings.enableAssistantStreaming !== defaults.enableAssistantStreaming
       ? ["Assistant output"]
       : []),
@@ -497,6 +509,43 @@ function SettingsRouteView() {
                       </SelectItem>
                     </SelectPopup>
                   </Select>
+                }
+              />
+
+              <SettingsRow
+                title="Visible threads"
+                description="Choose how many recent threads are shown per project before collapsing."
+                resetAction={
+                  settings.sidebarThreadPreviewCount !== defaults.sidebarThreadPreviewCount ? (
+                    <SettingResetButton
+                      label="visible threads"
+                      onClick={() =>
+                        updateSettings({
+                          sidebarThreadPreviewCount: defaults.sidebarThreadPreviewCount,
+                        })
+                      }
+                    />
+                  ) : null
+                }
+                control={
+                  <Input
+                    nativeInput
+                    type="number"
+                    inputMode="numeric"
+                    min={MIN_SIDEBAR_THREAD_PREVIEW_COUNT}
+                    max={MAX_SIDEBAR_THREAD_PREVIEW_COUNT}
+                    step={1}
+                    className="w-full sm:w-24"
+                    aria-label="Visible thread count"
+                    value={settings.sidebarThreadPreviewCount}
+                    onChange={(event) => {
+                      const nextValue = event.currentTarget.valueAsNumber;
+                      if (!Number.isFinite(nextValue)) return;
+                      updateSettings({
+                        sidebarThreadPreviewCount: clampSidebarThreadPreviewCount(nextValue),
+                      });
+                    }}
+                  />
                 }
               />
 

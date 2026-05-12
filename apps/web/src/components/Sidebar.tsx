@@ -93,7 +93,6 @@ import {
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
-const THREAD_PREVIEW_LIMIT = 6;
 
 function formatRelativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -273,6 +272,7 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const isOnSettings = useLocation({ select: (loc) => loc.pathname === "/settings" });
   const { settings: appSettings } = useAppSettings();
+  const sidebarThreadPreviewCount = appSettings.sidebarThreadPreviewCount;
   const { handleNewThread } = useHandleNewThread();
   const routeThreadId = useParams({
     strict: false,
@@ -1357,10 +1357,10 @@ export default function Sidebar() {
                     ),
                   );
                   const isThreadListExpanded = expandedThreadListsByProject.has(project.id);
-                  const hasHiddenThreads = projectThreads.length > THREAD_PREVIEW_LIMIT;
+                  const hasHiddenThreads = projectThreads.length > sidebarThreadPreviewCount;
                   const visibleThreads =
                     hasHiddenThreads && !isThreadListExpanded
-                      ? projectThreads.slice(0, THREAD_PREVIEW_LIMIT)
+                      ? projectThreads.slice(0, sidebarThreadPreviewCount)
                       : projectThreads;
                   const orderedProjectThreadIds = projectThreads.map((thread) => thread.id);
 
