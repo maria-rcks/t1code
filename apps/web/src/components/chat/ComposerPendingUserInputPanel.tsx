@@ -17,6 +17,20 @@ interface PendingUserInputPanelProps {
   onAdvance: () => void;
 }
 
+export function shouldUsePendingUserInputDigitShortcut(input: {
+  isTextInputTarget: boolean;
+  isInsideContentEditable: boolean;
+  hasCustomAnswer: boolean;
+}): boolean {
+  if (input.isTextInputTarget) {
+    return false;
+  }
+  if (input.isInsideContentEditable && input.hasCustomAnswer) {
+    return false;
+  }
+  return true;
+}
+
 export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserInputPanel({
   pendingUserInputs,
   respondingRequestIds,
@@ -93,14 +107,19 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
     const handler = (event: globalThis.KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target;
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+      const isTextInputTarget =
+        target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+      const isInsideContentEditable =
+        target instanceof HTMLElement &&
+        Boolean(target.closest('[contenteditable]:not([contenteditable="false"])'));
+      if (
+        !shouldUsePendingUserInputDigitShortcut({
+          isTextInputTarget,
+          isInsideContentEditable,
+          hasCustomAnswer: progress.customAnswer.length > 0,
+        })
+      ) {
         return;
-      }
-      // If the user has started typing a custom answer in the contenteditable
-      // composer, let digit keys pass through so they can type numbers.
-      if (target instanceof HTMLElement && target.isContentEditable) {
-        const hasCustomText = progress.customAnswer.length > 0;
-        if (hasCustomText) return;
       }
       const digit = Number.parseInt(event.key, 10);
       if (Number.isNaN(digit) || digit < 1 || digit > 9) return;
