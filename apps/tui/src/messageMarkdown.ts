@@ -1,3 +1,5 @@
+import { infoStringToFiletype } from "@opentui/core";
+
 export type MessageMarkdownSegment =
   | {
       kind: "markdown";
@@ -99,7 +101,10 @@ export function parseMessageMarkdownSegments(content: string): MessageMarkdownSe
   return segments;
 }
 
-export function resolveCodeBlockFiletype(language: string | null): string | undefined {
+export function resolveCodeBlockFiletype(
+  language: string | null,
+  resolveInfoStringToFiletype: (infoString: string) => string | undefined = infoStringToFiletype,
+): string | undefined {
   if (!language) {
     return undefined;
   }
@@ -109,11 +114,11 @@ export function resolveCodeBlockFiletype(language: string | null): string | unde
     return undefined;
   }
 
-  if (normalized === "patch" || normalized === "udiff" || normalized === "unified-diff") {
+  if (normalized === "udiff" || normalized === "unified-diff") {
     return "diff";
   }
 
-  return normalized;
+  return resolveInfoStringToFiletype(language) ?? normalized;
 }
 
 export function isDiffLikeCodeBlockFiletype(filetype: string | undefined): boolean {

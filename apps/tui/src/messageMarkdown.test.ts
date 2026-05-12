@@ -1,4 +1,26 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const filetypeByExtension = new Map([
+  ["go", "go"],
+  ["js", "javascript"],
+  ["jsx", "javascriptreact"],
+  ["md", "markdown"],
+  ["patch", "diff"],
+  ["py", "python"],
+  ["rs", "rust"],
+  ["ts", "typescript"],
+  ["tsx", "typescriptreact"],
+]);
+
+vi.mock("@opentui/core", () => ({
+  infoStringToFiletype: (infoString: string) => {
+    const token = infoString.trim().split(/\s+/, 1)[0]?.replace(/^\./, "").toLowerCase();
+    if (!token) return undefined;
+    if (token === "dockerfile") return "dockerfile";
+    const extension = token.includes(".") ? token.slice(token.lastIndexOf(".") + 1) : token;
+    return filetypeByExtension.get(extension) ?? token;
+  },
+}));
 
 import {
   isDiffLikeCodeBlockFiletype,
@@ -37,7 +59,17 @@ describe("parseMessageMarkdownSegments", () => {
     expect(resolveCodeBlockFiletype("patch")).toBe("diff");
     expect(resolveCodeBlockFiletype("udiff")).toBe("diff");
     expect(resolveCodeBlockFiletype("unified-diff")).toBe("diff");
-    expect(resolveCodeBlockFiletype("ts")).toBe("ts");
+  });
+
+  it("normalizes code fence info strings through OpenTUI filetype resolution", () => {
+    expect(resolveCodeBlockFiletype("js")).toBe("javascript");
+    expect(resolveCodeBlockFiletype("jsx")).toBe("javascriptreact");
+    expect(resolveCodeBlockFiletype("ts")).toBe("typescript");
+    expect(resolveCodeBlockFiletype("tsx")).toBe("typescriptreact");
+    expect(resolveCodeBlockFiletype("py")).toBe("python");
+    expect(resolveCodeBlockFiletype("main.rs")).toBe("rust");
+    expect(resolveCodeBlockFiletype("Dockerfile")).toBe("dockerfile");
+    expect(resolveCodeBlockFiletype("go")).toBe("go");
   });
 
   it("detects diff-like code block filetypes", () => {

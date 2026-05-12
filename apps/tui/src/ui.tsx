@@ -10,8 +10,10 @@ import type {
   TextareaRenderable,
 } from "@opentui/core";
 import {
+  addDefaultParsers,
   CliRenderEvents,
   decodePasteBytes,
+  infoStringToFiletype,
   pathToFiletype,
   RGBA,
   stripAnsiSequences,
@@ -107,6 +109,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useKeyboard } from "@opentui/react";
 import packageJson from "../package.json";
+import { CODE_BLOCK_TREE_SITTER_PARSERS } from "./codeBlockParsers";
 import { resolveTuiPaths } from "./config";
 import { resolveComposerPrimaryAction } from "./composerAction";
 import { parseStandaloneComposerModeCommand } from "./composerCommands";
@@ -193,6 +196,8 @@ import {
   shouldClearPendingCreatedThread,
 } from "./threadSelection";
 import { resolveWorkEntryIcon } from "./workEntryIcons";
+
+addDefaultParsers(CODE_BLOCK_TREE_SITTER_PARSERS);
 
 type FocusArea =
   | "projects"
@@ -1458,7 +1463,7 @@ export function MessageMarkdown({
         }
 
         const segmentKey = `${segment.kind}:${segment.language ?? ""}:${segment.content}`;
-        const codeBlockFiletype = resolveCodeBlockFiletype(segment.language);
+        const codeBlockFiletype = resolveCodeBlockFiletype(segment.language, infoStringToFiletype);
         const codeBlockSyntax = isDiffLikeCodeBlockFiletype(codeBlockFiletype)
           ? DIFF_SYNTAX
           : CODE_BLOCK_SYNTAX;
