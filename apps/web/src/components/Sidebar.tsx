@@ -1569,7 +1569,7 @@ export default function Sidebar() {
                                                 el.select();
                                               }
                                             }}
-                                            className="min-w-0 flex-1 truncate text-xs bg-transparent outline-none border border-ring rounded px-0.5"
+                                            className="min-w-0 flex-1 truncate text-base sm:text-xs bg-transparent outline-none border border-ring rounded px-0.5"
                                             value={renamingTitle}
                                             onChange={(e) => setRenamingTitle(e.target.value)}
                                             onKeyDown={(e) => {
