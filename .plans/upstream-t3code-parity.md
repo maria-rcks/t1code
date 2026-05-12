@@ -150,6 +150,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Windows provider health probes: adapt upstream `42ea7cfa` by treating
   Windows shell command-not-found exit results from Codex/Claude health probes
   as missing CLI errors instead of generic failed command output.
+- Toast dismiss controls: partially align with upstream `3a1daa87` by adding
+  dismiss buttons to standard and anchored toast bodies while leaving the
+  broader stacked-toast helper migration for a later slice.
 
 ## Remaining upstream groups
 
