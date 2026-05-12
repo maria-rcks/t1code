@@ -80,6 +80,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - External app launching: remove the `open` package dependency and route
   browser/editor launches through Effect child-process spawning while retaining
   the fork's existing `Open` service and RPC contract names.
+- Turbo release env forwarding: include hosted-release version/channel env vars
+  in Turbo's global environment and pass through `PATHEXT` for Windows command
+  lookup.
 
 ## Remaining upstream groups
 
