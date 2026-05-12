@@ -1513,10 +1513,6 @@ export function MessageMarkdown({
                   onMouseDown={(event) => {
                     event.preventDefault();
                     event.stopPropagation?.();
-                  }}
-                  onMouseUp={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation?.();
                     onCopyCodeBlock(segment.content);
                   }}
                   style={{

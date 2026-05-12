@@ -87,7 +87,7 @@ if (process.env.T1CODE_HEADLESS === "1") {
   const initialTheme = resolveTuiTheme(appTheme, tuiThemeId);
   const renderer = await createCliRenderer({
     exitOnCtrlC: false,
-    useAlternateScreen: shouldUseAlternateScreen(),
+    screenMode: shouldUseAlternateScreen() ? "alternate-screen" : "main-screen",
     useMouse: shouldUseMouse(),
     enableMouseMovement: shouldEnableMouseMovement(),
     useKittyKeyboard: shouldUseKittyKeyboard() ? { events: true } : null,
