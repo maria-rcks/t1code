@@ -298,6 +298,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Server secret store: partially align with upstream `08e6d4cf` by adding a
   filesystem-backed secret store and derived settings/secrets config paths for
   redacted provider environment variables.
+- Server settings service: partially align with upstream `08e6d4cf` by adding
+  the server-authoritative settings runtime with JSON persistence, patch
+  updates, settings streams, text-generation provider fallback, and provider
+  environment secret materialization/redaction.
 
 ## Remaining upstream groups
 
