@@ -302,6 +302,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
   the server-authoritative settings runtime with JSON persistence, patch
   updates, settings streams, text-generation provider fallback, and provider
   environment secret materialization/redaction.
+- Provider event loggers service: partially align with upstream `08e6d4cf` by
+  adding the shared native/canonical provider event logger service expected by
+  provider drivers and the normalized provider runtime.
 
 ## Remaining upstream groups
 
