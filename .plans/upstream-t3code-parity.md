@@ -62,6 +62,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
   opening settings.
 - Collapsible file diffs: add per-file collapse controls in the diff panel and
   align `@pierre/diffs` on the upstream catalog pin.
+- Codex auth probe timeout: give `codex login status` a 10 second timeout while
+  keeping CLI reachability checks fast, with virtual-clock regression coverage.
 
 ## Remaining upstream groups
 
@@ -69,7 +71,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
    - Effect 4 catalog migration and patch.
    - `effect-acp` and `effect-codex-app-server` packages.
    - ACP/Cursor provider support and OpenCode lifecycle fixes.
-   - Provider maintenance/update advisories.
+   - Provider maintenance/update advisories and newer provider snapshot
+     architecture.
 
 2. Terminal and shell state parity
    - Archived shell snapshot support.
