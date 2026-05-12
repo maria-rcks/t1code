@@ -1,4 +1,7 @@
 import * as Http from "node:http";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it, vi } from "@effect/vitest";
 import type { OrchestrationReadModel } from "@t3tools/contracts";
@@ -8,7 +11,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Command from "effect/unstable/cli/Command";
 import { FetchHttpClient } from "effect/unstable/http";
-import { beforeEach } from "vitest";
+import { afterEach, beforeEach } from "vitest";
 import { NetService } from "@t3tools/shared/Net";
 
 import { CliConfig, recordStartupHeartbeat, t3Cli, type CliConfigShape } from "./main";
@@ -20,6 +23,7 @@ import { Server, type ServerShape } from "./wsServer";
 
 const start = vi.fn(() => undefined);
 const stop = vi.fn(() => undefined);
+let testHomeDir = "";
 let resolvedConfig: ServerConfigShape | null = null;
 const serverStart = Effect.acquireRelease(
   Effect.gen(function* () {
@@ -57,17 +61,22 @@ const testLayer = Layer.mergeAll(
   NodeServices.layer,
 );
 
-const runCli = (
-  args: ReadonlyArray<string>,
-  env: Record<string, string> = { T3CODE_NO_BROWSER: "true" },
-) => {
+const runCli = (args: ReadonlyArray<string>, env: Record<string, string> = {}) => {
+  const shouldUseDefaultHome =
+    !args.includes("--home-dir") &&
+    env.T3CODE_HOME === undefined &&
+    env.T3CODE_BOOTSTRAP_FD === undefined;
+  const testEnv = {
+    T3CODE_NO_BROWSER: "true",
+    ...(shouldUseDefaultHome ? { T3CODE_HOME: testHomeDir } : {}),
+    ...env,
+  };
+
   return Command.runWith(t3Cli, { version: "0.0.0-test" })(args).pipe(
     Effect.provide(
       ConfigProvider.layer(
         ConfigProvider.fromEnv({
-          env: {
-            ...env,
-          },
+          env: testEnv,
         }),
       ),
     ),
@@ -76,10 +85,18 @@ const runCli = (
 
 beforeEach(() => {
   vi.clearAllMocks();
+  testHomeDir = mkdtempSync(join(tmpdir(), "t3-main-test-"));
   resolvedConfig = null;
   start.mockImplementation(() => undefined);
   stop.mockImplementation(() => undefined);
   findAvailablePort.mockImplementation((preferred: number) => Effect.succeed(preferred));
+});
+
+afterEach(() => {
+  if (testHomeDir !== "") {
+    rmSync(testHomeDir, { recursive: true, force: true });
+    testHomeDir = "";
+  }
 });
 
 it.layer(testLayer)("server CLI command", (it) => {
@@ -168,6 +185,7 @@ it.layer(testLayer)("server CLI command", (it) => {
         T3CODE_MODE: "web",
         T3CODE_BOOTSTRAP_FD: String(fd),
         T3CODE_AUTH_TOKEN: "env-token",
+        T3CODE_HOME: testHomeDir,
         T3CODE_NO_BROWSER: "true",
       });
 
