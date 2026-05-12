@@ -55,6 +55,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
   empty-state prompt.
 - Sticky changed-files header: keep timeline changed-files controls visible and
   tinted to match their card background while scrolling.
+- Mobile command dialog scrolling: allow touch panning inside command-style
+  dialogs and shared scroll areas.
 
 ## Remaining upstream groups
 
