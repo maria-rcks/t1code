@@ -89,6 +89,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Git action dialog footer layout: align with upstream `4ceabac7` by letting
   default-branch dialog footer actions wrap and use full-width mobile buttons so
   long labels do not clip.
+- Claude system prompt preset: align with upstream `cb8015a3` by starting Claude
+  SDK sessions with the `claude_code` system prompt preset.
 
 ## Remaining upstream groups
 
