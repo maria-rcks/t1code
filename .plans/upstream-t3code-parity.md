@@ -53,6 +53,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
   project and replace the hard-coded sidebar limit.
 - Composer skill mention placeholder: mention `$use skills` in the composer
   empty-state prompt.
+- Sticky changed-files header: keep timeline changed-files controls visible and
+  tinted to match their card background while scrolling.
 
 ## Remaining upstream groups
 
