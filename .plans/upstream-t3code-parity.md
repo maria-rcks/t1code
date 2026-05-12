@@ -199,6 +199,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
   already has ChatMarkdown regression coverage in this fork.
 - Diff turn strip fade: align with upstream `57d7746a` by replacing absolute
   overlay gradients with a `mask-image` fade on the scrollable turn strip.
+- Terminal shortcut capture phase: align with upstream `0f184c28` by installing
+  the ChatView global shortcut handler in capture phase so terminal-focused
+  Ctrl+J can still toggle the terminal on Windows.
 
 ## Remaining upstream groups
 
