@@ -931,7 +931,17 @@ export const makeGitManager = Effect.gen(function* () {
             branch: details.branch,
             upstreamRef: details.upstreamRef,
           }).pipe(
-            Effect.map((latest) => (latest ? toStatusPr(latest) : null)),
+            Effect.map((latest) => {
+              if (!latest) return null;
+              if (
+                details.branch !== null &&
+                ["main", "master"].includes(details.branch) &&
+                latest.state !== "open"
+              ) {
+                return null;
+              }
+              return toStatusPr(latest);
+            }),
             Effect.catch(() => Effect.succeed(null)),
           )
         : null;
