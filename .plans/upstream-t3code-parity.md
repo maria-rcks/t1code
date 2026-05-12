@@ -49,6 +49,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
   cache hits and uncached renders.
 - Long user message collapse: collapse verbose user prompts by default while
   keeping copy/revert controls available.
+- Sidebar thread preview count: add configurable visible thread count per
+  project and replace the hard-coded sidebar limit.
 
 ## Remaining upstream groups
 
