@@ -88,31 +88,34 @@ describe("derivePendingApprovals", () => {
     ]);
   });
 
-  it("maps canonical requestType payloads into pending approvals", () => {
-    const activities: OrchestrationThreadActivity[] = [
-      makeActivity({
-        id: "approval-open-request-type",
-        createdAt: "2026-02-23T00:00:01.000Z",
-        kind: "approval.requested",
-        summary: "Command approval requested",
-        tone: "approval",
-        payload: {
+  it.each(["command_execution_approval", "dynamic_tool_call"])(
+    "maps %s requestType payloads into pending approvals",
+    (requestType) => {
+      const activities: OrchestrationThreadActivity[] = [
+        makeActivity({
+          id: "approval-open-request-type",
+          createdAt: "2026-02-23T00:00:01.000Z",
+          kind: "approval.requested",
+          summary: "Command approval requested",
+          tone: "approval",
+          payload: {
+            requestId: "req-request-type",
+            requestType,
+            detail: "pwd",
+          },
+        }),
+      ];
+
+      expect(derivePendingApprovals(activities)).toEqual([
+        {
           requestId: "req-request-type",
-          requestType: "command_execution_approval",
+          requestKind: "command",
+          createdAt: "2026-02-23T00:00:01.000Z",
           detail: "pwd",
         },
-      }),
-    ];
-
-    expect(derivePendingApprovals(activities)).toEqual([
-      {
-        requestId: "req-request-type",
-        requestKind: "command",
-        createdAt: "2026-02-23T00:00:01.000Z",
-        detail: "pwd",
-      },
-    ]);
-  });
+      ]);
+    },
+  );
 
   it("clears stale pending approvals when provider reports unknown pending request", () => {
     const activities: OrchestrationThreadActivity[] = [

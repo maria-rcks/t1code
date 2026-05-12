@@ -47,6 +47,33 @@ describe("sessionLogic", () => {
     ]);
   });
 
+  it("maps dynamic tool call request types to command approvals", () => {
+    expect(
+      derivePendingApprovals([
+        {
+          id: "activity-dynamic-tool-call" as never,
+          turnId: null,
+          kind: "approval.requested",
+          tone: "approval",
+          summary: "Dynamic tool call requested",
+          createdAt: "2026-03-24T10:00:00.000Z",
+          payload: {
+            requestId: "approval-dynamic-tool-call",
+            requestType: "dynamic_tool_call",
+            detail: "Run dynamic tool",
+          },
+        },
+      ]),
+    ).toEqual([
+      {
+        requestId: ApprovalRequestId.makeUnsafe("approval-dynamic-tool-call"),
+        requestKind: "command",
+        createdAt: "2026-03-24T10:00:00.000Z",
+        detail: "Run dynamic tool",
+      },
+    ]);
+  });
+
   it("merges messages, plans, and work entries into a sorted timeline", () => {
     expect(
       deriveTimelineEntries(
