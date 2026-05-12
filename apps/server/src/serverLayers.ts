@@ -38,6 +38,8 @@ type RuntimePtyAdapterLoader = {
   layer: Layer.Layer<PtyAdapter, never, FileSystem.FileSystem | Path.Path>;
 };
 
+type RuntimeServicesLayer = Layer.Layer<any, never, never>;
+
 const runtimePtyAdapterLoaders = {
   bun: () => import("./terminal/Layers/BunPTY"),
   node: () => import("./terminal/Layers/NodePTY"),
@@ -152,5 +154,5 @@ export function makeServerRuntimeServicesLayer() {
     gitManagerLayer,
     terminalLayer,
     KeybindingsLive,
-  ).pipe(Layer.provideMerge(NodeServices.layer));
+  ).pipe(Layer.provideMerge(NodeServices.layer)) as RuntimeServicesLayer;
 }
