@@ -1510,27 +1510,33 @@ export function MessageMarkdown({
               />
               {onCopyCodeBlock ? (
                 <box
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation?.();
+                  }}
+                  onMouseUp={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation?.();
+                    onCopyCodeBlock(segment.content);
+                  }}
                   style={{
                     width: "100%",
                     minWidth: 0,
+                    height: 1,
                     flexDirection: "row",
                     justifyContent: "flex-end",
                   }}
                 >
                   <box
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation?.();
-                      onCopyCodeBlock(segment.content);
-                    }}
                     style={{
-                      width: "auto",
-                      minWidth: 0,
+                      width: 3,
+                      minWidth: 3,
                       paddingLeft: 0,
                       paddingRight: 0,
                       height: 1,
                       flexDirection: "row",
                       alignItems: "center",
+                      justifyContent: "center",
                     }}
                   >
                     <text content="󰆏" style={{ fg: ACTIVE_TUI_THEME.codeBlock.copyIcon }} />
