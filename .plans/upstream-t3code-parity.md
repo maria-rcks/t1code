@@ -171,6 +171,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Mobile sidebar dismissal: adapt upstream `a4298f1c` by closing the mobile
   sidebar after plain thread selection, keyboard thread activation, or sidebar
   new-thread creation.
+- Git actions header sizing: align with upstream `2aa11ae0` by preventing the
+  Git actions group from shrinking into the terminal toggle.
 
 ## Remaining upstream groups
 
