@@ -165,6 +165,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
   it from arming sidebar project drag.
 - Settings Escape navigation: adapt upstream `c4264522` by letting Escape leave
   the settings page, with a router fallback when there is no browser history.
+- Git branch column parsing: align with upstream `19eb9e72` by passing
+  `--no-column` when listing branches so `column.ui=always` cannot merge
+  multiple branch names into one parsed row.
 
 ## Remaining upstream groups
 
