@@ -14,9 +14,14 @@ let instance: { api: NativeApi; transport: WsTransport } | null = null;
 const welcomeListeners = new Set<(payload: WsWelcomePayload) => void>();
 const serverConfigUpdatedListeners = new Set<(payload: ServerConfigUpdatedPayload) => void>();
 const gitActionProgressListeners = new Set<(payload: GitActionProgressEvent) => void>();
+let latestWelcomePayload: WsWelcomePayload | null = null;
+let latestServerConfigUpdatedPayload: ServerConfigUpdatedPayload | null = null;
 
 export function onServerWelcome(listener: (payload: WsWelcomePayload) => void): () => void {
   welcomeListeners.add(listener);
+  if (latestWelcomePayload) {
+    listener(latestWelcomePayload);
+  }
   return () => {
     welcomeListeners.delete(listener);
   };
@@ -26,6 +31,9 @@ export function onServerConfigUpdated(
   listener: (payload: ServerConfigUpdatedPayload) => void,
 ): () => void {
   serverConfigUpdatedListeners.add(listener);
+  if (latestServerConfigUpdatedPayload) {
+    listener(latestServerConfigUpdatedPayload);
+  }
   return () => {
     serverConfigUpdatedListeners.delete(listener);
   };
@@ -75,6 +83,7 @@ export function createWsNativeApi(): NativeApi {
   });
 
   events.onServerWelcome((payload) => {
+    latestWelcomePayload = payload;
     for (const listener of welcomeListeners) {
       try {
         listener(payload);
@@ -84,6 +93,7 @@ export function createWsNativeApi(): NativeApi {
     }
   });
   events.onServerConfigUpdated((payload) => {
+    latestServerConfigUpdatedPayload = payload;
     for (const listener of serverConfigUpdatedListeners) {
       try {
         listener(payload);
