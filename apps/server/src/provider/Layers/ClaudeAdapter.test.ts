@@ -2183,6 +2183,62 @@ describe("ClaudeAdapterLive", () => {
     );
   });
 
+  it.effect("does not re-set the Claude model when the session already uses it", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: "claudeAgent",
+        model: "claude-opus-4-6",
+        runtimeMode: "full-access",
+      });
+      yield* adapter.sendTurn({
+        threadId: session.threadId,
+        input: "hello",
+        model: "claude-opus-4-6",
+        attachments: [],
+      });
+      yield* adapter.sendTurn({
+        threadId: session.threadId,
+        input: "hello again",
+        model: "claude-opus-4-6",
+        attachments: [],
+      });
+
+      assert.deepEqual(harness.query.setModelCalls, []);
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("re-sets the Claude model when the requested model changes", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: "claudeAgent",
+        model: "claude-opus-4-6",
+        runtimeMode: "full-access",
+      });
+      yield* adapter.sendTurn({
+        threadId: session.threadId,
+        input: "hello",
+        model: "claude-sonnet-4-6",
+        attachments: [],
+      });
+
+      assert.deepEqual(harness.query.setModelCalls, ["claude-sonnet-4-6"]);
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
   it.effect("sets plan permission mode on sendTurn when interactionMode is plan", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {
