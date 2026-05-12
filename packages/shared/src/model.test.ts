@@ -5,11 +5,13 @@ import {
   DEFAULT_REASONING_EFFORT_BY_PROVIDER,
   MODEL_OPTIONS,
   MODEL_OPTIONS_BY_PROVIDER,
+  type ProviderDriverKind,
   REASONING_EFFORT_OPTIONS_BY_PROVIDER,
 } from "@t3tools/contracts";
 
 import {
   applyClaudePromptEffortPrefix,
+  createModelCapabilities,
   getEffectiveClaudeCodeEffort,
   getDefaultModel,
   getDefaultReasoningEffort,
@@ -50,6 +52,12 @@ describe("normalizeModelSlug", () => {
     expect(normalizeModelSlug("gpt-5.2-codex")).toBe("gpt-5.2-codex");
   });
 
+  it("preserves model slugs for open provider drivers", () => {
+    expect(normalizeModelSlug("openai/gpt-5", "opencode" as ProviderDriverKind)).toBe(
+      "openai/gpt-5",
+    );
+  });
+
   it("does not leak prototype properties as aliases", () => {
     expect(normalizeModelSlug("toString")).toBe("toString");
     expect(normalizeModelSlug("constructor")).toBe("constructor");
@@ -59,6 +67,33 @@ describe("normalizeModelSlug", () => {
     expect(normalizeModelSlug("sonnet", "claudeAgent")).toBe("claude-sonnet-4-6");
     expect(normalizeModelSlug("opus-4.6", "claudeAgent")).toBe("claude-opus-4-6");
     expect(normalizeModelSlug("claude-haiku-4-5-20251001", "claudeAgent")).toBe("claude-haiku-4-5");
+  });
+});
+
+describe("createModelCapabilities", () => {
+  it("clones option descriptors", () => {
+    const descriptor = {
+      id: "mode",
+      label: "Mode",
+      type: "select" as const,
+      options: [{ id: "fast", label: "Fast" }],
+      promptInjectedValues: ["fast"],
+    };
+
+    const capabilities = createModelCapabilities({ optionDescriptors: [descriptor] });
+
+    descriptor.options.push({ id: "slow", label: "Slow" });
+    descriptor.promptInjectedValues.push("slow");
+
+    expect(capabilities.optionDescriptors).toEqual([
+      {
+        id: "mode",
+        label: "Mode",
+        type: "select",
+        options: [{ id: "fast", label: "Fast" }],
+        promptInjectedValues: ["fast"],
+      },
+    ]);
   });
 });
 

@@ -13,6 +13,9 @@ import {
   type ModelSlug,
   type ProviderReasoningEffort,
   type ProviderKind,
+  type ProviderDriverKind,
+  type ModelCapabilities,
+  type ProviderOptionDescriptor,
 } from "@t3tools/contracts";
 
 const MODEL_SLUG_SET_BY_PROVIDER: Record<ProviderKind, ReadonlySet<ModelSlug>> = {
@@ -27,6 +30,27 @@ const CLAUDE_HAIKU_4_5_MODEL = "claude-haiku-4-5";
 export interface SelectableModelOption {
   slug: string;
   name: string;
+}
+
+export function createModelCapabilities(input: {
+  optionDescriptors: ReadonlyArray<ProviderOptionDescriptor>;
+}): ModelCapabilities {
+  return {
+    optionDescriptors: input.optionDescriptors.map(cloneDescriptor),
+  };
+}
+
+function cloneDescriptor(descriptor: ProviderOptionDescriptor): ProviderOptionDescriptor {
+  if (descriptor.type === "select") {
+    return {
+      ...descriptor,
+      options: descriptor.options.map((option) => ({ ...option })),
+      ...(descriptor.promptInjectedValues
+        ? { promptInjectedValues: [...descriptor.promptInjectedValues] }
+        : {}),
+    };
+  }
+  return { ...descriptor };
 }
 
 export function getModelOptions(provider: ProviderKind = "codex") {
@@ -64,7 +88,7 @@ export function isClaudeUltrathinkPrompt(text: string | null | undefined): boole
 
 export function normalizeModelSlug(
   model: string | null | undefined,
-  provider: ProviderKind = "codex",
+  provider: ProviderDriverKind | ProviderKind = "codex",
 ): ModelSlug | null {
   if (typeof model !== "string") {
     return null;
@@ -75,7 +99,10 @@ export function normalizeModelSlug(
     return null;
   }
 
-  const aliases = MODEL_SLUG_ALIASES_BY_PROVIDER[provider] as Record<string, ModelSlug>;
+  const aliases = (MODEL_SLUG_ALIASES_BY_PROVIDER[provider as ProviderKind] ?? {}) as Record<
+    string,
+    ModelSlug
+  >;
   const aliased = Object.prototype.hasOwnProperty.call(aliases, trimmed)
     ? aliases[trimmed]
     : undefined;

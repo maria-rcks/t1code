@@ -272,6 +272,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
   adding provider maintenance capability resolution, npm latest-version
   advisory enrichment, update command selection for npm/bun/pnpm/vite-plus,
   Homebrew, native installers, and manual/custom binaries.
+- Provider snapshot scaffolding: partially align with upstream `08e6d4cf` by
+  adding managed server-provider snapshot sources, provider snapshot helpers,
+  byte-capped stream collection, and model-capability cloning for open provider
+  drivers.
 
 ## Remaining upstream groups
 
@@ -279,6 +283,7 @@ removing those fork surfaces unless a replacement has been implemented and wired
    - Effect 4 catalog migration and patch.
    - `effect-acp` and `effect-codex-app-server` packages.
    - ACP/Cursor provider support and OpenCode lifecycle fixes.
+   - Provider driver SPI, instance registry, and built-in driver catalog.
    - Provider update execution runners/coordinators and newer provider snapshot
      architecture.
 
