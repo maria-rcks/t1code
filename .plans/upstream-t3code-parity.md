@@ -259,6 +259,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
   adding rich server provider snapshots, model capabilities, slash commands,
   availability shadows, version advisories, and update-state schemas alongside
   the fork's existing legacy provider status payload.
+- Provider status cache: partially align with upstream `008ac5c3` and
+  `08e6d4cf` by adding atomic read/write helpers for rich provider snapshots,
+  instance-correlated hydration, and deterministic provider snapshot ordering.
 
 ## Remaining upstream groups
 
