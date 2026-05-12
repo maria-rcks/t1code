@@ -314,9 +314,15 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           (persistedBinding?.provider === input.provider
             ? persistedBinding.resumeCursor
             : undefined);
+        const effectiveCwd =
+          input.cwd ??
+          (persistedBinding?.provider === input.provider
+            ? readPersistedCwd(persistedBinding.runtimePayload)
+            : undefined);
         const adapter = yield* registry.getByProvider(input.provider);
         const session = yield* adapter.startSession({
           ...input,
+          ...(effectiveCwd !== undefined ? { cwd: effectiveCwd } : {}),
           ...(effectiveResumeCursor !== undefined ? { resumeCursor: effectiveResumeCursor } : {}),
         });
 
@@ -335,7 +341,7 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           provider: session.provider,
           runtimeMode: input.runtimeMode,
           hasResumeCursor: session.resumeCursor !== undefined,
-          hasCwd: typeof input.cwd === "string" && input.cwd.trim().length > 0,
+          hasCwd: typeof effectiveCwd === "string" && effectiveCwd.trim().length > 0,
           hasModel: typeof input.model === "string" && input.model.trim().length > 0,
         });
 

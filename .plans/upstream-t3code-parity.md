@@ -242,6 +242,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Composer command menu active scroll: align with upstream `4a4795e5` by
   scrolling the controlled active command/menu item into view as keyboard
   navigation changes the active item.
+- Provider session cwd resume: partially align with upstream `188df6da` by
+  reusing persisted cwd when `ProviderService.startSession` resumes an existing
+  provider binding without an explicit cwd, preventing workspace drift.
 
 ## Remaining upstream groups
 
