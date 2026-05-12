@@ -125,6 +125,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Pending answer submit labels: align with upstream `28e481eb` by using
   singular "Submit answer" for one-question user input prompts and plural
   "Submit answers" only after multi-question progress.
+- Diff panel close availability: align with upstream `86c94b48` by keeping the
+  diff toggle enabled when a non-git project already has the diff panel open so
+  users can close it.
 
 ## Remaining upstream groups
 
