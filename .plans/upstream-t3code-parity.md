@@ -158,6 +158,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
   preventing local clock skew from hiding unread completions.
 - Codex home tilde expansion: adapt upstream `aa2d385a` by expanding
   `CODEX_HOME=~/...` before Codex CLI version checks and app-server launches.
+- Project path context action: align with upstream `ce463a53` by adding a
+  sidebar project context-menu action that copies the project workspace path.
 
 ## Remaining upstream groups
 
