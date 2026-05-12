@@ -8,6 +8,7 @@ export * from "./model";
 export * from "./ws";
 export * from "./keybindings";
 export * from "./server";
+export * from "./settings";
 export * from "./git";
 export * from "./orchestration";
 export * from "./editor";

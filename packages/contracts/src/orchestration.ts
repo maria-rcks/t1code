@@ -1,5 +1,5 @@
-import { Option, Schema, SchemaIssue, Struct } from "effect";
-import { ProviderModelOptions } from "./model";
+import { Effect, Option, Schema, SchemaIssue, SchemaTransformation, Struct } from "effect";
+import { ProviderModelOptions, ProviderOptionSelections } from "./model";
 import {
   ApprovalRequestId,
   CheckpointRef,
@@ -14,6 +14,7 @@ import {
   TrimmedNonEmptyString,
   TurnId,
 } from "./baseSchemas";
+import { ProviderInstanceId } from "./providerInstance";
 
 export const ORCHESTRATION_WS_METHODS = {
   getSnapshot: "orchestration.getSnapshot",
@@ -29,6 +30,51 @@ export const ORCHESTRATION_WS_CHANNELS = {
 
 export const ProviderKind = Schema.Literals(["codex", "claudeAgent"]);
 export type ProviderKind = typeof ProviderKind.Type;
+
+const ModelSelectionWire = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  model: TrimmedNonEmptyString,
+  options: Schema.optionalKey(ProviderOptionSelections),
+});
+
+const ModelSelectionSource = Schema.Struct({
+  provider: Schema.optional(Schema.Unknown),
+  instanceId: Schema.optional(Schema.Unknown),
+  model: Schema.Unknown,
+  options: Schema.optional(Schema.Unknown),
+});
+
+export const ModelSelection = ModelSelectionSource.pipe(
+  Schema.decodeTo(
+    ModelSelectionWire,
+    SchemaTransformation.transformOrFail({
+      decode: (raw) => {
+        const instanceIdSource =
+          raw.instanceId !== undefined
+            ? raw.instanceId
+            : typeof raw.provider === "string"
+              ? raw.provider
+              : undefined;
+        const base: Record<string, unknown> = {
+          instanceId: instanceIdSource,
+          model: raw.model,
+        };
+        if (raw.options !== undefined) base.options = raw.options;
+        return Effect.succeed(base as typeof ModelSelectionWire.Encoded);
+      },
+      encode: (value) => {
+        const base: Record<string, unknown> = {
+          instanceId: value.instanceId,
+          model: value.model,
+        };
+        if (value.options !== undefined) base.options = value.options;
+        return Effect.succeed(base as typeof ModelSelectionSource.Encoded);
+      },
+    }),
+  ),
+);
+export type ModelSelection = typeof ModelSelection.Type;
+
 export const ProviderApprovalPolicy = Schema.Literals([
   "untrusted",
   "on-failure",

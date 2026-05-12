@@ -288,6 +288,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
   adding rich provider snapshot aggregation over live instances, unavailable
   shadows, cache hydration/persistence, refresh routing, stream subscriptions,
   and volatile provider update state.
+- Provider settings contracts: partially align with upstream `08e6d4cf` by
+  adding server/client settings schemas, per-driver provider setting schemas,
+  instance-based model selections, and legacy option-selection decoding for the
+  next provider driver and settings UI slices.
 
 ## Remaining upstream groups
 

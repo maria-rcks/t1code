@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Effect, Schema, SchemaTransformation } from "effect";
 import type { ProviderKind } from "./orchestration";
 import { TrimmedNonEmptyString } from "./baseSchemas";
 
@@ -46,6 +46,60 @@ export const ProviderOptionDescriptor = Schema.Union([
   BooleanProviderOptionDescriptor,
 ]);
 export type ProviderOptionDescriptor = typeof ProviderOptionDescriptor.Type;
+
+export const ProviderOptionSelectionValue = Schema.Union([TrimmedNonEmptyString, Schema.Boolean]);
+export type ProviderOptionSelectionValue = typeof ProviderOptionSelectionValue.Type;
+
+export const ProviderOptionSelection = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  value: ProviderOptionSelectionValue,
+});
+export type ProviderOptionSelection = typeof ProviderOptionSelection.Type;
+
+const LegacyProviderOptionSelectionsObject = Schema.Record(Schema.String, Schema.Unknown);
+
+const ProviderOptionSelectionsFromLegacyObject = LegacyProviderOptionSelectionsObject.pipe(
+  Schema.decodeTo(
+    Schema.Array(ProviderOptionSelection),
+    SchemaTransformation.transformOrFail({
+      decode: (record) => Effect.succeed(coerceLegacyOptionsObjectToArray(record)),
+      encode: (selections) => Effect.succeed(canonicalSelectionsToLegacyObject(selections)),
+    }),
+  ),
+);
+
+export const ProviderOptionSelections = Schema.Union([
+  Schema.Array(ProviderOptionSelection),
+  ProviderOptionSelectionsFromLegacyObject,
+]);
+export type ProviderOptionSelections = typeof ProviderOptionSelections.Type;
+
+function coerceLegacyOptionsObjectToArray(
+  record: Record<string, unknown>,
+): ReadonlyArray<ProviderOptionSelection> {
+  const entries: Array<ProviderOptionSelection> = [];
+  for (const [rawKey, rawValue] of Object.entries(record)) {
+    const id = typeof rawKey === "string" ? rawKey.trim() : "";
+    if (id.length === 0) continue;
+    if (typeof rawValue === "string") {
+      const trimmed = rawValue.trim();
+      if (trimmed.length > 0) entries.push({ id, value: trimmed });
+    } else if (typeof rawValue === "boolean") {
+      entries.push({ id, value: rawValue });
+    }
+  }
+  return entries;
+}
+
+function canonicalSelectionsToLegacyObject(
+  selections: ReadonlyArray<ProviderOptionSelection>,
+): Record<string, string | boolean> {
+  const out: Record<string, string | boolean> = {};
+  for (const { id, value } of selections) {
+    out[id] = value;
+  }
+  return out;
+}
 
 export const ModelCapabilities = Schema.Struct({
   optionDescriptors: Schema.optional(Schema.Array(ProviderOptionDescriptor)),
