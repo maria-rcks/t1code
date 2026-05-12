@@ -245,6 +245,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Provider session cwd resume: partially align with upstream `188df6da` by
   reusing persisted cwd when `ProviderService.startSession` resumes an existing
   provider binding without an explicit cwd, preventing workspace drift.
+- Claude durable resume ids: partially align with upstream `188df6da` by
+  ignoring transient Claude resume hook `session_id`s when updating the resume
+  cursor and provider thread id.
 
 ## Remaining upstream groups
 
