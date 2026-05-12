@@ -226,6 +226,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Sidebar selection rerenders: partially align with upstream `7455472c` by
   reading selection presence imperatively in sidebar click/global-dismiss
   handlers so those callbacks do not resubscribe to selection-size changes.
+- Atomic config writes: partially align with upstream `e25db3a5` by adding a
+  UUID temp-directory based atomic writer and using it for the local keybindings
+  config writer, avoiding timestamp temp-path collisions.
 
 ## Remaining upstream groups
 
