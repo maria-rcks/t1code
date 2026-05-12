@@ -6,6 +6,8 @@ import { defineConfig } from "vite";
 import pkg from "./package.json" with { type: "json" };
 
 const port = Number(process.env.PORT ?? 5733);
+const configuredHostedAppChannel = process.env.VITE_HOSTED_APP_CHANNEL?.trim() || "";
+const configuredAppVersion = process.env.APP_VERSION?.trim() || pkg.version;
 const sourcemapEnv = process.env.T3CODE_WEB_SOURCEMAP?.trim().toLowerCase();
 
 const buildSourcemap =
@@ -35,7 +37,8 @@ export default defineConfig({
   define: {
     // In dev mode, tell the web app where the WebSocket server lives
     "import.meta.env.VITE_WS_URL": JSON.stringify(process.env.VITE_WS_URL ?? ""),
-    "import.meta.env.APP_VERSION": JSON.stringify(pkg.version),
+    "import.meta.env.VITE_HOSTED_APP_CHANNEL": JSON.stringify(configuredHostedAppChannel),
+    "import.meta.env.APP_VERSION": JSON.stringify(configuredAppVersion),
   },
   resolve: {
     tsconfigPaths: true,
