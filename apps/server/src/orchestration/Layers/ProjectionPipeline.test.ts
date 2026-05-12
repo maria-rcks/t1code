@@ -166,6 +166,85 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
   );
 });
 
+it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-pending-approvals-")))(
+  "OrchestrationProjectionPipeline",
+  (it) => {
+    it.effect("only creates pending approval rows for approval-requested activities", () =>
+      Effect.gen(function* () {
+        const projectionPipeline = yield* OrchestrationProjectionPipeline;
+        const eventStore = yield* OrchestrationEventStore;
+        const sql = yield* SqlClient.SqlClient;
+        const now = new Date().toISOString();
+
+        yield* eventStore.append({
+          type: "thread.activity-appended",
+          eventId: EventId.makeUnsafe("evt-user-input-requested"),
+          aggregateKind: "thread",
+          aggregateId: ThreadId.makeUnsafe("thread-pending-approval"),
+          occurredAt: now,
+          commandId: CommandId.makeUnsafe("cmd-user-input-requested"),
+          causationEventId: null,
+          correlationId: CommandId.makeUnsafe("cmd-user-input-requested"),
+          metadata: {},
+          payload: {
+            threadId: ThreadId.makeUnsafe("thread-pending-approval"),
+            activity: {
+              id: EventId.makeUnsafe("activity-user-input-requested"),
+              tone: "info",
+              kind: "user-input.requested",
+              summary: "User input requested",
+              payload: {
+                requestId: "request-user-input",
+                questions: [],
+              },
+              turnId: TurnId.makeUnsafe("turn-pending-approval"),
+              createdAt: now,
+            },
+          },
+        });
+
+        yield* eventStore.append({
+          type: "thread.activity-appended",
+          eventId: EventId.makeUnsafe("evt-approval-requested"),
+          aggregateKind: "thread",
+          aggregateId: ThreadId.makeUnsafe("thread-pending-approval"),
+          occurredAt: now,
+          commandId: CommandId.makeUnsafe("cmd-approval-requested"),
+          causationEventId: null,
+          correlationId: CommandId.makeUnsafe("cmd-approval-requested"),
+          metadata: {},
+          payload: {
+            threadId: ThreadId.makeUnsafe("thread-pending-approval"),
+            activity: {
+              id: EventId.makeUnsafe("activity-approval-requested"),
+              tone: "approval",
+              kind: "approval.requested",
+              summary: "Command approval requested",
+              payload: {
+                requestId: "request-approval",
+                requestKind: "command",
+              },
+              turnId: TurnId.makeUnsafe("turn-pending-approval"),
+              createdAt: now,
+            },
+          },
+        });
+
+        yield* projectionPipeline.bootstrap;
+
+        const rows = yield* sql<{
+          readonly requestId: string;
+        }>`
+          SELECT request_id AS "requestId"
+          FROM projection_pending_approvals
+          ORDER BY request_id ASC
+        `;
+        assert.deepEqual(rows, [{ requestId: "request-approval" }]);
+      }),
+    );
+  },
+);
+
 it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-base-")))(
   "OrchestrationProjectionPipeline",
   (it) => {

@@ -188,6 +188,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Markdown code block copy spacing: align with upstream `1bf048eb` by reserving
   space for the web markdown copy button so long code does not render under the
   control.
+- Pending approval projection guard: align with upstream `d22c6f52` by ignoring
+  non-approval activities that carry `requestId`, such as user-input requests,
+  when populating pending approval rows.
 
 ## Remaining upstream groups
 
