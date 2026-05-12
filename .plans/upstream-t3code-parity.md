@@ -77,6 +77,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Chat timeline timer updates: move streaming elapsed-time labels to
   self-updating text nodes so the chat view no longer commits every second
   while a turn is running.
+- External app launching: remove the `open` package dependency and route
+  browser/editor launches through Effect child-process spawning while retaining
+  the fork's existing `Open` service and RPC contract names.
 
 ## Remaining upstream groups
 
