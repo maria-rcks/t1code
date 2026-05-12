@@ -217,6 +217,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Claude prompt stream shutdown: align with upstream `0a503d0c` by converting
   prompt-queue interrupt causes into an empty SDK prompt stream during session
   stop.
+- Codex stderr warning projection: align with upstream `83eb396c` by emitting
+  classified process stderr as notifications and mapping them to
+  `runtime.warning` instead of active-turn runtime errors.
 
 ## Remaining upstream groups
 
