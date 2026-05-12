@@ -60,6 +60,8 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Mobile sidebar actions: reserve space for project header actions, keep the
   new-thread action visible on touch layouts, and close the mobile sidebar when
   opening settings.
+- Collapsible file diffs: add per-file collapse controls in the diff panel and
+  align `@pierre/diffs` on the upstream catalog pin.
 
 ## Remaining upstream groups
 
@@ -95,8 +97,7 @@ removing those fork surfaces unless a replacement has been implemented and wired
 
 6. Web UI parity
    - Sidebar performance and grouping changes.
-   - Collapsible file diffs, changed-files sticky header, and diff renderer
-     updates.
+   - Diff renderer updates beyond collapsible file sections.
    - Skill chips and broader composer action refactors.
    - Mobile/iOS layout fixes.
 
