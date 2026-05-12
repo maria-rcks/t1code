@@ -238,6 +238,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Pull request reference canonicalization: align with upstream `cd7980b4` by
   normalizing `#123` inputs to the raw numeric PR reference before resolving or
   preparing a PR thread.
+- Composer command menu active scroll: align with upstream `4a4795e5` by
+  scrolling the controlled active command/menu item into view as keyboard
+  navigation changes the active item.
 
 ## Remaining upstream groups
 

@@ -28,6 +28,7 @@ describe("ComposerCommandMenu", () => {
     );
 
     expect(markup).toContain("data-highlighted:bg-transparent");
+    expect(markup).toContain('data-composer-item-id="slash-plan"');
     expect(markup).toContain("bg-accent!");
   });
 });
