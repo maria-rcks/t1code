@@ -308,6 +308,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Provider home layout helpers: partially align with upstream `08e6d4cf` by
   adding Codex shared/shadow home materialization and Claude HOME resolution,
   continuation keys, and capabilities cache keys for built-in driver instances.
+- Claude provider snapshot wrapper: partially align with upstream `08e6d4cf`
+  by adding Claude model capabilities, provider snapshot construction,
+  pending snapshots, CLI effort normalization, API model id resolution, and
+  SDK initialization capability probing for the new driver path.
 
 ## Remaining upstream groups
 
