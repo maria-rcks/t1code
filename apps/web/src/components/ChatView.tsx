@@ -3519,6 +3519,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                 resolvedTheme={resolvedTheme}
                 timestampFormat={timestampFormat}
                 workspaceRoot={activeProject?.cwd ?? undefined}
+                skills={activeProviderStatus?.skills ?? []}
               />
             </div>
 

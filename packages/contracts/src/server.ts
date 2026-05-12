@@ -33,6 +33,17 @@ export const ServerProviderAuthStatus = Schema.Literals([
 ]);
 export type ServerProviderAuthStatus = typeof ServerProviderAuthStatus.Type;
 
+export const ServerProviderSkill = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  description: Schema.optional(TrimmedNonEmptyString),
+  path: TrimmedNonEmptyString,
+  scope: Schema.optional(TrimmedNonEmptyString),
+  enabled: Schema.Boolean,
+  displayName: Schema.optional(TrimmedNonEmptyString),
+  shortDescription: Schema.optional(TrimmedNonEmptyString),
+});
+export type ServerProviderSkill = typeof ServerProviderSkill.Type;
+
 export const ServerProviderStatus = Schema.Struct({
   provider: ProviderKind,
   status: ServerProviderStatusState,
@@ -40,6 +51,7 @@ export const ServerProviderStatus = Schema.Struct({
   authStatus: ServerProviderAuthStatus,
   checkedAt: IsoDateTime,
   message: Schema.optional(TrimmedNonEmptyString),
+  skills: Schema.optional(Schema.Array(ServerProviderSkill)),
 });
 export type ServerProviderStatus = typeof ServerProviderStatus.Type;
 
