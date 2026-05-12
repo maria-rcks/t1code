@@ -194,6 +194,11 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Terminal global shortcut bypass: align with upstream `39ca3ee8` by passing
   resolved keybindings into the terminal viewport and letting global terminal
   and diff shortcuts bypass xterm handling while focused.
+- External markdown link safety: align with upstream `73b2f255` by opening
+  external chat markdown links with `rel="noopener noreferrer"`; this behavior
+  already has ChatMarkdown regression coverage in this fork.
+- Diff turn strip fade: align with upstream `57d7746a` by replacing absolute
+  overlay gradients with a `mask-image` fade on the scrollable turn strip.
 
 ## Remaining upstream groups
 

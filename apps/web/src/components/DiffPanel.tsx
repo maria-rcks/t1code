@@ -33,6 +33,7 @@ import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { useStore } from "../store";
 import { useAppSettings } from "../appSettings";
 import { formatShortTimestamp } from "../timestampFormat";
+import { resolveTurnStripMaskImage } from "./DiffPanel.logic";
 import { DiffPanelLoadingState, DiffPanelShell, type DiffPanelMode } from "./DiffPanelShell";
 import { ToggleGroup, Toggle } from "./ui/toggle-group";
 
@@ -456,12 +457,6 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
   const headerRow = (
     <>
       <div className="relative min-w-0 flex-1 [-webkit-app-region:no-drag]">
-        {canScrollTurnStripLeft && (
-          <div className="pointer-events-none absolute inset-y-0 left-8 z-10 w-7 bg-linear-to-r from-card to-transparent" />
-        )}
-        {canScrollTurnStripRight && (
-          <div className="pointer-events-none absolute inset-y-0 right-8 z-10 w-7 bg-linear-to-l from-card to-transparent" />
-        )}
         <button
           type="button"
           className={cn(
@@ -493,6 +488,16 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
         <div
           ref={turnStripRef}
           className="turn-chip-strip flex gap-1 overflow-x-auto px-8 py-0.5"
+          style={
+            canScrollTurnStripLeft || canScrollTurnStripRight
+              ? {
+                  maskImage: resolveTurnStripMaskImage({
+                    canScrollLeft: canScrollTurnStripLeft,
+                    canScrollRight: canScrollTurnStripRight,
+                  }),
+                }
+              : undefined
+          }
           onWheel={onTurnStripWheel}
         >
           <button
