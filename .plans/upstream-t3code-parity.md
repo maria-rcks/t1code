@@ -73,6 +73,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
   credentials.
 - Hosted channel branding: recognize `VITE_HOSTED_APP_CHANNEL=latest|nightly`
   and surface the matching stage/display name in the web app.
+- Chat timeline timer updates: move streaming elapsed-time labels to
+  self-updating text nodes so the chat view no longer commits every second
+  while a turn is running.
 
 ## Remaining upstream groups
 
