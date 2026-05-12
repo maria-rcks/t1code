@@ -232,6 +232,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - WebSocket stale lifecycle events: adapt upstream `dbebc387` by marking the
   currently active socket as soon as a connection attempt starts and ignoring
   stale open/message/close/error events from superseded sockets after reconnect.
+- Pull request checkout references: partially align with upstream `d8a485ea`
+  by accepting `gh pr checkout ...` inputs in PR reference parsing and keeping
+  the synthetic checkout-PR branch picker item visible for those queries.
 
 ## Remaining upstream groups
 
