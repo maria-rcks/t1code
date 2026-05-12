@@ -122,6 +122,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Add-project icon parity: align with upstream `7da6522f` by using the folder
   add icon for the sidebar add-project action while preserving this fork's
   rotated plus cancel affordance while the path entry is open.
+- Pending answer submit labels: align with upstream `28e481eb` by using
+  singular "Submit answer" for one-question user input prompts and plural
+  "Submit answers" only after multi-question progress.
 
 ## Remaining upstream groups
 
