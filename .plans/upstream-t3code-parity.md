@@ -214,6 +214,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Branch selector hover state: align with upstream `fc650706` by letting
   selected/highlighted combobox item states own the active branch styling
   instead of forcing a static active background.
+- Claude prompt stream shutdown: align with upstream `0a503d0c` by converting
+  prompt-queue interrupt causes into an empty SDK prompt stream during session
+  stop.
 
 ## Remaining upstream groups
 

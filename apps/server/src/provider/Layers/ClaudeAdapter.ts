@@ -2259,6 +2259,9 @@ function makeClaudeAdapter(options?: ClaudeAdapterLiveOptions) {
         const prompt = Stream.fromQueue(promptQueue).pipe(
           Stream.filter((item) => item.type === "message"),
           Stream.map((item) => item.message),
+          Stream.catchCause((cause) =>
+            Cause.hasInterruptsOnly(cause) ? Stream.empty : Stream.failCause(cause),
+          ),
           Stream.toAsyncIterable,
         );
 
