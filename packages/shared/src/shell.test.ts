@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   extractPathFromShellOutput,
+  isCommandAvailable,
   readEnvironmentFromLoginShell,
   readPathFromLoginShell,
+  resolveCommandPath,
 } from "./shell";
 
 describe("extractPathFromShellOutput", () => {
@@ -124,5 +126,34 @@ describe("readEnvironmentFromLoginShell", () => {
     expect(readEnvironmentFromLoginShell("/bin/zsh", ["CUSTOM_VAR"], execFile)).toEqual({
       CUSTOM_VAR: "  padded value  ",
     });
+  });
+});
+
+describe("resolveCommandPath", () => {
+  it("returns null for missing commands", () => {
+    expect(
+      resolveCommandPath("definitely-not-installed", {
+        platform: "win32",
+        env: { PATH: "", PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+      }),
+    ).toBeNull();
+  });
+
+  it("finds executable POSIX commands on PATH", () => {
+    expect(
+      resolveCommandPath("node", {
+        platform: process.platform,
+        env: { PATH: process.env.PATH ?? "" },
+      }),
+    ).not.toBeNull();
+  });
+
+  it("reports command availability from resolved paths", () => {
+    expect(
+      isCommandAvailable("definitely-not-installed", {
+        platform: "win32",
+        env: { PATH: "", PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+      }),
+    ).toBe(false);
   });
 });

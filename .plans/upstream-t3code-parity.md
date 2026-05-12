@@ -265,6 +265,9 @@ removing those fork surfaces unless a replacement has been implemented and wired
 - Shared semver helpers: align with upstream provider-maintenance prerequisites
   by adding semver normalization, comparison, and lightweight range checking to
   `@t3tools/shared/semver`.
+- Shared command path resolution: partially align with upstream shell helpers
+  by adding `resolveCommandPath`/`isCommandAvailable` for provider maintenance
+  install-source detection.
 
 ## Remaining upstream groups
 
