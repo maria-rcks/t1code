@@ -679,6 +679,39 @@ function readProviderInstanceConfigStringArray(
     : undefined;
 }
 
+function applyProviderModelPreferences(
+  options: ReadonlyArray<{
+    readonly slug: string;
+    readonly name: string;
+    readonly isCustom: boolean;
+  }>,
+  appSettings: AppSettings,
+  instanceId: ProviderInstanceId,
+): ReadonlyArray<{ readonly slug: string; readonly name: string; readonly isCustom: boolean }> {
+  const preferences = appSettings.providerModelPreferences[instanceId];
+  const hiddenModels = new Set(preferences?.hiddenModels ?? []);
+  const modelOrder = new Map((preferences?.modelOrder ?? []).map((slug, index) => [slug, index]));
+  const favoriteModels = new Set(
+    appSettings.favorites
+      .filter((favorite) => favorite.provider === instanceId)
+      .map((favorite) => favorite.model),
+  );
+  return options
+    .filter((option) => option.isCustom || !hiddenModels.has(option.slug))
+    .map((option, index) => ({ option, index }))
+    .toSorted((left, right) => {
+      const favoriteDelta =
+        Number(favoriteModels.has(right.option.slug)) -
+        Number(favoriteModels.has(left.option.slug));
+      if (favoriteDelta !== 0) return favoriteDelta;
+      const leftRank = modelOrder.get(left.option.slug) ?? Number.POSITIVE_INFINITY;
+      const rightRank = modelOrder.get(right.option.slug) ?? Number.POSITIVE_INFINITY;
+      if (leftRank !== rightRank) return leftRank - rightRank;
+      return left.index - right.index;
+    })
+    .map(({ option }) => option);
+}
+
 function readProviderInstallEnabled(
   settings: ServerSettings,
   provider: InstallProviderKey,
@@ -3803,22 +3836,24 @@ export function App({
       ReadonlyArray<{ readonly slug: string; readonly name: string; readonly isCustom: boolean }>
     >();
     for (const entry of modelMenuEntries) {
+      const fallbackOptions = getAppModelOptions(
+        entry.provider,
+        customModelsByProvider[entry.provider],
+        entry.instanceId === draftProviderInstanceId ? draftModel : undefined,
+      );
       optionsByInstance.set(
         entry.instanceId,
-        getProviderInstanceModelOptions(
-          providerSnapshots,
+        applyProviderModelPreferences(
+          getProviderInstanceModelOptions(providerSnapshots, entry.instanceId, fallbackOptions),
+          appSettings,
           entry.instanceId,
-          getAppModelOptions(
-            entry.provider,
-            customModelsByProvider[entry.provider],
-            entry.instanceId === draftProviderInstanceId ? draftModel : undefined,
-          ),
         ),
       );
     }
     return optionsByInstance;
   }, [
     customModelsByProvider,
+    appSettings,
     draftModel,
     draftProviderInstanceId,
     modelMenuEntries,

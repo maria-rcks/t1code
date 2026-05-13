@@ -1,6 +1,7 @@
 import { Option, Schema } from "effect";
 import {
   DEFAULT_GIT_TEXT_GENERATION_MODEL,
+  ProviderInstanceId,
   TrimmedNonEmptyString,
   type ProviderKind,
   type ProviderStartOptions,
@@ -97,6 +98,19 @@ export const AppSettingsSchema = Schema.Struct({
   sidebarThreadPreviewCount: SidebarThreadPreviewCount.pipe(
     withDefaults(() => DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT),
   ),
+  favorites: Schema.Array(
+    Schema.Struct({
+      provider: ProviderInstanceId,
+      model: TrimmedNonEmptyString,
+    }),
+  ).pipe(withDefaults(() => [])),
+  providerModelPreferences: Schema.Record(
+    ProviderInstanceId,
+    Schema.Struct({
+      hiddenModels: Schema.Array(Schema.String).pipe(withDefaults(() => [])),
+      modelOrder: Schema.Array(Schema.String).pipe(withDefaults(() => [])),
+    }),
+  ).pipe(withDefaults(() => ({}))),
   customCodexModels: Schema.Array(Schema.String).pipe(withDefaults(() => [])),
   customClaudeModels: Schema.Array(Schema.String).pipe(withDefaults(() => [])),
   textGenerationModel: Schema.optional(TrimmedNonEmptyString),
