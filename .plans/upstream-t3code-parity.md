@@ -346,6 +346,11 @@ removing those fork surfaces unless a replacement has been implemented and wired
   the per-instance Codex driver that bundles rich snapshots, app-server session
   adapters, `codex exec` text generation, shadow-home materialization,
   continuation identity, and package-maintenance capability enrichment.
+- Claude provider driver: partially align with upstream `08e6d4cf` by adding
+  the per-instance Claude driver, exporting the Claude adapter constructor for
+  instance-bound settings and HOME environments, and wiring snapshot,
+  text-generation, capability-probe cache, continuation, and maintenance
+  capabilities into one provider instance bundle.
 
 ## Remaining upstream groups
 

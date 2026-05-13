@@ -75,6 +75,7 @@ export function makeServerProviderLayer(): Layer.Layer<
   | SqlClient.SqlClient
   | ServerConfig
   | FileSystem.FileSystem
+  | Path.Path
   | AnalyticsService
   | ChildProcessSpawner.ChildProcessSpawner
 > {
