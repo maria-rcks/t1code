@@ -153,6 +153,11 @@ import {
 import { openExternalUrl } from "./openExternal";
 import { type TuiPrefs, readPrefs, writePrefs } from "./prefs";
 import {
+  buildDefaultProviderInstanceUpdatePatch,
+  buildResetDefaultProviderInstancesPatch,
+  defaultProviderInstanceIdForSettingsKey,
+} from "./providerSettings";
+import {
   normalizeRendererThemeMode,
   resolveTerminalPalette,
   shouldListenForRendererThemeChanges,
@@ -3850,6 +3855,16 @@ export function App({
     provider: InstallProviderKey,
     field: InstallProviderFieldKey,
   ): string {
+    const instanceConfig =
+      serverSettings?.providerInstances[defaultProviderInstanceIdForSettingsKey(provider)]?.config;
+    if (
+      instanceConfig &&
+      typeof instanceConfig === "object" &&
+      !globalThis.Array.isArray(instanceConfig) &&
+      field in instanceConfig
+    ) {
+      return String((instanceConfig as Record<string, unknown>)[field] ?? "");
+    }
     if (provider === "codex") {
       if (field === "binaryPath") {
         return serverSettings?.providers.codex.binaryPath ?? appSettings.codexBinaryPath;
@@ -6205,6 +6220,10 @@ export function App({
     provider: InstallProviderKey,
     patch: Partial<Record<InstallProviderFieldKey, string>>,
   ) {
+    if (!serverSettings) {
+      setStatus("Settings loading");
+      return;
+    }
     if (provider === "codex") {
       updateAppSettings({
         ...(patch.binaryPath !== undefined ? { codexBinaryPath: patch.binaryPath } : {}),
@@ -6213,23 +6232,25 @@ export function App({
     } else if (provider === "claudeAgent" && patch.binaryPath !== undefined) {
       updateAppSettings({ claudeBinaryPath: patch.binaryPath });
     }
+    const settingsPatch = buildDefaultProviderInstanceUpdatePatch({
+      settings: serverSettings,
+      provider,
+      configPatch: patch,
+    });
+    const providerPatch = settingsPatch.providers as NonNullable<ServerSettingsPatch["providers"]>;
     setServerSettings((current) =>
       current
         ? {
             ...current,
             providers: {
               ...current.providers,
-              [provider]: {
-                ...current.providers[provider],
-                ...patch,
-              },
+              ...providerPatch,
             } as ServerSettings["providers"],
+            providerInstances: settingsPatch.providerInstances ?? current.providerInstances,
           }
         : current,
     );
-    updateServerSettings({
-      providers: { [provider]: patch } as NonNullable<ServerSettingsPatch["providers"]>,
-    });
+    updateServerSettings(settingsPatch);
   }
 
   function resetProviderInstallSettings() {
@@ -6238,56 +6259,25 @@ export function App({
       codexBinaryPath: DEFAULT_APP_SETTINGS.codexBinaryPath,
       codexHomePath: DEFAULT_APP_SETTINGS.codexHomePath,
     });
+    const providers = INSTALL_PROVIDER_SETTINGS.map((settings) => settings.provider);
+    const settingsPatch = buildResetDefaultProviderInstancesPatch({
+      settings: serverSettings ?? DEFAULT_SERVER_SETTINGS,
+      providers,
+    });
+    const providerPatch = settingsPatch.providers as NonNullable<ServerSettingsPatch["providers"]>;
     setServerSettings((current) =>
       current
         ? {
             ...current,
             providers: {
               ...current.providers,
-              codex: {
-                ...current.providers.codex,
-                binaryPath: DEFAULT_SERVER_SETTINGS.providers.codex.binaryPath,
-                homePath: DEFAULT_SERVER_SETTINGS.providers.codex.homePath,
-              },
-              claudeAgent: {
-                ...current.providers.claudeAgent,
-                binaryPath: DEFAULT_SERVER_SETTINGS.providers.claudeAgent.binaryPath,
-              },
-              cursor: {
-                ...current.providers.cursor,
-                binaryPath: DEFAULT_SERVER_SETTINGS.providers.cursor.binaryPath,
-                apiEndpoint: DEFAULT_SERVER_SETTINGS.providers.cursor.apiEndpoint,
-              },
-              opencode: {
-                ...current.providers.opencode,
-                binaryPath: DEFAULT_SERVER_SETTINGS.providers.opencode.binaryPath,
-                serverUrl: DEFAULT_SERVER_SETTINGS.providers.opencode.serverUrl,
-                serverPassword: DEFAULT_SERVER_SETTINGS.providers.opencode.serverPassword,
-              },
-            },
+              ...providerPatch,
+            } as ServerSettings["providers"],
+            providerInstances: settingsPatch.providerInstances ?? current.providerInstances,
           }
         : current,
     );
-    updateServerSettings({
-      providers: {
-        codex: {
-          binaryPath: DEFAULT_SERVER_SETTINGS.providers.codex.binaryPath,
-          homePath: DEFAULT_SERVER_SETTINGS.providers.codex.homePath,
-        },
-        claudeAgent: {
-          binaryPath: DEFAULT_SERVER_SETTINGS.providers.claudeAgent.binaryPath,
-        },
-        cursor: {
-          binaryPath: DEFAULT_SERVER_SETTINGS.providers.cursor.binaryPath,
-          apiEndpoint: DEFAULT_SERVER_SETTINGS.providers.cursor.apiEndpoint,
-        },
-        opencode: {
-          binaryPath: DEFAULT_SERVER_SETTINGS.providers.opencode.binaryPath,
-          serverUrl: DEFAULT_SERVER_SETTINGS.providers.opencode.serverUrl,
-          serverPassword: DEFAULT_SERVER_SETTINGS.providers.opencode.serverPassword,
-        },
-      },
-    });
+    updateServerSettings(settingsPatch);
     setOpenInstallProviders({
       codex: false,
       claudeAgent: false,
