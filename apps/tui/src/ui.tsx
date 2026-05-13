@@ -494,8 +494,10 @@ type InstallProviderFieldKey =
   | "apiEndpoint"
   | "binaryPath"
   | "homePath"
+  | "launchArgs"
   | "serverPassword"
-  | "serverUrl";
+  | "serverUrl"
+  | "shadowHomePath";
 type InstallProviderField = {
   key: InstallProviderFieldKey;
   label: string;
@@ -557,8 +559,14 @@ const INSTALL_PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
       {
         key: "homePath",
         label: "CODEX_HOME path",
-        placeholder: "CODEX_HOME",
-        description: "Optional custom Codex home and config directory.",
+        placeholder: "~/.codex",
+        description: "Custom Codex home and config directory.",
+      },
+      {
+        key: "shadowHomePath",
+        label: "Shadow home path",
+        placeholder: "~/.codex-t1/personal",
+        description: "Account-specific Codex home for separate auth while sharing state.",
       },
     ],
   },
@@ -571,6 +579,18 @@ const INSTALL_PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
         label: "Binary path",
         placeholder: "Claude binary path",
         description: "Leave blank to use claude from your PATH.",
+      },
+      {
+        key: "homePath",
+        label: "Claude HOME path",
+        placeholder: "~",
+        description: "Custom HOME used when running this Claude instance.",
+      },
+      {
+        key: "launchArgs",
+        label: "Launch arguments",
+        placeholder: "e.g. --chrome",
+        description: "Additional CLI arguments passed on session start.",
       },
     ],
   },
@@ -617,6 +637,42 @@ const INSTALL_PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
     ],
   },
 ] as const;
+
+function readProviderInstallSettingValue(
+  settings: ServerSettings,
+  provider: InstallProviderKey,
+  field: InstallProviderFieldKey,
+): string {
+  const instanceConfig =
+    settings.providerInstances[defaultProviderInstanceIdForSettingsKey(provider)]?.config;
+  if (
+    instanceConfig &&
+    typeof instanceConfig === "object" &&
+    !globalThis.Array.isArray(instanceConfig) &&
+    field in instanceConfig
+  ) {
+    return String((instanceConfig as Record<string, unknown>)[field] ?? "");
+  }
+  const providerSettings = settings.providers[provider];
+  return field in providerSettings
+    ? String(providerSettings[field as keyof typeof providerSettings] ?? "")
+    : "";
+}
+
+function isProviderInstallSettingsDirtyForSettings(
+  settings: ServerSettings,
+  providerSettings: InstallProviderSettings,
+): boolean {
+  return providerSettings.fields.some(
+    (field) =>
+      readProviderInstallSettingValue(settings, providerSettings.provider, field.key) !==
+      String(
+        DEFAULT_SERVER_SETTINGS.providers[providerSettings.provider][
+          field.key as keyof (typeof DEFAULT_SERVER_SETTINGS.providers)[typeof providerSettings.provider]
+        ] ?? "",
+      ),
+  );
+}
 
 function toRendererColor(color: TuiColor): RGBA {
   return RGBA.fromHex(color);
@@ -3292,26 +3348,22 @@ export function App({
             if (!disposed) {
               setServerSettings(settings);
               setOpenInstallProviders({
-                codex:
-                  settings.providers.codex.binaryPath !==
-                    DEFAULT_SERVER_SETTINGS.providers.codex.binaryPath ||
-                  settings.providers.codex.homePath !==
-                    DEFAULT_SERVER_SETTINGS.providers.codex.homePath,
-                claudeAgent:
-                  settings.providers.claudeAgent.binaryPath !==
-                  DEFAULT_SERVER_SETTINGS.providers.claudeAgent.binaryPath,
-                cursor:
-                  settings.providers.cursor.binaryPath !==
-                    DEFAULT_SERVER_SETTINGS.providers.cursor.binaryPath ||
-                  settings.providers.cursor.apiEndpoint !==
-                    DEFAULT_SERVER_SETTINGS.providers.cursor.apiEndpoint,
-                opencode:
-                  settings.providers.opencode.binaryPath !==
-                    DEFAULT_SERVER_SETTINGS.providers.opencode.binaryPath ||
-                  settings.providers.opencode.serverUrl !==
-                    DEFAULT_SERVER_SETTINGS.providers.opencode.serverUrl ||
-                  settings.providers.opencode.serverPassword !==
-                    DEFAULT_SERVER_SETTINGS.providers.opencode.serverPassword,
+                codex: isProviderInstallSettingsDirtyForSettings(
+                  settings,
+                  INSTALL_PROVIDER_SETTINGS[0]!,
+                ),
+                claudeAgent: isProviderInstallSettingsDirtyForSettings(
+                  settings,
+                  INSTALL_PROVIDER_SETTINGS[1]!,
+                ),
+                cursor: isProviderInstallSettingsDirtyForSettings(
+                  settings,
+                  INSTALL_PROVIDER_SETTINGS[2]!,
+                ),
+                opencode: isProviderInstallSettingsDirtyForSettings(
+                  settings,
+                  INSTALL_PROVIDER_SETTINGS[3]!,
+                ),
               });
             }
           })
@@ -3879,41 +3931,35 @@ export function App({
     provider: InstallProviderKey,
     field: InstallProviderFieldKey,
   ): string {
-    const instanceConfig =
-      serverSettings?.providerInstances[defaultProviderInstanceIdForSettingsKey(provider)]?.config;
-    if (
-      instanceConfig &&
-      typeof instanceConfig === "object" &&
-      !globalThis.Array.isArray(instanceConfig) &&
-      field in instanceConfig
-    ) {
-      return String((instanceConfig as Record<string, unknown>)[field] ?? "");
+    if (serverSettings) {
+      return readProviderInstallSettingValue(serverSettings, provider, field);
     }
     if (provider === "codex") {
       if (field === "binaryPath") {
-        return serverSettings?.providers.codex.binaryPath ?? appSettings.codexBinaryPath;
+        return appSettings.codexBinaryPath;
       }
       if (field === "homePath") {
-        return serverSettings?.providers.codex.homePath ?? appSettings.codexHomePath;
+        return appSettings.codexHomePath;
       }
     }
     if (provider === "claudeAgent" && field === "binaryPath") {
-      return serverSettings?.providers.claudeAgent.binaryPath ?? appSettings.claudeBinaryPath;
+      return appSettings.claudeBinaryPath;
     }
-    const settings =
-      serverSettings?.providers[provider] ?? DEFAULT_SERVER_SETTINGS.providers[provider];
+    const settings = DEFAULT_SERVER_SETTINGS.providers[provider];
     return field in settings ? String(settings[field as keyof typeof settings] ?? "") : "";
   }
   function isProviderInstallSettingsDirty(providerSettings: InstallProviderSettings): boolean {
-    return providerSettings.fields.some(
-      (field) =>
-        providerInstallValue(providerSettings.provider, field.key) !==
-        String(
-          DEFAULT_SERVER_SETTINGS.providers[providerSettings.provider][
-            field.key as keyof (typeof DEFAULT_SERVER_SETTINGS.providers)[typeof providerSettings.provider]
-          ] ?? "",
-        ),
-    );
+    return serverSettings
+      ? isProviderInstallSettingsDirtyForSettings(serverSettings, providerSettings)
+      : providerSettings.fields.some(
+          (field) =>
+            providerInstallValue(providerSettings.provider, field.key) !==
+            String(
+              DEFAULT_SERVER_SETTINGS.providers[providerSettings.provider][
+                field.key as keyof (typeof DEFAULT_SERVER_SETTINGS.providers)[typeof providerSettings.provider]
+              ] ?? "",
+            ),
+        );
   }
   const isInstallSettingsDirty = INSTALL_PROVIDER_SETTINGS.some(isProviderInstallSettingsDirty);
   const savedCustomModelRows = MODEL_PROVIDER_SETTINGS.flatMap((providerSettings) =>
