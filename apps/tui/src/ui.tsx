@@ -244,6 +244,7 @@ type SettingsSelectKind =
   | "theme-preset"
   | "timestamp-format"
   | "thread-env"
+  | "git-model-provider"
   | "git-model"
   | "custom-model-provider";
 type SidebarSortMenuItem = {
@@ -2983,8 +2984,8 @@ export function App({
     [updateAppSettings, updateServerSettings],
   );
   const updateGitTextGenerationModel = useCallback(
-    (model: string) => {
-      const textGenerationModelSelection = createModelSelection(DEFAULT_CODEX_INSTANCE_ID, model);
+    (instanceId: ProviderInstanceId, model: string) => {
+      const textGenerationModelSelection = createModelSelection(instanceId, model);
       updateAppSettings({ textGenerationModel: model });
       setServerSettings((current) =>
         current
@@ -3709,16 +3710,38 @@ export function App({
     () => getProviderStartOptions(appSettings),
     [appSettings],
   );
+  const configuredGitTextGenerationModel =
+    serverSettings?.textGenerationModelSelection.model ?? appSettings.textGenerationModel;
+  const configuredGitTextGenerationInstanceId =
+    serverSettings?.textGenerationModelSelection.instanceId;
+  const currentGitTextGenerationEntry =
+    (configuredGitTextGenerationInstanceId
+      ? modelMenuEntryByInstanceId.get(configuredGitTextGenerationInstanceId)
+      : undefined) ??
+    modelMenuEntryByInstanceId.get(DEFAULT_CODEX_INSTANCE_ID) ??
+    modelMenuEntries[0]!;
+  const currentGitTextGenerationInstanceId = currentGitTextGenerationEntry.instanceId;
+  const gitTextGenerationModelOptions = useMemo(() => {
+    const options = providerModelOptionsByInstance.get(currentGitTextGenerationInstanceId);
+    if (options && options.length > 0) return options;
+    return getAppModelOptions(
+      currentGitTextGenerationEntry.provider,
+      customModelsByProvider[currentGitTextGenerationEntry.provider],
+      configuredGitTextGenerationModel ?? DEFAULT_GIT_TEXT_GENERATION_MODEL,
+    );
+  }, [
+    configuredGitTextGenerationModel,
+    currentGitTextGenerationEntry.provider,
+    currentGitTextGenerationInstanceId,
+    customModelsByProvider,
+    providerModelOptionsByInstance,
+  ]);
   const currentGitTextGenerationModel =
-    serverSettings?.textGenerationModelSelection.model ??
-    appSettings.textGenerationModel ??
-    DEFAULT_GIT_TEXT_GENERATION_MODEL;
-  const currentGitTextGenerationInstanceId =
-    serverSettings?.textGenerationModelSelection.instanceId ?? DEFAULT_CODEX_INSTANCE_ID;
-  const gitTextGenerationModelOptions = useMemo(
-    () => getAppModelOptions("codex", customModelsByProvider.codex, currentGitTextGenerationModel),
-    [customModelsByProvider.codex, currentGitTextGenerationModel],
-  );
+    resolveSelectableModel(
+      currentGitTextGenerationEntry.provider,
+      configuredGitTextGenerationModel,
+      gitTextGenerationModelOptions,
+    ) ?? DEFAULT_MODEL_BY_PROVIDER[currentGitTextGenerationEntry.provider];
   const isGitRepo = gitBranchList?.isRepo ?? true;
   const hasOriginRemote = gitBranchList?.hasOriginRemote ?? false;
   const visibleGitBranches = useMemo(
@@ -3849,6 +3872,7 @@ export function App({
   const selectedGitTextGenerationModelLabel =
     gitTextGenerationModelOptions.find((option) => option.slug === currentGitTextGenerationModel)
       ?.name ?? currentGitTextGenerationModel;
+  const selectedGitTextGenerationProviderLabel = currentGitTextGenerationEntry.displayName;
   const totalCustomModels =
     customModelsByProvider.codex.length + customModelsByProvider.claudeAgent.length;
   function providerInstallValue(
@@ -3945,13 +3969,33 @@ export function App({
             setOverlayMenu(null);
           },
         }));
+      case "git-model-provider":
+        return modelMenuEntries.map((entry) => ({
+          id: entry.instanceId,
+          label: entry.displayName,
+          selected: entry.instanceId === currentGitTextGenerationInstanceId,
+          onSelect: () => {
+            const nextOptions =
+              providerModelOptionsByInstance.get(entry.instanceId) ??
+              getAppModelOptions(
+                entry.provider,
+                customModelsByProvider[entry.provider],
+                currentGitTextGenerationModel,
+              );
+            const nextModel =
+              resolveSelectableModel(entry.provider, currentGitTextGenerationModel, nextOptions) ??
+              DEFAULT_MODEL_BY_PROVIDER[entry.provider];
+            updateGitTextGenerationModel(entry.instanceId, nextModel);
+            setOverlayMenu(null);
+          },
+        }));
       case "git-model":
         return gitTextGenerationModelOptions.map((option) => ({
           id: option.slug,
           label: option.name,
           selected: option.slug === currentGitTextGenerationModel,
           onSelect: () => {
-            updateGitTextGenerationModel(option.slug);
+            updateGitTextGenerationModel(currentGitTextGenerationInstanceId, option.slug);
             setOverlayMenu(null);
           },
         }));
@@ -3969,9 +4013,13 @@ export function App({
   }, [
     appSettings.theme,
     appSettings.timestampFormat,
+    currentGitTextGenerationInstanceId,
     currentGitTextGenerationModel,
+    customModelsByProvider,
     defaultThreadEnvMode,
     gitTextGenerationModelOptions,
+    modelMenuEntries,
+    providerModelOptionsByInstance,
     selectedCustomModelProvider,
     settingsSelectKind,
     tuiThemeId,
@@ -8134,7 +8182,9 @@ export function App({
             ? "New threads"
             : settingsSelectKind === "custom-model-provider"
               ? "Custom model provider"
-              : "Text generation model";
+              : settingsSelectKind === "git-model-provider"
+                ? "Text generation provider"
+                : "Text generation model";
   const settingsSelectPopupWidth = Math.max(
     14,
     settingsSelectItems.reduce(
@@ -9025,15 +9075,28 @@ export function App({
                             ) : null
                           }
                           control={
-                            <ToolbarButton
-                              label={`${selectedGitTextGenerationModelLabel} ▾`}
-                              surface="inset"
-                              active={
-                                overlayMenu === "settings-select" &&
-                                settingsSelectKind === "git-model"
-                              }
-                              onPress={(event) => openSettingsSelectMenu("git-model", event)}
-                            />
+                            <box style={{ flexDirection: "row", alignItems: "center" }}>
+                              <ToolbarButton
+                                label={`${selectedGitTextGenerationProviderLabel} ▾`}
+                                surface="inset"
+                                active={
+                                  overlayMenu === "settings-select" &&
+                                  settingsSelectKind === "git-model-provider"
+                                }
+                                onPress={(event) =>
+                                  openSettingsSelectMenu("git-model-provider", event)
+                                }
+                              />
+                              <ToolbarButton
+                                label={`${selectedGitTextGenerationModelLabel} ▾`}
+                                surface="inset"
+                                active={
+                                  overlayMenu === "settings-select" &&
+                                  settingsSelectKind === "git-model"
+                                }
+                                onPress={(event) => openSettingsSelectMenu("git-model", event)}
+                              />
+                            </box>
                           }
                         />
                         <SettingsRow
