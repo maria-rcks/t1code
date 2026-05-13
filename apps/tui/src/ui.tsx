@@ -63,6 +63,7 @@ import {
   MAX_CUSTOM_MODEL_LENGTH,
   MODEL_PROVIDER_SETTINGS,
   normalizeAppSettings,
+  normalizeCustomModelSlugs,
   patchCustomModels,
   sortProjectsForSidebar,
   sortThreadsForSidebar,
@@ -3413,10 +3414,18 @@ export function App({
   const userMessageBubbleWidth = resolveUserMessageBubbleWidth(mainPanelColumns);
   const customModelsByProvider = useMemo(
     () => ({
-      codex: getCustomModelsForProvider(appSettings, "codex"),
-      claudeAgent: getCustomModelsForProvider(appSettings, "claudeAgent"),
+      codex:
+        serverSettings?.providers.codex.customModels ??
+        getCustomModelsForProvider(appSettings, "codex"),
+      claudeAgent:
+        serverSettings?.providers.claudeAgent.customModels ??
+        getCustomModelsForProvider(appSettings, "claudeAgent"),
     }),
-    [appSettings],
+    [
+      appSettings,
+      serverSettings?.providers.claudeAgent.customModels,
+      serverSettings?.providers.codex.customModels,
+    ],
   );
   const providerSnapshots = serverConfig?.providerInstances ?? EMPTY_PROVIDER_SNAPSHOTS;
   const providerModelOptionsByProvider = useMemo(
@@ -3466,8 +3475,8 @@ export function App({
   );
   const gitTextGenerationModelOptions = useMemo(
     () =>
-      getAppModelOptions("codex", appSettings.customCodexModels, appSettings.textGenerationModel),
-    [appSettings.customCodexModels, appSettings.textGenerationModel],
+      getAppModelOptions("codex", customModelsByProvider.codex, appSettings.textGenerationModel),
+    [appSettings.textGenerationModel, customModelsByProvider.codex],
   );
   const currentGitTextGenerationModel =
     appSettings.textGenerationModel ?? DEFAULT_GIT_TEXT_GENERATION_MODEL;
@@ -3601,7 +3610,7 @@ export function App({
     gitTextGenerationModelOptions.find((option) => option.slug === currentGitTextGenerationModel)
       ?.name ?? currentGitTextGenerationModel;
   const totalCustomModels =
-    appSettings.customCodexModels.length + appSettings.customClaudeModels.length;
+    customModelsByProvider.codex.length + customModelsByProvider.claudeAgent.length;
   const providerInstallValues = {
     codexBinaryPath: serverSettings?.providers.codex.binaryPath ?? appSettings.codexBinaryPath,
     codexHomePath: serverSettings?.providers.codex.homePath ?? appSettings.codexHomePath,
@@ -3616,7 +3625,7 @@ export function App({
     DEFAULT_SERVER_SETTINGS.providers.claudeAgent.binaryPath;
   const isInstallSettingsDirty = isCodexInstallSettingsDirty || isClaudeInstallSettingsDirty;
   const savedCustomModelRows = MODEL_PROVIDER_SETTINGS.flatMap((providerSettings) =>
-    getCustomModelsForProvider(appSettings, providerSettings.provider).map((slug) => ({
+    customModelsByProvider[providerSettings.provider].map((slug) => ({
       key: `${providerSettings.provider}:${slug}`,
       provider: providerSettings.provider,
       providerTitle: providerSettings.title,
@@ -5719,6 +5728,40 @@ export function App({
 
   function restoreDefaultSettings() {
     setAppSettings(DEFAULT_APP_SETTINGS);
+    updateServerSettings({
+      providers: {
+        codex: {
+          binaryPath: DEFAULT_SERVER_SETTINGS.providers.codex.binaryPath,
+          customModels: DEFAULT_SERVER_SETTINGS.providers.codex.customModels,
+          homePath: DEFAULT_SERVER_SETTINGS.providers.codex.homePath,
+        },
+        claudeAgent: {
+          binaryPath: DEFAULT_SERVER_SETTINGS.providers.claudeAgent.binaryPath,
+          customModels: DEFAULT_SERVER_SETTINGS.providers.claudeAgent.customModels,
+        },
+      },
+    });
+    setServerSettings((current) =>
+      current
+        ? {
+            ...current,
+            providers: {
+              ...current.providers,
+              codex: {
+                ...current.providers.codex,
+                binaryPath: DEFAULT_SERVER_SETTINGS.providers.codex.binaryPath,
+                customModels: DEFAULT_SERVER_SETTINGS.providers.codex.customModels,
+                homePath: DEFAULT_SERVER_SETTINGS.providers.codex.homePath,
+              },
+              claudeAgent: {
+                ...current.providers.claudeAgent,
+                binaryPath: DEFAULT_SERVER_SETTINGS.providers.claudeAgent.binaryPath,
+                customModels: DEFAULT_SERVER_SETTINGS.providers.claudeAgent.customModels,
+              },
+            },
+          }
+        : current,
+    );
     setTuiThemeId(DEFAULT_TUI_THEME_ID);
     setOpenInstallProviders({ codex: false, claudeAgent: false });
     setSelectedCustomModelProvider("codex");
@@ -5731,7 +5774,7 @@ export function App({
 
   function addCustomModel(provider: ProviderKind) {
     const customModelInput = customModelInputByProvider[provider];
-    const customModels = getCustomModelsForProvider(appSettings, provider);
+    const customModels = customModelsByProvider[provider];
     const normalized = normalizeModelSlug(customModelInput, provider);
     if (!normalized) {
       setCustomModelErrorByProvider((current) => ({
@@ -5762,9 +5805,66 @@ export function App({
       return;
     }
 
-    updateAppSettings(patchCustomModels(provider, [...customModels, normalized]));
+    updateProviderCustomModels(provider, [...customModels, normalized]);
     setCustomModelInputByProvider((current) => ({ ...current, [provider]: "" }));
     setCustomModelErrorByProvider((current) => ({ ...current, [provider]: null }));
+  }
+
+  function updateProviderCustomModels(provider: ProviderKind, models: readonly string[]) {
+    const nextModels = normalizeCustomModelSlugs(models, provider);
+    updateAppSettings(patchCustomModels(provider, nextModels));
+    setServerSettings((current) =>
+      current
+        ? {
+            ...current,
+            providers: {
+              ...current.providers,
+              [provider]: {
+                ...current.providers[provider],
+                customModels: nextModels,
+              },
+            },
+          }
+        : current,
+    );
+    updateServerSettings({ providers: { [provider]: { customModels: nextModels } } });
+  }
+
+  function resetProviderCustomModels() {
+    updateAppSettings({
+      customCodexModels: DEFAULT_APP_SETTINGS.customCodexModels,
+      customClaudeModels: DEFAULT_APP_SETTINGS.customClaudeModels,
+    });
+    setServerSettings((current) =>
+      current
+        ? {
+            ...current,
+            providers: {
+              ...current.providers,
+              codex: {
+                ...current.providers.codex,
+                customModels: DEFAULT_SERVER_SETTINGS.providers.codex.customModels,
+              },
+              claudeAgent: {
+                ...current.providers.claudeAgent,
+                customModels: DEFAULT_SERVER_SETTINGS.providers.claudeAgent.customModels,
+              },
+            },
+          }
+        : current,
+    );
+    updateServerSettings({
+      providers: {
+        codex: {
+          customModels: DEFAULT_SERVER_SETTINGS.providers.codex.customModels,
+        },
+        claudeAgent: {
+          customModels: DEFAULT_SERVER_SETTINGS.providers.claudeAgent.customModels,
+        },
+      },
+    });
+    setCustomModelErrorByProvider({});
+    setShowAllCustomModels(false);
   }
 
   function updateCodexInstallSettings(
@@ -5857,12 +5957,10 @@ export function App({
   }
 
   function removeCustomModel(provider: ProviderKind, slug: string) {
-    const customModels = getCustomModelsForProvider(appSettings, provider);
-    updateAppSettings(
-      patchCustomModels(
-        provider,
-        customModels.filter((model) => model !== slug),
-      ),
+    const customModels = customModelsByProvider[provider];
+    updateProviderCustomModels(
+      provider,
+      customModels.filter((model) => model !== slug),
     );
     setCustomModelErrorByProvider((current) => ({ ...current, [provider]: null }));
   }
@@ -8609,16 +8707,7 @@ export function App({
                           }
                           resetAction={
                             totalCustomModels > 0 ? (
-                              <SettingResetButton
-                                onPress={() => {
-                                  updateAppSettings({
-                                    customCodexModels: DEFAULT_APP_SETTINGS.customCodexModels,
-                                    customClaudeModels: DEFAULT_APP_SETTINGS.customClaudeModels,
-                                  });
-                                  setCustomModelErrorByProvider({});
-                                  setShowAllCustomModels(false);
-                                }}
-                              />
+                              <SettingResetButton onPress={resetProviderCustomModels} />
                             ) : null
                           }
                         >
@@ -8693,17 +8782,7 @@ export function App({
                               onPress={() => addCustomModel(selectedCustomModelProvider)}
                             />
                             {totalCustomModels > 0 ? (
-                              <ToolbarButton
-                                label="Reset"
-                                onPress={() => {
-                                  updateAppSettings({
-                                    customCodexModels: DEFAULT_APP_SETTINGS.customCodexModels,
-                                    customClaudeModels: DEFAULT_APP_SETTINGS.customClaudeModels,
-                                  });
-                                  setCustomModelErrorByProvider({});
-                                  setShowAllCustomModels(false);
-                                }}
-                              />
+                              <ToolbarButton label="Reset" onPress={resetProviderCustomModels} />
                             ) : null}
                           </box>
                           {customModelErrorByProvider[selectedCustomModelProvider] ? (
