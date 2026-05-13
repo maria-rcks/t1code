@@ -342,6 +342,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
   session-runtime adapter, adding model-selection/provider-instance inputs,
   structured token-usage contracts, compatibility layer exports, and focused
   lifecycle/event/request tests.
+- Codex provider driver: partially align with upstream `08e6d4cf` by adding
+  the per-instance Codex driver that bundles rich snapshots, app-server session
+  adapters, `codex exec` text generation, shadow-home materialization,
+  continuation identity, and package-maintenance capability enrichment.
 
 ## Remaining upstream groups
 

@@ -1,6 +1,6 @@
 import * as NodeOS from "node:os";
 
-import { type CodexSettings } from "@t3tools/contracts";
+import { ProviderDriverKind, type CodexSettings } from "@t3tools/contracts";
 import { Effect, FileSystem, Path, PlatformError, Schema } from "effect";
 
 import { expandHomePath } from "../../pathExpansion";
@@ -254,3 +254,10 @@ export const materializeCodexShadowHome = Effect.fn("materializeCodexShadowHome"
 
   yield* ensureShadowAuthIsPrivate(fileSystem, effectiveHomePath);
 });
+
+export function codexContinuationIdentity(layout: CodexHomeLayout) {
+  return {
+    driverKind: Schema.decodeUnknownSync(ProviderDriverKind)("codex"),
+    continuationKey: layout.continuationKey,
+  };
+}
