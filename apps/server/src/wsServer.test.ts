@@ -18,6 +18,8 @@ import {
   EventId,
   ORCHESTRATION_WS_CHANNELS,
   ORCHESTRATION_WS_METHODS,
+  ProviderDriverKind,
+  ProviderInstanceId,
   ProviderItemId,
   ThreadId,
   TurnId,
@@ -25,6 +27,7 @@ import {
   WS_METHODS,
   type WebSocketResponse,
   type ProviderRuntimeEvent,
+  type ServerSettings,
   type ServerProvider,
   type ServerProviderStatus,
   type KeybindingsConfig,
@@ -901,6 +904,69 @@ describe("WebSocket Server", () => {
       ]),
     );
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
+  });
+
+  it("responds to server settings RPC methods with redacted provider secrets", async () => {
+    const baseDir = makeTempDir("t3code-state-server-settings-rpc-");
+    const instanceId = ProviderInstanceId.makeUnsafe("codex_secret");
+
+    server = await createTestServer({ cwd: "/my/workspace", baseDir });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const initialResponse = await sendRequest(ws, WS_METHODS.serverGetSettings);
+    expect(initialResponse.error).toBeUndefined();
+    expect(initialResponse.result).toEqual(
+      expect.objectContaining({
+        providers: expect.objectContaining({
+          codex: expect.objectContaining({
+            enabled: true,
+          }),
+        }),
+        providerInstances: {},
+      }),
+    );
+
+    const updateResponse = await sendRequest(ws, WS_METHODS.serverUpdateSettings, {
+      providers: {
+        codex: {
+          binaryPath: "/tmp/custom-codex",
+        },
+      },
+      providerInstances: {
+        [instanceId]: {
+          driver: ProviderDriverKind.makeUnsafe("codex"),
+          displayName: "Secret Codex",
+          environment: [
+            {
+              name: "OPENAI_API_KEY",
+              value: "sk-secret",
+              sensitive: true,
+            },
+          ],
+        },
+      },
+    });
+    expect(updateResponse.error).toBeUndefined();
+    const updated = updateResponse.result as ServerSettings;
+    expect(updated.providers.codex.binaryPath).toBe("/tmp/custom-codex");
+    expect(updated.providerInstances[instanceId]?.environment).toEqual([
+      {
+        name: "OPENAI_API_KEY",
+        value: "",
+        sensitive: true,
+        valueRedacted: true,
+      },
+    ]);
+
+    const readBackResponse = await sendRequest(ws, WS_METHODS.serverGetSettings);
+    expect(readBackResponse.error).toBeUndefined();
+    const readBack = readBackResponse.result as ServerSettings;
+    expect(readBack.providers.codex.binaryPath).toBe("/tmp/custom-codex");
+    expect(readBack.providerInstances[instanceId]?.environment?.[0]?.value).toBe("");
   });
 
   it("bootstraps default keybindings file when missing", async () => {

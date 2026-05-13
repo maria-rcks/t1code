@@ -58,6 +58,7 @@ import { OrchestrationReactor } from "./orchestration/Services/OrchestrationReac
 import { ProviderService } from "./provider/Services/ProviderService";
 import { ProviderHealth } from "./provider/Services/ProviderHealth";
 import { ProviderInstanceRegistry } from "./provider/Services/ProviderInstanceRegistry";
+import { redactServerSettingsForClient, ServerSettingsService } from "./serverSettings";
 import { CheckpointDiffQuery } from "./checkpointing/Services/CheckpointDiffQuery";
 import { clamp } from "effect/Number";
 import { Open, resolveAvailableEditors } from "./open";
@@ -216,7 +217,8 @@ export type ServerCoreRuntimeServices =
   | OrchestrationReactor
   | ProviderService
   | ProviderHealth
-  | ProviderInstanceRegistry;
+  | ProviderInstanceRegistry
+  | ServerSettingsService;
 
 export type ServerRuntimeServices =
   | ServerCoreRuntimeServices
@@ -262,6 +264,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const terminalManager = yield* TerminalManager;
   const keybindingsManager = yield* Keybindings;
   const providerHealth = yield* ProviderHealth;
+  const serverSettings = yield* ServerSettingsService;
   const git = yield* GitCore;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -942,6 +945,16 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           providerInstances,
           availableEditors,
         };
+
+      case WS_METHODS.serverGetSettings:
+        return yield* serverSettings.getSettings.pipe(Effect.map(redactServerSettingsForClient));
+
+      case WS_METHODS.serverUpdateSettings: {
+        const body = stripRequestTag(request.body);
+        return yield* serverSettings
+          .updateSettings(body)
+          .pipe(Effect.map(redactServerSettingsForClient));
+      }
 
       case WS_METHODS.serverUpsertKeybinding: {
         const body = stripRequestTag(request.body);

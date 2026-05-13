@@ -127,6 +127,8 @@ export function createTransportNativeApi(options: NativeApiAdapterOptions): {
     },
     server: {
       getConfig: () => transport.request(WS_METHODS.serverGetConfig),
+      getSettings: () => transport.request(WS_METHODS.serverGetSettings),
+      updateSettings: (patch) => transport.request(WS_METHODS.serverUpdateSettings, patch),
       upsertKeybinding: (input) => transport.request(WS_METHODS.serverUpsertKeybinding, input),
     },
     orchestration: {
