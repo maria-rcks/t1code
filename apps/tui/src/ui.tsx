@@ -55,8 +55,11 @@ import {
   DEFAULT_APP_THEME,
   DEFAULT_DIFF_WORD_WRAP,
   DEFAULT_SIDEBAR_PROJECT_SORT_ORDER,
+  DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT,
   DEFAULT_SIDEBAR_THREAD_SORT_ORDER,
   DEFAULT_TIMESTAMP_FORMAT,
+  MAX_SIDEBAR_THREAD_PREVIEW_COUNT,
+  MIN_SIDEBAR_THREAD_PREVIEW_COUNT,
   buildPendingUserInputAnswers,
   buildGitActionMenuItems,
   buildPlanImplementationPrompt,
@@ -3006,6 +3009,9 @@ export function App({
     cursor: false,
     opencode: false,
   });
+  const [showAllProjectThreads, setShowAllProjectThreads] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [isOpeningKeybindings, setIsOpeningKeybindings] = useState(false);
   const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
   const [prefsReady, setPrefsReady] = useState(false);
@@ -3926,6 +3932,8 @@ export function App({
   const selectedTuiThemeLabel = TUI_THEME_LABELS[tuiThemeId] ?? TUI_THEME_LABELS.default;
   const selectedThreadEnvLabel = defaultThreadEnvMode === "worktree" ? "New worktree" : "Local";
   const addProjectBaseDirectory = serverSettings?.addProjectBaseDirectory ?? "";
+  const sidebarThreadPreviewCount =
+    appSettings.sidebarThreadPreviewCount ?? DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT;
   const composerEnvMenuItems: ComposerEnvMenuItem[] = ENV_MODE_OPTIONS.map((option) => ({
     id: option.value,
     label: option.label,
@@ -4175,6 +4183,9 @@ export function App({
       : []),
     ...(appSettings.sidebarThreadSortOrder !== DEFAULT_SIDEBAR_THREAD_SORT_ORDER
       ? ["Thread sort"]
+      : []),
+    ...(sidebarThreadPreviewCount !== DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT
+      ? ["Visible threads"]
       : []),
     ...(appSettings.diffWordWrap !== DEFAULT_DIFF_WORD_WRAP ? ["Diff line wrapping"] : []),
     ...(assistantStreamingEnabled !== DEFAULT_SERVER_SETTINGS.enableAssistantStreaming
@@ -6203,6 +6214,27 @@ export function App({
         next.delete(key);
       } else {
         next.add(key);
+      }
+      return next;
+    });
+  }
+
+  function updateSidebarThreadPreviewCount(delta: number) {
+    updateAppSettings({
+      sidebarThreadPreviewCount: Math.min(
+        MAX_SIDEBAR_THREAD_PREVIEW_COUNT,
+        Math.max(MIN_SIDEBAR_THREAD_PREVIEW_COUNT, sidebarThreadPreviewCount + delta),
+      ),
+    });
+  }
+
+  function toggleProjectThreadPreview(projectId: string) {
+    setShowAllProjectThreads((current) => {
+      const next = new Set(current);
+      if (next.has(projectId)) {
+        next.delete(projectId);
+      } else {
+        next.add(projectId);
       }
       return next;
     });
@@ -8675,6 +8707,12 @@ export function App({
 
             {sortedProjects.map((project) => {
               const projectThreads = threadsByProject.get(project.id) ?? [];
+              const showAllThreadsForProject = showAllProjectThreads.has(project.id);
+              const hasOverflowingThreads = projectThreads.length > sidebarThreadPreviewCount;
+              const visibleProjectThreads =
+                showAllThreadsForProject || !hasOverflowingThreads
+                  ? projectThreads
+                  : projectThreads.slice(0, sidebarThreadPreviewCount);
               const orderedProjectThreadIds = projectThreads.map((thread) => thread.id);
               const isProjectExpanded = expandedProjectIds.has(project.id);
               const isProjectActive = project.id === activeProjectId;
@@ -8761,97 +8799,115 @@ export function App({
                       }}
                     >
                       {projectThreads.length > 0 ? (
-                        projectThreads.map((thread) => {
-                          const status = threadStatus(thread, {
-                            forceUnread: locallyUnreadThreadIds.has(thread.id),
-                            locallyVisitedAt: locallyVisitedThreads[thread.id],
-                          });
-                          const isActive = thread.id === activeThreadId;
-                          const isSelected = selectedThreadIds.has(thread.id);
-                          return (
-                            <SidebarRow
-                              key={thread.id}
-                              active={isActive}
-                              selected={isSelected}
-                              activeBackgroundColor={PALETTE.controlActiveStrong}
-                              compact
-                              onPress={(event) => {
-                                closeSidebarContextMenu();
-                                handleThreadClick(
-                                  event,
-                                  project.id,
-                                  thread.id,
-                                  orderedProjectThreadIds,
-                                );
-                              }}
-                              onSecondaryPress={(event) => {
-                                openThreadContextMenu(project.id, thread.id, event);
-                              }}
-                            >
-                              <box
-                                style={{
-                                  width: 1,
-                                  marginRight: 1,
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  flexShrink: 0,
+                        <>
+                          {visibleProjectThreads.map((thread) => {
+                            const status = threadStatus(thread, {
+                              forceUnread: locallyUnreadThreadIds.has(thread.id),
+                              locallyVisitedAt: locallyVisitedThreads[thread.id],
+                            });
+                            const isActive = thread.id === activeThreadId;
+                            const isSelected = selectedThreadIds.has(thread.id);
+                            return (
+                              <SidebarRow
+                                key={thread.id}
+                                active={isActive}
+                                selected={isSelected}
+                                activeBackgroundColor={PALETTE.controlActiveStrong}
+                                compact
+                                onPress={(event) => {
+                                  closeSidebarContextMenu();
+                                  handleThreadClick(
+                                    event,
+                                    project.id,
+                                    thread.id,
+                                    orderedProjectThreadIds,
+                                  );
+                                }}
+                                onSecondaryPress={(event) => {
+                                  openThreadContextMenu(project.id, thread.id, event);
                                 }}
                               >
-                                {status ? (
+                                <box
+                                  style={{
+                                    width: 1,
+                                    marginRight: 1,
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {status ? (
+                                    <text
+                                      content="●"
+                                      style={{
+                                        fg: resolveThreadStatusDotColor(status, sidebarPulseTick),
+                                        flexShrink: 0,
+                                      }}
+                                    />
+                                  ) : null}
+                                </box>
+                                <box
+                                  style={{
+                                    width: SIDEBAR_THREAD_TITLE_WIDTH,
+                                    flexShrink: 0,
+                                    overflow: "hidden",
+                                    height: 1,
+                                  }}
+                                >
                                   <text
-                                    content="●"
+                                    content={truncateTitleForDisplay(
+                                      thread.title,
+                                      SIDEBAR_THREAD_TITLE_WIDTH,
+                                    )}
                                     style={{
-                                      fg: resolveThreadStatusDotColor(status, sidebarPulseTick),
+                                      fg: isSelected
+                                        ? ACTIVE_TUI_THEME.colors.selectedText
+                                        : isActive
+                                          ? PALETTE.text
+                                          : PALETTE.muted,
+                                    }}
+                                  />
+                                </box>
+                                <box
+                                  style={{
+                                    width: SIDEBAR_THREAD_TIMESTAMP_WIDTH,
+                                    marginLeft: SIDEBAR_THREAD_TIMESTAMP_GAP,
+                                    flexShrink: 0,
+                                    justifyContent: "flex-end",
+                                  }}
+                                >
+                                  <text
+                                    content={formatRelativeTime(thread.updatedAt)}
+                                    style={{
+                                      fg: isSelected
+                                        ? ACTIVE_TUI_THEME.colors.selectedText
+                                        : isActive
+                                          ? PALETTE.muted
+                                          : PALETTE.subtle,
                                       flexShrink: 0,
                                     }}
                                   />
-                                ) : null}
-                              </box>
-                              <box
-                                style={{
-                                  width: SIDEBAR_THREAD_TITLE_WIDTH,
-                                  flexShrink: 0,
-                                  overflow: "hidden",
-                                  height: 1,
-                                }}
-                              >
-                                <text
-                                  content={truncateTitleForDisplay(
-                                    thread.title,
-                                    SIDEBAR_THREAD_TITLE_WIDTH,
-                                  )}
-                                  style={{
-                                    fg: isSelected
-                                      ? ACTIVE_TUI_THEME.colors.selectedText
-                                      : isActive
-                                        ? PALETTE.text
-                                        : PALETTE.muted,
-                                  }}
-                                />
-                              </box>
-                              <box
-                                style={{
-                                  width: SIDEBAR_THREAD_TIMESTAMP_WIDTH,
-                                  marginLeft: SIDEBAR_THREAD_TIMESTAMP_GAP,
-                                  flexShrink: 0,
-                                  justifyContent: "flex-end",
-                                }}
-                              >
-                                <text
-                                  content={formatRelativeTime(thread.updatedAt)}
-                                  style={{
-                                    fg: isSelected
-                                      ? ACTIVE_TUI_THEME.colors.selectedText
-                                      : isActive
-                                        ? PALETTE.muted
-                                        : PALETTE.subtle,
-                                    flexShrink: 0,
-                                  }}
-                                />
-                              </box>
+                                </box>
+                              </SidebarRow>
+                            );
+                          })}
+                          {hasOverflowingThreads ? (
+                            <SidebarRow
+                              compact
+                              suppressHighlight
+                              onPress={() => toggleProjectThreadPreview(project.id)}
+                            >
+                              <text
+                                content={
+                                  showAllThreadsForProject
+                                    ? "Show fewer"
+                                    : `Show ${projectThreads.length - visibleProjectThreads.length} more`
+                                }
+                                style={{ fg: PALETTE.subtle }}
+                              />
                             </SidebarRow>
-                          );
-                        })
+                          ) : null}
+                        </>
                       ) : (
                         <box
                           style={{
@@ -9151,6 +9207,44 @@ export function App({
                                 })
                               }
                             />
+                          }
+                        />
+                        <SettingsRow
+                          title="Visible threads"
+                          description="Limit how many threads are shown for each expanded project."
+                          status={`${sidebarThreadPreviewCount} per project`}
+                          resetAction={
+                            sidebarThreadPreviewCount !== DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT ? (
+                              <SettingResetButton
+                                onPress={() =>
+                                  updateAppSettings({
+                                    sidebarThreadPreviewCount: DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT,
+                                  })
+                                }
+                              />
+                            ) : null
+                          }
+                          control={
+                            <box style={{ flexDirection: "row", alignItems: "center" }}>
+                              <ToolbarButton
+                                label="-"
+                                disabled={
+                                  sidebarThreadPreviewCount <= MIN_SIDEBAR_THREAD_PREVIEW_COUNT
+                                }
+                                onPress={() => updateSidebarThreadPreviewCount(-1)}
+                              />
+                              <text
+                                content={String(sidebarThreadPreviewCount)}
+                                style={{ fg: PALETTE.text, marginLeft: 1, marginRight: 1 }}
+                              />
+                              <ToolbarButton
+                                label="+"
+                                disabled={
+                                  sidebarThreadPreviewCount >= MAX_SIDEBAR_THREAD_PREVIEW_COUNT
+                                }
+                                onPress={() => updateSidebarThreadPreviewCount(1)}
+                              />
+                            </box>
                           }
                         />
                         <SettingsRow
