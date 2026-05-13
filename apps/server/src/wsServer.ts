@@ -27,6 +27,7 @@ import {
   type WsResponse as WsResponseMessage,
   WsResponse,
   type WsPushEnvelopeBase,
+  type ServerProvider,
 } from "@t3tools/contracts";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import {
@@ -56,6 +57,7 @@ import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnap
 import { OrchestrationReactor } from "./orchestration/Services/OrchestrationReactor";
 import { ProviderService } from "./provider/Services/ProviderService";
 import { ProviderHealth } from "./provider/Services/ProviderHealth";
+import { ProviderInstanceRegistry } from "./provider/Services/ProviderInstanceRegistry";
 import { CheckpointDiffQuery } from "./checkpointing/Services/CheckpointDiffQuery";
 import { clamp } from "effect/Number";
 import { Open, resolveAvailableEditors } from "./open";
@@ -213,7 +215,8 @@ export type ServerCoreRuntimeServices =
   | CheckpointDiffQuery
   | OrchestrationReactor
   | ProviderService
-  | ProviderHealth;
+  | ProviderHealth
+  | ProviderInstanceRegistry;
 
 export type ServerRuntimeServices =
   | ServerCoreRuntimeServices
@@ -624,20 +627,53 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const projectionReadModelQuery = yield* ProjectionSnapshotQuery;
   const checkpointDiffQuery = yield* CheckpointDiffQuery;
   const orchestrationReactor = yield* OrchestrationReactor;
+  const providerInstanceRegistry = yield* ProviderInstanceRegistry;
   const { openInEditor } = yield* Open;
 
   const subscriptionsScope = yield* Scope.make("sequential");
   yield* Effect.addFinalizer(() => Scope.close(subscriptionsScope, Exit.void));
+
+  const getProviderInstances = Effect.gen(function* () {
+    const [instances, unavailable] = yield* Effect.all(
+      [providerInstanceRegistry.listInstances, providerInstanceRegistry.listUnavailable] as const,
+      { concurrency: "unbounded" },
+    );
+    const snapshots = yield* Effect.forEach(
+      instances,
+      (instance) => instance.snapshot.getSnapshot,
+      { concurrency: "unbounded" },
+    );
+    return [...snapshots, ...unavailable] satisfies ReadonlyArray<ServerProvider>;
+  });
 
   yield* Stream.runForEach(orchestrationEngine.streamDomainEvents, (event) =>
     pushBus.publishAll(ORCHESTRATION_WS_CHANNELS.domainEvent, event),
   ).pipe(Effect.forkIn(subscriptionsScope));
 
   yield* Stream.runForEach(keybindingsManager.streamChanges, (event) =>
-    pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
-      issues: event.issues,
-      providers: providerStatuses,
-    }),
+    getProviderInstances.pipe(
+      Effect.flatMap((providerInstances) =>
+        pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
+          issues: event.issues,
+          providers: providerStatuses,
+          providerInstances,
+        }),
+      ),
+    ),
+  ).pipe(Effect.forkIn(subscriptionsScope));
+
+  yield* Stream.runForEach(providerInstanceRegistry.streamChanges, () =>
+    Effect.all([keybindingsManager.loadConfigState, getProviderInstances] as const, {
+      concurrency: "unbounded",
+    }).pipe(
+      Effect.flatMap(([keybindingsConfig, providerInstances]) =>
+        pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
+          issues: keybindingsConfig.issues,
+          providers: providerStatuses,
+          providerInstances,
+        }),
+      ),
+    ),
   ).pipe(Effect.forkIn(subscriptionsScope));
 
   yield* Scope.provide(orchestrationReactor.start, subscriptionsScope);
@@ -896,12 +932,14 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
       case WS_METHODS.serverGetConfig:
         const keybindingsConfig = yield* keybindingsManager.loadConfigState;
+        const providerInstances = yield* getProviderInstances;
         return {
           cwd,
           keybindingsConfigPath,
           keybindings: keybindingsConfig.keybindings,
           issues: keybindingsConfig.issues,
           providers: providerStatuses,
+          providerInstances,
           availableEditors,
         };
 

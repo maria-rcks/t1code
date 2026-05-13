@@ -25,6 +25,7 @@ import {
   WS_METHODS,
   type WebSocketResponse,
   type ProviderRuntimeEvent,
+  type ServerProvider,
   type ServerProviderStatus,
   type KeybindingsConfig,
   type ResolvedKeybindingsConfig,
@@ -886,8 +887,19 @@ describe("WebSocket Server", () => {
       keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
       issues: [],
       providers: defaultProviderStatuses,
+      providerInstances: expect.any(Array),
       availableEditors: expect.any(Array),
     });
+    expect(
+      (response.result as { providerInstances: ReadonlyArray<ServerProvider> }).providerInstances,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          instanceId: "codex",
+          driver: "codex",
+        }),
+      ]),
+    );
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
   });
 
@@ -911,6 +923,7 @@ describe("WebSocket Server", () => {
       keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
       issues: [],
       providers: defaultProviderStatuses,
+      providerInstances: expect.any(Array),
       availableEditors: expect.any(Array),
     });
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
@@ -947,6 +960,7 @@ describe("WebSocket Server", () => {
         },
       ],
       providers: defaultProviderStatuses,
+      providerInstances: expect.any(Array),
       availableEditors: expect.any(Array),
     });
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
@@ -982,6 +996,7 @@ describe("WebSocket Server", () => {
       keybindings: ResolvedKeybindingsConfig;
       issues: Array<{ kind: string; index?: number; message: string }>;
       providers: ReadonlyArray<ServerProviderStatus>;
+      providerInstances: ReadonlyArray<ServerProvider>;
       availableEditors: unknown;
     };
     expect(result.cwd).toBe("/my/workspace");
@@ -1002,6 +1017,7 @@ describe("WebSocket Server", () => {
     expect(result.keybindings.some((entry) => entry.command === "terminal.toggle")).toBe(true);
     expect(result.keybindings.some((entry) => entry.command === "terminal.new")).toBe(true);
     expect(result.providers).toEqual(defaultProviderStatuses);
+    expect(result.providerInstances).toEqual(expect.any(Array));
     expectAvailableEditors(result.availableEditors);
   });
 
@@ -1030,6 +1046,7 @@ describe("WebSocket Server", () => {
     expect(malformedPush.data).toEqual({
       issues: [{ kind: "keybindings.malformed-config", message: expect.any(String) }],
       providers: defaultProviderStatuses,
+      providerInstances: expect.any(Array),
     });
 
     const successPush = await rewriteKeybindingsAndWaitForPush(
@@ -1038,7 +1055,11 @@ describe("WebSocket Server", () => {
       "[]",
       (push) => Array.isArray(push.data.issues) && push.data.issues.length === 0,
     );
-    expect(successPush.data).toEqual({ issues: [], providers: defaultProviderStatuses });
+    expect(successPush.data).toEqual({
+      issues: [],
+      providers: defaultProviderStatuses,
+      providerInstances: expect.any(Array),
+    });
   });
 
   it("routes shell.openInEditor through the injected open service", async () => {
@@ -1097,6 +1118,7 @@ describe("WebSocket Server", () => {
       keybindings: compileKeybindings(persistedConfig),
       issues: [],
       providers: defaultProviderStatuses,
+      providerInstances: expect.any(Array),
       availableEditors: expect.any(Array),
     });
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
@@ -1145,6 +1167,7 @@ describe("WebSocket Server", () => {
       keybindings: compileKeybindings(persistedConfig),
       issues: [],
       providers: defaultProviderStatuses,
+      providerInstances: expect.any(Array),
       availableEditors: expect.any(Array),
     });
     expectAvailableEditors(
