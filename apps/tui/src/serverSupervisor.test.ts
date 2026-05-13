@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { resolveAttachedServerConnection, startServerSupervisor } from "./serverSupervisor";
 
+const expectedPackagedBunCommand = () => (process.versions.bun ? process.execPath : "bun");
+
 class FakeChildProcess extends EventEmitter {
   killed = false;
   stdout = new EventEmitter();
@@ -158,7 +160,7 @@ describe("startServerSupervisor", () => {
       },
     );
 
-    expect((spawnImpl as any).mock.calls[0][0]).toBe("bun");
+    expect((spawnImpl as any).mock.calls[0][0]).toBe(expectedPackagedBunCommand());
     expect((spawnImpl as any).mock.calls[0][1][0]).toContain("/apps/server/dist/index.mjs");
 
     server.stop();
@@ -180,7 +182,7 @@ describe("startServerSupervisor", () => {
       },
     );
 
-    expect((spawnImpl as any).mock.calls[0][0]).toBe("bun");
+    expect((spawnImpl as any).mock.calls[0][0]).toBe(expectedPackagedBunCommand());
     expect((spawnImpl as any).mock.calls[0][1][0]).toContain("/server/index.js");
 
     server.stop();
