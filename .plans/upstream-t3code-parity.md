@@ -337,6 +337,11 @@ removing those fork surfaces unless a replacement has been implemented and wired
   instructions, thread open/resume fallback handling, turn-start parameter
   construction, and focused runtime regression tests adapted to this fork's
   current runtime-mode contract.
+- Codex adapter runtime migration: partially align with upstream `08e6d4cf`
+  by replacing the manager-backed Codex adapter with the per-instance
+  session-runtime adapter, adding model-selection/provider-instance inputs,
+  structured token-usage contracts, compatibility layer exports, and focused
+  lifecycle/event/request tests.
 
 ## Remaining upstream groups
 
