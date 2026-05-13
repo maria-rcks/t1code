@@ -35,6 +35,7 @@ export const SidebarThreadSortOrder = Schema.Literals(["updated_at", "created_at
 export type SidebarThreadSortOrder = typeof SidebarThreadSortOrder.Type;
 export const DEFAULT_SIDEBAR_THREAD_SORT_ORDER: SidebarThreadSortOrder = "updated_at";
 export const DEFAULT_DIFF_IGNORE_WHITESPACE = true;
+export const DEFAULT_DIFF_WORD_WRAP = false;
 export const MIN_SIDEBAR_THREAD_PREVIEW_COUNT = 1;
 export const MAX_SIDEBAR_THREAD_PREVIEW_COUNT = 15;
 export const SidebarThreadPreviewCount = Schema.Int.check(
@@ -84,6 +85,7 @@ export const AppSettingsSchema = Schema.Struct({
   defaultThreadEnvMode: AppThreadEnvMode.pipe(withDefaults(() => "local" as const)),
   confirmThreadDelete: Schema.Boolean.pipe(withDefaults(() => true)),
   diffIgnoreWhitespace: Schema.Boolean.pipe(withDefaults(() => DEFAULT_DIFF_IGNORE_WHITESPACE)),
+  diffWordWrap: Schema.Boolean.pipe(withDefaults(() => DEFAULT_DIFF_WORD_WRAP)),
   enableAssistantStreaming: Schema.Boolean.pipe(withDefaults(() => false)),
   timestampFormat: TimestampFormat.pipe(withDefaults(() => DEFAULT_TIMESTAMP_FORMAT)),
   sidebarProjectSortOrder: SidebarProjectSortOrder.pipe(

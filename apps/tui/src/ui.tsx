@@ -53,6 +53,7 @@ import {
 import {
   DEFAULT_APP_SETTINGS,
   DEFAULT_APP_THEME,
+  DEFAULT_DIFF_WORD_WRAP,
   DEFAULT_SIDEBAR_PROJECT_SORT_ORDER,
   DEFAULT_SIDEBAR_THREAD_SORT_ORDER,
   DEFAULT_TIMESTAMP_FORMAT,
@@ -4160,6 +4161,7 @@ export function App({
     ...(appSettings.sidebarThreadSortOrder !== DEFAULT_SIDEBAR_THREAD_SORT_ORDER
       ? ["Thread sort"]
       : []),
+    ...(appSettings.diffWordWrap !== DEFAULT_DIFF_WORD_WRAP ? ["Diff line wrapping"] : []),
     ...(assistantStreamingEnabled !== DEFAULT_SERVER_SETTINGS.enableAssistantStreaming
       ? ["Assistant output"]
       : []),
@@ -9106,6 +9108,32 @@ export function App({
                           }
                         />
                         <SettingsRow
+                          title="Diff line wrapping"
+                          description="Set whether the diff panel wraps long lines by default."
+                          status={appSettings.diffWordWrap ? "Wrapped" : "Unwrapped"}
+                          resetAction={
+                            appSettings.diffWordWrap !== DEFAULT_DIFF_WORD_WRAP ? (
+                              <SettingResetButton
+                                onPress={() =>
+                                  updateAppSettings({
+                                    diffWordWrap: DEFAULT_DIFF_WORD_WRAP,
+                                  })
+                                }
+                              />
+                            ) : null
+                          }
+                          control={
+                            <TogglePill
+                              checked={appSettings.diffWordWrap}
+                              onPress={() =>
+                                updateAppSettings({
+                                  diffWordWrap: !appSettings.diffWordWrap,
+                                })
+                              }
+                            />
+                          }
+                        />
+                        <SettingsRow
                           title="Assistant output"
                           description="Show token-by-token output while a response is in progress."
                           status={assistantStreamingEnabled ? "Streaming" : "Buffered"}
@@ -9679,7 +9707,7 @@ export function App({
                                 syntaxStyle={DIFF_SYNTAX}
                                 view={diffView}
                                 showLineNumbers
-                                wrapMode="none"
+                                wrapMode={appSettings.diffWordWrap ? "char" : "none"}
                                 {...(file.filetype ? { filetype: file.filetype } : {})}
                                 addedBg={ACTIVE_TUI_THEME.diffViewer.addedBg}
                                 removedBg={ACTIVE_TUI_THEME.diffViewer.removedBg}
