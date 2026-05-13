@@ -51,6 +51,11 @@ import { makeSqlitePersistenceLive, SqlitePersistenceMemory } from "./persistenc
 import { SqlClient, SqlError } from "effect/unstable/sql";
 import { ProviderService, type ProviderServiceShape } from "./provider/Services/ProviderService";
 import { ProviderHealth, type ProviderHealthShape } from "./provider/Services/ProviderHealth";
+import {
+  ProviderInstanceRegistry,
+  type ProviderInstanceRegistryShape,
+} from "./provider/Services/ProviderInstanceRegistry.ts";
+import type { ProviderInstance } from "./provider/ProviderDriver.ts";
 import { Open, type OpenShape } from "./open";
 import { GitManager, type GitManagerShape } from "./git/Services/GitManager.ts";
 import type { GitCoreShape } from "./git/Services/GitCore.ts";
@@ -495,6 +500,7 @@ describe("WebSocket Server", () => {
       baseDir?: string;
       staticDir?: string;
       providerLayer?: Layer.Layer<ProviderService, never>;
+      providerInstanceRegistry?: ProviderInstanceRegistryShape;
       providerHealth?: ProviderHealthShape;
       open?: OpenShape;
       gitManager?: GitManagerShape;
@@ -549,10 +555,14 @@ describe("WebSocket Server", () => {
       ),
       runtimeOverrides,
     );
+    const providerInstanceRegistryLayer = options.providerInstanceRegistry
+      ? Layer.succeed(ProviderInstanceRegistry, options.providerInstanceRegistry)
+      : ProviderInstanceRegistryHydrationLive;
+
     const dependenciesLayer = Layer.empty.pipe(
       Layer.provideMerge(runtimeLayer),
       Layer.provideMerge(providerHealthLayer),
-      Layer.provideMerge(ProviderInstanceRegistryHydrationLive),
+      Layer.provideMerge(providerInstanceRegistryLayer),
       Layer.provideMerge(ProviderEventLoggersLive),
       Layer.provideMerge(ServerSettingsLive),
       Layer.provideMerge(openLayer),
@@ -904,6 +914,99 @@ describe("WebSocket Server", () => {
       ]),
     );
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
+  });
+
+  it("responds to server.refreshProviders", async () => {
+    let refreshCount = 0;
+    const initialSnapshot: ServerProvider = {
+      instanceId: ProviderInstanceId.makeUnsafe("codex"),
+      driver: ProviderDriverKind.makeUnsafe("codex"),
+      enabled: true,
+      installed: true,
+      version: "1.0.0",
+      status: "ready",
+      auth: { status: "authenticated" },
+      checkedAt: "2026-01-01T00:00:00.000Z",
+      availability: "available",
+      models: [],
+      slashCommands: [],
+      skills: [],
+    };
+    const refreshedSnapshot: ServerProvider = {
+      ...initialSnapshot,
+      checkedAt: "2026-01-01T00:01:00.000Z",
+    };
+    const providerInstance = {
+      instanceId: ProviderInstanceId.makeUnsafe("codex"),
+      driverKind: ProviderDriverKind.makeUnsafe("codex"),
+      continuationIdentity: {
+        driverKind: ProviderDriverKind.makeUnsafe("codex"),
+        continuationKey: "codex:instance:codex",
+      },
+      displayName: undefined,
+      enabled: true,
+      snapshot: {
+        maintenanceCapabilities: {},
+        getSnapshot: Effect.succeed(initialSnapshot),
+        refresh: Effect.sync(() => {
+          refreshCount += 1;
+          return refreshedSnapshot;
+        }),
+        streamChanges: Stream.empty,
+      },
+      adapter: {
+        provider: "codex",
+        capabilities: { sessionModelSwitch: "unsupported" },
+        startSession: () => Effect.die("not implemented"),
+        sendTurn: () => Effect.die("not implemented"),
+        interruptTurn: () => Effect.void,
+        respondToRequest: () => Effect.void,
+        respondToUserInput: () => Effect.void,
+        stopSession: () => Effect.void,
+        listSessions: () => Effect.succeed([]),
+        hasSession: () => Effect.succeed(false),
+        readThread: () => Effect.die("not implemented"),
+        rollbackThread: () => Effect.die("not implemented"),
+        stopAll: () => Effect.void,
+        streamEvents: Stream.empty,
+      },
+      textGeneration: {
+        generateCommitMessage: () => Effect.die("not implemented"),
+        generatePrContent: () => Effect.die("not implemented"),
+        generateBranchName: () => Effect.die("not implemented"),
+        generateThreadTitle: () => Effect.die("not implemented"),
+      },
+    } as unknown as ProviderInstance;
+    const registry: ProviderInstanceRegistryShape = {
+      getInstance: (instanceId) =>
+        Effect.succeed(instanceId === providerInstance.instanceId ? providerInstance : undefined),
+      listInstances: Effect.succeed([providerInstance]),
+      listUnavailable: Effect.succeed([]),
+      streamChanges: Stream.empty,
+      subscribeChanges: PubSub.unbounded<void>().pipe(Effect.flatMap(PubSub.subscribe)),
+    };
+
+    server = await createTestServer({ cwd: "/my/workspace", providerInstanceRegistry: registry });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.serverRefreshProviders, {
+      instanceId: "codex",
+    });
+    expect(response.error).toBeUndefined();
+    expect((response.result as { providers: ReadonlyArray<ServerProvider> }).providers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          instanceId: "codex",
+          driver: "codex",
+          checkedAt: "2026-01-01T00:01:00.000Z",
+        }),
+      ]),
+    );
+    expect(refreshCount).toBe(1);
   });
 
   it("responds to server settings RPC methods with redacted provider secrets", async () => {

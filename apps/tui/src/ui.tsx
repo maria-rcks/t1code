@@ -1028,6 +1028,11 @@ function formatRelativeTime(iso: string | null | undefined): string {
   return `${Math.floor(hours / 24)}d`;
 }
 
+function formatCheckedRelativeTime(iso: string | null | undefined): string {
+  const relativeTime = formatRelativeTime(iso);
+  return relativeTime === "now" ? "Checked now" : `Checked ${relativeTime} ago`;
+}
+
 const timestampFormatterCache = new Map<TimestampFormat, Intl.DateTimeFormat>();
 
 function getTimestampFormatter(timestampFormat: TimestampFormat): Intl.DateTimeFormat {
@@ -3159,6 +3164,7 @@ export function App({
   >({});
   const [showAllCustomModels, setShowAllCustomModels] = useState(false);
   const [showAllModelPreferenceRows, setShowAllModelPreferenceRows] = useState(false);
+  const [isRefreshingProviders, setIsRefreshingProviders] = useState(false);
   const [openInstallProviders, setOpenInstallProviders] = useState<
     Record<InstallProviderKey, boolean>
   >({
@@ -3207,6 +3213,33 @@ export function App({
         });
     },
     [api, logger],
+  );
+
+  const refreshProviderSnapshots = useCallback(
+    async (instanceId?: ProviderInstanceId) => {
+      if (!api || isRefreshingProviders) return;
+      setIsRefreshingProviders(true);
+      try {
+        const payload = await api.server.refreshProviders(instanceId ? { instanceId } : undefined);
+        setServerConfig((current) =>
+          current
+            ? {
+                ...current,
+                providerInstances: payload.providers,
+              }
+            : current,
+        );
+        setStatus("Providers refreshed");
+      } catch (error) {
+        logger.log("server.providers.refreshFailed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        setStatus("Provider refresh failed");
+      } finally {
+        setIsRefreshingProviders(false);
+      }
+    },
+    [api, isRefreshingProviders, logger],
   );
   const updateAssistantStreamingSetting = useCallback(
     (enableAssistantStreaming: boolean) => {
@@ -3909,6 +3942,13 @@ export function App({
     [appSettings, serverSettings],
   );
   const providerSnapshots = serverConfig?.providerInstances ?? EMPTY_PROVIDER_SNAPSHOTS;
+  const providerLastCheckedAt =
+    providerSnapshots.length > 0
+      ? providerSnapshots.reduce(
+          (latest, provider) => (provider.checkedAt > latest ? provider.checkedAt : latest),
+          providerSnapshots[0]!.checkedAt,
+        )
+      : null;
   const modelMenuEntries = useMemo<ReadonlyArray<ModelMenuInstanceEntry>>(() => {
     const entries = sortProviderInstanceEntries(deriveProviderInstanceEntries(providerSnapshots))
       .map((entry) => {
@@ -10322,10 +10362,24 @@ export function App({
                         <SettingsRow
                           title="Provider installs"
                           description="Override the CLI used for new sessions."
+                          status={
+                            providerLastCheckedAt
+                              ? formatCheckedRelativeTime(providerLastCheckedAt)
+                              : null
+                          }
                           resetAction={
                             isInstallSettingsDirty ? (
                               <SettingResetButton onPress={resetProviderInstallSettings} />
                             ) : null
+                          }
+                          control={
+                            <ToolbarButton
+                              label={isRefreshingProviders ? "Refreshing..." : "Refresh"}
+                              disabled={!api || isRefreshingProviders}
+                              onPress={() => {
+                                void refreshProviderSnapshots();
+                              }}
+                            />
                           }
                         >
                           {INSTALL_PROVIDER_SETTINGS.map((providerSettings) => {

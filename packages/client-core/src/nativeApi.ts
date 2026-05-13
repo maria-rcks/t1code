@@ -5,6 +5,7 @@ import {
   ORCHESTRATION_WS_CHANNELS,
   ORCHESTRATION_WS_METHODS,
   type ServerConfigUpdatedPayload,
+  type ServerRefreshProvidersInput,
   WS_CHANNELS,
   WS_METHODS,
   type WsWelcomePayload,
@@ -127,6 +128,8 @@ export function createTransportNativeApi(options: NativeApiAdapterOptions): {
     },
     server: {
       getConfig: () => transport.request(WS_METHODS.serverGetConfig),
+      refreshProviders: (input?: ServerRefreshProvidersInput) =>
+        transport.request(WS_METHODS.serverRefreshProviders, input),
       getSettings: () => transport.request(WS_METHODS.serverGetSettings),
       updateSettings: (patch) => transport.request(WS_METHODS.serverUpdateSettings, patch),
       upsertKeybinding: (input) => transport.request(WS_METHODS.serverUpsertKeybinding, input),

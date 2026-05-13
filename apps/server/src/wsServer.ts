@@ -264,6 +264,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const terminalManager = yield* TerminalManager;
   const keybindingsManager = yield* Keybindings;
   const providerHealth = yield* ProviderHealth;
+  const providerInstanceRegistry = yield* ProviderInstanceRegistry;
   const serverSettings = yield* ServerSettingsService;
   const git = yield* GitCore;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -630,7 +631,6 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const projectionReadModelQuery = yield* ProjectionSnapshotQuery;
   const checkpointDiffQuery = yield* CheckpointDiffQuery;
   const orchestrationReactor = yield* OrchestrationReactor;
-  const providerInstanceRegistry = yield* ProviderInstanceRegistry;
   const { openInEditor } = yield* Open;
 
   const subscriptionsScope = yield* Scope.make("sequential");
@@ -648,6 +648,36 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     );
     return [...snapshots, ...unavailable] satisfies ReadonlyArray<ServerProvider>;
   });
+
+  const refreshProviderInstances = (instanceId?: ServerProvider["instanceId"]) =>
+    Effect.gen(function* () {
+      const [instances, unavailable] = yield* Effect.all(
+        [providerInstanceRegistry.listInstances, providerInstanceRegistry.listUnavailable] as const,
+        { concurrency: "unbounded" },
+      );
+      const matchingInstances = instanceId
+        ? instances.filter((instance) => instance.instanceId === instanceId)
+        : instances;
+      const refreshed = yield* Effect.forEach(
+        matchingInstances,
+        (instance) => instance.snapshot.refresh,
+        { concurrency: "unbounded" },
+      );
+      if (!instanceId) {
+        return [...refreshed, ...unavailable] satisfies ReadonlyArray<ServerProvider>;
+      }
+
+      const otherSnapshots = yield* Effect.forEach(
+        instances.filter((instance) => instance.instanceId !== instanceId),
+        (instance) => instance.snapshot.getSnapshot,
+        { concurrency: "unbounded" },
+      );
+      return [
+        ...otherSnapshots,
+        ...refreshed,
+        ...unavailable,
+      ] satisfies ReadonlyArray<ServerProvider>;
+    });
 
   yield* Stream.runForEach(orchestrationEngine.streamDomainEvents, (event) =>
     pushBus.publishAll(ORCHESTRATION_WS_CHANNELS.domainEvent, event),
@@ -945,6 +975,12 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           providerInstances,
           availableEditors,
         };
+
+      case WS_METHODS.serverRefreshProviders: {
+        const body = stripRequestTag(request.body);
+        const providers = yield* refreshProviderInstances(body.instanceId);
+        return { providers };
+      }
 
       case WS_METHODS.serverGetSettings:
         return yield* serverSettings.getSettings.pipe(Effect.map(redactServerSettingsForClient));

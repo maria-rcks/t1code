@@ -190,6 +190,16 @@ export const ServerUpsertKeybindingResult = Schema.Struct({
 });
 export type ServerUpsertKeybindingResult = typeof ServerUpsertKeybindingResult.Type;
 
+export const ServerProviderUpdatedPayload = Schema.Struct({
+  providers: ServerProviders,
+});
+export type ServerProviderUpdatedPayload = typeof ServerProviderUpdatedPayload.Type;
+
+export const ServerRefreshProvidersInput = Schema.Struct({
+  instanceId: Schema.optionalKey(ProviderInstanceId),
+});
+export type ServerRefreshProvidersInput = typeof ServerRefreshProvidersInput.Type;
+
 export const ServerConfigUpdatedPayload = Schema.Struct({
   issues: ServerConfigIssues,
   providers: ServerProviderStatuses,
