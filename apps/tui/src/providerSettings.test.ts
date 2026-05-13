@@ -7,7 +7,9 @@ import {
 } from "@t3tools/contracts";
 import { Schema } from "effect";
 import {
+  buildDeleteProviderInstancePatch,
   buildDefaultProviderInstanceUpdatePatch,
+  buildDuplicateDefaultProviderInstancePatch,
   buildResetDefaultProviderInstancesPatch,
   defaultProviderInstanceIdForSettingsKey,
   providerDriverKindForSettingsKey,
@@ -177,6 +179,76 @@ describe("providerSettings", () => {
     expect(patch.providerInstances?.[customId]).toEqual({
       driver: decodeProviderDriverKind("codex"),
       config: { binaryPath: "/opt/personal-codex" },
+    });
+  });
+
+  it("duplicates default provider settings into the next custom instance slot", () => {
+    const codexId = decodeProviderInstanceId("codex");
+    const codex2Id = decodeProviderInstanceId("codex_2");
+    const codex3Id = decodeProviderInstanceId("codex_3");
+    const { instanceId, patch } = buildDuplicateDefaultProviderInstancePatch({
+      settings: {
+        ...DEFAULT_SERVER_SETTINGS,
+        providers: {
+          ...DEFAULT_SERVER_SETTINGS.providers,
+          codex: {
+            ...DEFAULT_SERVER_SETTINGS.providers.codex,
+            binaryPath: "/legacy/codex",
+          },
+        },
+        providerInstances: {
+          [codexId]: {
+            driver: decodeProviderDriverKind("codex"),
+            config: {
+              homePath: "/workspace/.codex",
+            },
+          },
+          [codex2Id]: {
+            driver: decodeProviderDriverKind("codex"),
+            config: {
+              binaryPath: "/opt/codex-2",
+            },
+          },
+        },
+      },
+      provider: "codex",
+      title: "Codex",
+    });
+
+    expect(instanceId).toBe(codex3Id);
+    expect(patch.providerInstances?.[codex3Id]).toEqual({
+      driver: decodeProviderDriverKind("codex"),
+      enabled: true,
+      displayName: "Codex 3",
+      config: {
+        ...DEFAULT_SERVER_SETTINGS.providers.codex,
+        binaryPath: "/legacy/codex",
+        homePath: "/workspace/.codex",
+      },
+    });
+  });
+
+  it("deletes a custom provider instance without touching others", () => {
+    const codexId = decodeProviderInstanceId("codex");
+    const customId = decodeProviderInstanceId("codex_work");
+    const patch = buildDeleteProviderInstancePatch({
+      settings: {
+        providerInstances: {
+          [codexId]: {
+            driver: decodeProviderDriverKind("codex"),
+          },
+          [customId]: {
+            driver: decodeProviderDriverKind("codex"),
+            displayName: "Work",
+          },
+        },
+      },
+      instanceId: customId,
+    });
+
+    expect(patch.providerInstances?.[customId]).toBeUndefined();
+    expect(patch.providerInstances?.[codexId]).toEqual({
+      driver: decodeProviderDriverKind("codex"),
     });
   });
 });

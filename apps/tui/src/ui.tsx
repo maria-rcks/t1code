@@ -162,7 +162,9 @@ import {
 import { openExternalUrl } from "./openExternal";
 import { type TuiPrefs, readPrefs, writePrefs } from "./prefs";
 import {
+  buildDeleteProviderInstancePatch,
   buildDefaultProviderInstanceUpdatePatch,
+  buildDuplicateDefaultProviderInstancePatch,
   buildResetDefaultProviderInstancesPatch,
   defaultProviderInstanceIdForSettingsKey,
 } from "./providerSettings";
@@ -700,6 +702,29 @@ function readDefaultProviderInstanceEnvironment(
   return (
     settings.providerInstances[defaultProviderInstanceIdForSettingsKey(provider)]?.environment ?? []
   );
+}
+
+function readAdditionalProviderInstances(
+  settings: ServerSettings | null,
+  provider: InstallProviderKey,
+): readonly [ProviderInstanceId, ProviderInstanceConfig][] {
+  if (!settings) return [];
+  const defaultInstanceId = defaultProviderInstanceIdForSettingsKey(provider);
+  return Object.entries(settings.providerInstances)
+    .filter(
+      (entry): entry is [ProviderInstanceId, ProviderInstanceConfig] =>
+        entry[0] !== defaultInstanceId && entry[1].driver === provider,
+    )
+    .toSorted(([leftId], [rightId]) => String(leftId).localeCompare(String(rightId)));
+}
+
+function formatProviderInstanceSummary(
+  instanceId: ProviderInstanceId,
+  instance: ProviderInstanceConfig,
+): string {
+  const label = instance.displayName?.trim() || String(instanceId);
+  const state = instance.enabled === false ? "disabled" : "enabled";
+  return `${label} · ${String(instanceId)} · ${state}`;
 }
 
 function durationToSeconds(duration: Duration.Duration): number {
@@ -6878,6 +6903,67 @@ export function App({
     );
   }
 
+  function addProviderInstallInstance(providerSettings: InstallProviderSettings) {
+    if (!serverSettings) {
+      setStatus("Settings loading");
+      return;
+    }
+    const { instanceId, patch } = buildDuplicateDefaultProviderInstancePatch({
+      settings: serverSettings,
+      provider: providerSettings.provider,
+      title: providerSettings.title,
+    });
+    setServerSettings((current) =>
+      current
+        ? {
+            ...current,
+            providerInstances: patch.providerInstances ?? current.providerInstances,
+          }
+        : current,
+    );
+    updateServerSettings(patch);
+    setOpenInstallProviders((current) => ({ ...current, [providerSettings.provider]: true }));
+    setStatus(`Added ${String(instanceId)}`);
+  }
+
+  function removeProviderInstallInstance(instanceId: ProviderInstanceId) {
+    if (!serverSettings) {
+      setStatus("Settings loading");
+      return;
+    }
+    const settingsPatch = buildDeleteProviderInstancePatch({
+      settings: serverSettings,
+      instanceId,
+    });
+    const textGenerationModelSelection =
+      currentGitTextGenerationInstanceId === instanceId
+        ? DEFAULT_SERVER_SETTINGS.textGenerationModelSelection
+        : undefined;
+    setServerSettings((current) =>
+      current
+        ? {
+            ...current,
+            ...(textGenerationModelSelection ? { textGenerationModelSelection } : {}),
+            providerInstances: settingsPatch.providerInstances ?? current.providerInstances,
+          }
+        : current,
+    );
+    const nextProviderModelPreferences = { ...appSettings.providerModelPreferences };
+    delete nextProviderModelPreferences[instanceId];
+    updateAppSettings({
+      providerModelPreferences: nextProviderModelPreferences,
+      favorites: appSettings.favorites.filter((favorite) => favorite.provider !== instanceId),
+      ...(currentGitTextGenerationInstanceId === instanceId
+        ? { textGenerationModel: DEFAULT_APP_SETTINGS.textGenerationModel }
+        : {}),
+    });
+    updateServerSettings({
+      ...settingsPatch,
+      ...(textGenerationModelSelection ? { textGenerationModelSelection } : {}),
+    });
+    setStatus(`Removed ${String(instanceId)}`);
+  }
+
   function updateProviderInstallEnabled(provider: InstallProviderKey, enabled: boolean) {
     if (!serverSettings) {
       setStatus("Settings loading");
@@ -10186,6 +10272,10 @@ export function App({
                             const isProviderEnabled = providerInstallEnabled(
                               providerSettings.provider,
                             );
+                            const additionalProviderInstances = readAdditionalProviderInstances(
+                              serverSettings,
+                              providerSettings.provider,
+                            );
                             return (
                               <box
                                 key={providerSettings.provider}
@@ -10227,6 +10317,11 @@ export function App({
                                           !isProviderEnabled,
                                         )
                                       }
+                                    />
+                                    <ToolbarButton
+                                      label="Add"
+                                      disabled={!serverSettings}
+                                      onPress={() => addProviderInstallInstance(providerSettings)}
                                     />
                                     <ToolbarButton
                                       label={isOpen ? "Hide" : "Edit"}
@@ -10332,6 +10427,77 @@ export function App({
                                         content="Use a six-digit hex color such as #7c3aed."
                                         style={{ fg: PALETTE.subtle, marginBottom: 1 }}
                                       />
+                                    </box>
+                                    <box style={{ flexDirection: "column", marginBottom: 1 }}>
+                                      <box
+                                        style={{
+                                          flexDirection: "row",
+                                          alignItems: "center",
+                                          justifyContent: "space-between",
+                                          marginBottom: 1,
+                                        }}
+                                      >
+                                        <text
+                                          content="Additional instances"
+                                          style={{ fg: PALETTE.text }}
+                                        />
+                                        <ToolbarButton
+                                          label="Add"
+                                          disabled={!serverSettings}
+                                          onPress={() =>
+                                            addProviderInstallInstance(providerSettings)
+                                          }
+                                        />
+                                      </box>
+                                      {additionalProviderInstances.length === 0 ? (
+                                        <text
+                                          content="Add another instance when the same provider needs separate paths, auth, or model preferences."
+                                          style={{ fg: PALETTE.subtle, marginBottom: 1 }}
+                                        />
+                                      ) : (
+                                        additionalProviderInstances.map(
+                                          ([instanceId, instance]) => (
+                                            <box
+                                              key={`${providerSettings.provider}:instance:${String(instanceId)}`}
+                                              style={{
+                                                flexDirection: "row",
+                                                alignItems: "center",
+                                                justifyContent: "space-between",
+                                                backgroundColor: PALETTE.surfaceAlt,
+                                                paddingLeft: 1,
+                                                paddingRight: 1,
+                                                marginBottom: 1,
+                                              }}
+                                            >
+                                              <box
+                                                style={{
+                                                  flexDirection: "column",
+                                                  flexGrow: 1,
+                                                  flexShrink: 1,
+                                                }}
+                                              >
+                                                <text
+                                                  content={formatProviderInstanceSummary(
+                                                    instanceId,
+                                                    instance,
+                                                  )}
+                                                  style={{ fg: PALETTE.text }}
+                                                />
+                                                <text
+                                                  content="Configure detailed metadata and model preferences from the provider and model pickers."
+                                                  style={{ fg: PALETTE.subtle }}
+                                                />
+                                              </box>
+                                              <ToolbarButton
+                                                label="Remove"
+                                                onPress={() =>
+                                                  removeProviderInstallInstance(instanceId)
+                                                }
+                                              />
+                                            </box>
+                                          ),
+                                        )
+                                      )}
                                     </box>
                                     <box style={{ flexDirection: "column", marginBottom: 1 }}>
                                       <box

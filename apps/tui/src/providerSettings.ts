@@ -1,9 +1,9 @@
 import {
   DEFAULT_SERVER_SETTINGS,
   ProviderDriverKind,
+  ProviderInstanceId,
   defaultInstanceIdForDriver,
   type ProviderInstanceConfig,
-  type ProviderInstanceId,
   type ServerSettings,
   type ServerSettingsPatch,
 } from "@t3tools/contracts";
@@ -18,6 +18,7 @@ type DefaultProviderInstancePatch = {
 };
 
 const decodeProviderDriverKind = Schema.decodeUnknownSync(ProviderDriverKind);
+const decodeProviderInstanceId = Schema.decodeUnknownSync(ProviderInstanceId);
 
 export function providerDriverKindForSettingsKey(
   provider: ProviderSettingsKey,
@@ -111,4 +112,60 @@ export function buildResetDefaultProviderInstancesPatch(input: {
     input.providers.map((provider) => [provider, DEFAULT_SERVER_SETTINGS.providers[provider]]),
   ) as NonNullable<ServerSettingsPatch["providers"]>;
   return { providers, providerInstances };
+}
+
+function nextProviderInstanceId(
+  providerInstances: Pick<ServerSettings, "providerInstances">["providerInstances"],
+  provider: ProviderSettingsKey,
+): ProviderInstanceId {
+  const prefix = `${provider}_`;
+  for (let index = 2; index < 1_000; index += 1) {
+    const candidate = decodeProviderInstanceId(`${prefix}${index}`);
+    if (!(candidate in providerInstances)) {
+      return candidate;
+    }
+  }
+  throw new Error(`Could not allocate a provider instance id for ${provider}.`);
+}
+
+export function buildDuplicateDefaultProviderInstancePatch(input: {
+  readonly settings: Pick<ServerSettings, "providerInstances" | "providers">;
+  readonly provider: ProviderSettingsKey;
+  readonly title: string;
+}): {
+  readonly instanceId: ProviderInstanceId;
+  readonly patch: ServerSettingsPatch;
+} {
+  const driver = providerDriverKindForSettingsKey(input.provider);
+  const instanceId = nextProviderInstanceId(input.settings.providerInstances, input.provider);
+  const defaultInstance = input.settings.providerInstances[defaultInstanceIdForDriver(driver)];
+  const config = {
+    ...DEFAULT_SERVER_SETTINGS.providers[input.provider],
+    ...input.settings.providers[input.provider],
+    ...recordConfig(defaultInstance?.config),
+  };
+
+  return {
+    instanceId,
+    patch: {
+      providerInstances: {
+        ...input.settings.providerInstances,
+        [instanceId]: {
+          driver,
+          enabled: true,
+          displayName: `${input.title} ${String(instanceId).replace(`${input.provider}_`, "")}`,
+          config,
+        },
+      },
+    },
+  };
+}
+
+export function buildDeleteProviderInstancePatch(input: {
+  readonly settings: Pick<ServerSettings, "providerInstances">;
+  readonly instanceId: ProviderInstanceId;
+}): ServerSettingsPatch {
+  const providerInstances = { ...input.settings.providerInstances };
+  delete providerInstances[input.instanceId];
+  return { providerInstances };
 }
