@@ -3074,6 +3074,20 @@ export function App({
     },
     [updateAppSettings, updateServerSettings],
   );
+  const updateAddProjectBaseDirectorySetting = useCallback(
+    (addProjectBaseDirectory: string) => {
+      setServerSettings((current) =>
+        current
+          ? {
+              ...current,
+              addProjectBaseDirectory,
+            }
+          : current,
+      );
+      updateServerSettings({ addProjectBaseDirectory });
+    },
+    [updateServerSettings],
+  );
   const updateGitTextGenerationModel = useCallback(
     (instanceId: ProviderInstanceId, model: string) => {
       const textGenerationModelSelection = createModelSelection(instanceId, model);
@@ -3911,6 +3925,7 @@ export function App({
         : "Dark";
   const selectedTuiThemeLabel = TUI_THEME_LABELS[tuiThemeId] ?? TUI_THEME_LABELS.default;
   const selectedThreadEnvLabel = defaultThreadEnvMode === "worktree" ? "New worktree" : "Local";
+  const addProjectBaseDirectory = serverSettings?.addProjectBaseDirectory ?? "";
   const composerEnvMenuItems: ComposerEnvMenuItem[] = ENV_MODE_OPTIONS.map((option) => ({
     id: option.value,
     label: option.label,
@@ -4167,6 +4182,9 @@ export function App({
       : []),
     ...(defaultThreadEnvMode !== DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode
       ? ["New threads"]
+      : []),
+    ...(addProjectBaseDirectory !== DEFAULT_SERVER_SETTINGS.addProjectBaseDirectory
+      ? ["Add project base directory"]
       : []),
     ...(appSettings.confirmThreadDelete !== DEFAULT_APP_SETTINGS.confirmThreadDelete
       ? ["Delete confirmation"]
@@ -5116,14 +5134,14 @@ export function App({
     }, 0);
   }
 
-  function openProjectPathPrompt(initialValue = process.cwd()) {
+  function openProjectPathPrompt(initialValue?: string) {
     setOverlayMenu(null);
     closeSidebarContextMenu();
     setConfirmDialog(null);
     setRenameThreadDialog(null);
     setFocusArea("projects");
     setProjectPathError(null);
-    setProjectPathDraft(initialValue);
+    setProjectPathDraft(initialValue ?? (addProjectBaseDirectory.trim() || "~/"));
     setProjectPathResetKey((current) => current + 1);
     setProjectPathPromptOpen(true);
   }
@@ -6194,6 +6212,7 @@ export function App({
     setAppSettings(DEFAULT_APP_SETTINGS);
     updateServerSettings({
       defaultThreadEnvMode: DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode,
+      addProjectBaseDirectory: DEFAULT_SERVER_SETTINGS.addProjectBaseDirectory,
       enableAssistantStreaming: DEFAULT_SERVER_SETTINGS.enableAssistantStreaming,
       textGenerationModelSelection: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection,
       providers: {
@@ -6213,6 +6232,7 @@ export function App({
         ? {
             ...current,
             defaultThreadEnvMode: DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode,
+            addProjectBaseDirectory: DEFAULT_SERVER_SETTINGS.addProjectBaseDirectory,
             enableAssistantStreaming: DEFAULT_SERVER_SETTINGS.enableAssistantStreaming,
             textGenerationModelSelection: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection,
             providers: {
@@ -9185,6 +9205,46 @@ export function App({
                             />
                           }
                         />
+                        <SettingsRow
+                          title="Add project starts in"
+                          description={'Leave empty to use "~/" when the Add Project prompt opens.'}
+                          resetAction={
+                            addProjectBaseDirectory !==
+                            DEFAULT_SERVER_SETTINGS.addProjectBaseDirectory ? (
+                              <SettingResetButton
+                                onPress={() =>
+                                  updateAddProjectBaseDirectorySetting(
+                                    DEFAULT_SERVER_SETTINGS.addProjectBaseDirectory,
+                                  )
+                                }
+                              />
+                            ) : null
+                          }
+                        >
+                          <box
+                            style={{
+                              backgroundColor: PALETTE.input,
+                              paddingLeft: 1,
+                              paddingRight: 1,
+                              height: 3,
+                              justifyContent: "center",
+                            }}
+                          >
+                            <input
+                              value={addProjectBaseDirectory}
+                              onInput={(value) => updateAddProjectBaseDirectorySetting(value)}
+                              placeholder="~/"
+                              cursorColor={PALETTE.cursor}
+                              style={{
+                                backgroundColor: PALETTE.input,
+                                focusedBackgroundColor: PALETTE.input,
+                                textColor: PALETTE.text,
+                                focusedTextColor: PALETTE.text,
+                                placeholderColor: PALETTE.subtle,
+                              }}
+                            />
+                          </box>
+                        </SettingsRow>
                         <SettingsRow
                           title="Delete confirmation"
                           description="Ask before deleting a thread and its chat history."
