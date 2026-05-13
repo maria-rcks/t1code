@@ -8,6 +8,7 @@ import {
 } from "@t3tools/contracts";
 import {
   deriveProviderInstanceEntries,
+  getProviderInstanceModelOptions,
   getProviderInstanceModels,
   normalizeProviderAccentColor,
   resolveSelectableProviderInstance,
@@ -124,6 +125,28 @@ describe("providerInstances", () => {
     expect(
       getProviderInstanceModels(providers, decodeProviderInstanceId("codex_personal")),
     ).toEqual([model("gpt-5.4-mini")]);
+  });
+
+  it("uses instance model options while preserving custom fallback models", () => {
+    const providers = [
+      provider({
+        instanceId: "codex",
+        driver: "codex",
+        models: [model("gpt-5.4"), { ...model("custom/live"), isCustom: true }],
+      }),
+    ];
+
+    expect(
+      getProviderInstanceModelOptions(providers, decodeProviderInstanceId("codex"), [
+        { slug: "gpt-5.4-mini", name: "GPT-5.4 Mini", isCustom: false },
+        { slug: "custom/local", name: "custom/local", isCustom: true },
+        { slug: "custom/live", name: "custom/live", isCustom: true },
+      ]),
+    ).toEqual([
+      { slug: "gpt-5.4", name: "gpt-5.4", isCustom: false },
+      { slug: "custom/live", name: "custom/live", isCustom: true },
+      { slug: "custom/local", name: "custom/local", isCustom: true },
+    ]);
   });
 
   it("resolves unavailable selections to the first enabled available instance", () => {

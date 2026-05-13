@@ -27,6 +27,7 @@ import {
   DEFAULT_MODEL_BY_PROVIDER,
   MODEL_OPTIONS_BY_PROVIDER,
   ORCHESTRATION_WS_METHODS,
+  defaultInstanceIdForDriver,
   type ClientOrchestrationCommand,
   type EditorId,
   type GitActionProgressEvent,
@@ -36,11 +37,13 @@ import {
   type OrchestrationReadModel,
   type ProjectEntry,
   type ProviderApprovalDecision,
+  type ProviderDriverKind,
   type ProviderInteractionMode,
   type ProviderKind,
   type ProviderModelOptions,
   type RuntimeMode,
   type ServerConfig,
+  type ServerProvider,
 } from "@t3tools/contracts";
 import {
   DEFAULT_APP_SETTINGS,
@@ -128,6 +131,7 @@ import { saveClipboardImageToFile } from "./clipboardImage";
 import { copyTextToClipboard } from "./clipboardText";
 import { KEYBINDING_GUIDE_SECTIONS, isCtrlC, shouldClearComposerOnCtrlC } from "./keyboardBehavior";
 import { createT1Logger } from "./log";
+import { getProviderInstanceModelOptions } from "./providerInstances";
 import { resolveUserMessageBubbleWidth } from "./messageLayout";
 import {
   isDiffLikeCodeBlockFiletype,
@@ -751,19 +755,25 @@ function interactionIcon(mode: "default" | "plan"): string {
   return mode === "plan" ? "󰨖" : "󰍩";
 }
 
-function modelControlLabel(provider: ProviderKind, model: string): string {
-  const resolvedModel =
-    resolveSelectableModel(provider, model, MODEL_OPTIONS_BY_PROVIDER[provider]) ?? model;
+function modelControlLabel(
+  provider: ProviderKind,
+  model: string,
+  options: ReadonlyArray<{
+    readonly slug: string;
+    readonly name: string;
+  }> = MODEL_OPTIONS_BY_PROVIDER[provider],
+): string {
+  const resolvedModel = resolveSelectableModel(provider, model, options) ?? model;
 
   if (provider === "codex") {
-    return resolveModelName(provider, resolvedModel);
+    return resolveModelName(provider, resolvedModel, options);
   } else {
     if (resolvedModel === "claude-opus-4-6") return "Opus 4.6";
     if (resolvedModel === "claude-sonnet-4-6") return "Sonnet 4.6";
     if (resolvedModel === "claude-haiku-4-5") return "Haiku 4.5";
   }
 
-  return resolveModelName(provider, resolvedModel)
+  return resolveModelName(provider, resolvedModel, options)
     .replace(/^GPT-/i, "GPT ")
     .replace(/-codex$/i, "")
     .replace(/^Claude\s+/i, "")
@@ -873,8 +883,15 @@ function getDispatchModelOptions(
   return normalized ? { claudeAgent: normalized } : undefined;
 }
 
-function resolveModelName(provider: ProviderKind, model: string): string {
-  return MODEL_OPTIONS_BY_PROVIDER[provider].find((option) => option.slug === model)?.name ?? model;
+function resolveModelName(
+  provider: ProviderKind,
+  model: string,
+  options: ReadonlyArray<{
+    readonly slug: string;
+    readonly name: string;
+  }> = MODEL_OPTIONS_BY_PROVIDER[provider],
+): string {
+  return options.find((option) => option.slug === model)?.name ?? model;
 }
 
 function runtimeFooterLabel(mode: RuntimeMode): string {
@@ -1900,6 +1917,7 @@ function isAvailableModelProviderOption(
 }
 
 const AVAILABLE_MODEL_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter(isAvailableModelProviderOption);
+const EMPTY_PROVIDER_SNAPSHOTS: ReadonlyArray<ServerProvider> = [];
 const COMING_SOON_MODEL_PROVIDER_OPTIONS = [
   ...PROVIDER_OPTIONS.filter((option) => !option.available).map((option) => ({
     id: option.value,
@@ -3082,6 +3100,9 @@ export function App({
                   ...current,
                   issues: payload.issues,
                   providers: payload.providers,
+                  ...(payload.providerInstances
+                    ? { providerInstances: payload.providerInstances }
+                    : {}),
                 }
               : current,
           );
@@ -3353,10 +3374,47 @@ export function App({
     }),
     [appSettings],
   );
-  const modelOptions = getAppModelOptions(
-    modelMenuProvider,
-    customModelsByProvider[modelMenuProvider],
-    modelMenuProvider === draftProvider ? draftModel : undefined,
+  const providerSnapshots = serverConfig?.providerInstances ?? EMPTY_PROVIDER_SNAPSHOTS;
+  const providerModelOptionsByProvider = useMemo(
+    () => ({
+      codex: getProviderInstanceModelOptions(
+        providerSnapshots,
+        defaultInstanceIdForDriver("codex" as ProviderDriverKind),
+        getAppModelOptions(
+          "codex",
+          customModelsByProvider.codex,
+          draftProvider === "codex" ? draftModel : undefined,
+        ),
+      ),
+      claudeAgent: getProviderInstanceModelOptions(
+        providerSnapshots,
+        defaultInstanceIdForDriver("claudeAgent" as ProviderDriverKind),
+        getAppModelOptions(
+          "claudeAgent",
+          customModelsByProvider.claudeAgent,
+          draftProvider === "claudeAgent" ? draftModel : undefined,
+        ),
+      ),
+    }),
+    [
+      customModelsByProvider.claudeAgent,
+      customModelsByProvider.codex,
+      draftModel,
+      draftProvider,
+      providerSnapshots,
+    ],
+  );
+  const modelOptions = providerModelOptionsByProvider[modelMenuProvider];
+  const draftProviderModelOptions = providerModelOptionsByProvider[draftProvider];
+  const providerOptionLabelByProvider = useMemo(
+    () =>
+      new Map(
+        (serverConfig?.providerInstances ?? []).map((provider) => [
+          provider.instanceId,
+          provider.displayName?.trim() || provider.instanceId,
+        ]),
+      ),
+    [serverConfig?.providerInstances],
   );
   const providerOptionsForDispatch = useMemo(
     () => getProviderStartOptions(appSettings),
@@ -6498,11 +6556,7 @@ export function App({
   }
 
   function focusModelProvider(nextProvider: ProviderKind, openSubmenu: boolean = true) {
-    const nextOptions = getAppModelOptions(
-      nextProvider,
-      customModelsByProvider[nextProvider],
-      draftModel,
-    );
+    const nextOptions = providerModelOptionsByProvider[nextProvider];
     setModelMenuProvider(nextProvider);
     setModelSubmenuOpen(openSubmenu);
     setModelMenuIndex(
@@ -9783,7 +9837,11 @@ export function App({
                             iconColor={providerColor(draftProvider)}
                             label={
                               responsiveLayout.showComposerModelLabel
-                                ? modelControlLabel(draftProvider, draftModel)
+                                ? modelControlLabel(
+                                    draftProvider,
+                                    draftModel,
+                                    draftProviderModelOptions,
+                                  )
                                 : undefined
                             }
                             compact={!responsiveLayout.showComposerModelLabel}
@@ -10068,7 +10126,11 @@ export function App({
                 key={`provider:${option.value}`}
                 icon={providerPickerIcon(option.value)}
                 iconColor={providerColor(option.value)}
-                label={option.label}
+                label={
+                  providerOptionLabelByProvider.get(
+                    defaultInstanceIdForDriver(option.value as ProviderDriverKind),
+                  ) ?? option.label
+                }
                 active={modelMenuProvider === option.value}
                 onHover={() => focusModelProvider(option.value)}
                 onPress={() => focusModelProvider(option.value)}

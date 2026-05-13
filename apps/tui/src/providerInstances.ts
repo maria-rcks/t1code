@@ -22,6 +22,12 @@ export interface ProviderInstanceEntry {
   readonly models: ReadonlyArray<ServerProviderModel>;
 }
 
+export interface ProviderInstanceModelOption {
+  readonly slug: string;
+  readonly name: string;
+  readonly isCustom: boolean;
+}
+
 function formatProviderDriverKindLabel(driverKind: ProviderDriverKind): string {
   return driverKind
     .replace(/[_-]+/g, " ")
@@ -130,6 +136,30 @@ export function getProviderInstanceModels(
   instanceId: ProviderInstanceId,
 ): ReadonlyArray<ServerProviderModel> {
   return getProviderInstanceEntry(providers, instanceId)?.models ?? [];
+}
+
+export function getProviderInstanceModelOptions(
+  providers: ReadonlyArray<ServerProvider>,
+  instanceId: ProviderInstanceId,
+  fallbackOptions: ReadonlyArray<ProviderInstanceModelOption>,
+): ReadonlyArray<ProviderInstanceModelOption> {
+  const instanceModels = getProviderInstanceModels(providers, instanceId);
+  if (instanceModels.length === 0) return fallbackOptions;
+
+  const options: ProviderInstanceModelOption[] = instanceModels.map((model) => ({
+    slug: model.slug,
+    name: model.name,
+    isCustom: model.isCustom,
+  }));
+  const seen = new Set(options.map((option) => option.slug));
+  for (const option of fallbackOptions) {
+    if (!option.isCustom || seen.has(option.slug)) {
+      continue;
+    }
+    seen.add(option.slug);
+    options.push(option);
+  }
+  return options;
 }
 
 export function resolveSelectableProviderInstance(
