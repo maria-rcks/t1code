@@ -10,6 +10,12 @@ import {
 import { Schema } from "effect";
 
 export type ProviderSettingsKey = keyof ServerSettings["providers"];
+type DefaultProviderInstancePatch = {
+  readonly accentColor?: ProviderInstanceConfig["accentColor"] | undefined;
+  readonly displayName?: ProviderInstanceConfig["displayName"] | undefined;
+  readonly enabled?: ProviderInstanceConfig["enabled"] | undefined;
+  readonly environment?: ProviderInstanceConfig["environment"] | undefined;
+};
 
 const decodeProviderDriverKind = Schema.decodeUnknownSync(ProviderDriverKind);
 
@@ -35,19 +41,22 @@ export function buildDefaultProviderInstanceUpdatePatch(input: {
   readonly settings: Pick<ServerSettings, "providerInstances" | "providers">;
   readonly provider: ProviderSettingsKey;
   readonly configPatch: Readonly<Record<string, unknown>>;
-  readonly instancePatch?:
-    | Partial<Pick<ProviderInstanceConfig, "accentColor" | "displayName" | "enabled">>
-    | undefined;
+  readonly instancePatch?: DefaultProviderInstancePatch | undefined;
 }): ServerSettingsPatch {
   const driver = providerDriverKindForSettingsKey(input.provider);
   const instanceId = defaultInstanceIdForDriver(driver);
   const existing = input.settings.providerInstances[instanceId];
   const legacyConfig = input.settings.providers[input.provider];
   const defaultLegacyConfig = DEFAULT_SERVER_SETTINGS.providers[input.provider];
+  const definedInstancePatch = Object.fromEntries(
+    Object.entries(input.instancePatch ?? {}).filter(([, value]) => value !== undefined),
+  ) as Partial<
+    Pick<ProviderInstanceConfig, "accentColor" | "displayName" | "enabled" | "environment">
+  >;
   let nextInstance: ProviderInstanceConfig = {
     ...existing,
     driver,
-    ...input.instancePatch,
+    ...definedInstancePatch,
     config: {
       ...legacyConfig,
       ...recordConfig(existing?.config),
@@ -68,6 +77,14 @@ export function buildDefaultProviderInstanceUpdatePatch(input: {
     !input.instancePatch.accentColor
   ) {
     const { accentColor: _accentColor, ...rest } = nextInstance;
+    nextInstance = rest as ProviderInstanceConfig;
+  }
+  if (
+    input.instancePatch &&
+    "environment" in input.instancePatch &&
+    !input.instancePatch.environment
+  ) {
+    const { environment: _environment, ...rest } = nextInstance;
     nextInstance = rest as ProviderInstanceConfig;
   }
 

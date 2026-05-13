@@ -102,6 +102,9 @@ describe("providerSettings", () => {
         enabled: false,
         displayName: "Claude Work",
         accentColor: "#112233",
+        environment: [
+          { name: "ANTHROPIC_BASE_URL", value: "https://example.test", sensitive: false },
+        ],
       },
     });
 
@@ -110,6 +113,9 @@ describe("providerSettings", () => {
       enabled: false,
       displayName: "Claude Work",
       accentColor: "#112233",
+      environment: [
+        { name: "ANTHROPIC_BASE_URL", value: "https://example.test", sensitive: false },
+      ],
       config: {
         ...DEFAULT_SERVER_SETTINGS.providers.claudeAgent,
         launchArgs: "--chrome",
@@ -127,6 +133,7 @@ describe("providerSettings", () => {
             driver: decodeProviderDriverKind("codex"),
             displayName: "Codex Work",
             accentColor: "#112233",
+            environment: [{ name: "OPENAI_API_KEY", value: "sk-test", sensitive: true }],
           },
         },
       },
@@ -135,6 +142,7 @@ describe("providerSettings", () => {
       instancePatch: {
         displayName: undefined,
         accentColor: undefined,
+        environment: undefined,
       },
     });
 
