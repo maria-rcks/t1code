@@ -4188,6 +4188,9 @@ export function App({
       ? ["Visible threads"]
       : []),
     ...(appSettings.diffWordWrap !== DEFAULT_DIFF_WORD_WRAP ? ["Diff line wrapping"] : []),
+    ...(appSettings.diffIgnoreWhitespace !== DEFAULT_APP_SETTINGS.diffIgnoreWhitespace
+      ? ["Diff whitespace changes"]
+      : []),
     ...(assistantStreamingEnabled !== DEFAULT_SERVER_SETTINGS.enableAssistantStreaming
       ? ["Assistant output"]
       : []),
@@ -4543,6 +4546,7 @@ export function App({
         const result = await api.orchestration.getFullThreadDiff({
           threadId: activeThread.id,
           toTurnCount: checkpointCount,
+          ignoreWhitespace: appSettings.diffIgnoreWhitespace,
         });
         setDiffText(result.diff);
         setStatus("Diff ready");
@@ -4558,7 +4562,7 @@ export function App({
         });
       }
     },
-    [activeThread, api, logger],
+    [activeThread, api, appSettings.diffIgnoreWhitespace, logger],
   );
 
   useEffect(() => {
@@ -9204,6 +9208,33 @@ export function App({
                               onPress={() =>
                                 updateAppSettings({
                                   diffWordWrap: !appSettings.diffWordWrap,
+                                })
+                              }
+                            />
+                          }
+                        />
+                        <SettingsRow
+                          title="Hide whitespace changes"
+                          description="Set whether the diff panel ignores whitespace-only edits by default."
+                          status={appSettings.diffIgnoreWhitespace ? "Hidden" : "Shown"}
+                          resetAction={
+                            appSettings.diffIgnoreWhitespace !==
+                            DEFAULT_APP_SETTINGS.diffIgnoreWhitespace ? (
+                              <SettingResetButton
+                                onPress={() =>
+                                  updateAppSettings({
+                                    diffIgnoreWhitespace: DEFAULT_APP_SETTINGS.diffIgnoreWhitespace,
+                                  })
+                                }
+                              />
+                            ) : null
+                          }
+                          control={
+                            <TogglePill
+                              checked={appSettings.diffIgnoreWhitespace}
+                              onPress={() =>
+                                updateAppSettings({
+                                  diffIgnoreWhitespace: !appSettings.diffIgnoreWhitespace,
                                 })
                               }
                             />
