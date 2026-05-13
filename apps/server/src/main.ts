@@ -25,6 +25,7 @@ import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnap
 import { ProviderEventLoggersLive } from "./provider/Layers/ProviderEventLoggers";
 import { ProviderHealthLive } from "./provider/Layers/ProviderHealth";
 import { ProviderInstanceRegistryHydrationLive } from "./provider/Layers/ProviderInstanceRegistryHydration";
+import { layer as ProviderMaintenanceRunnerLive } from "./provider/providerMaintenanceRunner";
 import { Server } from "./wsServer";
 import { ServerSettingsLive } from "./serverSettings";
 import { ServerLoggerLive } from "./serverLogger";
@@ -296,7 +297,9 @@ const LayerLive = (input: CliInput) =>
   Layer.empty.pipe(
     Layer.provideMerge(makeServerRuntimeServicesLayer()),
     Layer.provideMerge(makeServerProviderLayer()),
-    Layer.provideMerge(ProviderInstanceRegistryHydrationLive),
+    Layer.provideMerge(
+      ProviderMaintenanceRunnerLive.pipe(Layer.provideMerge(ProviderInstanceRegistryHydrationLive)),
+    ),
     Layer.provideMerge(ProviderEventLoggersLive),
     Layer.provideMerge(ServerSettingsLive),
     Layer.provideMerge(ProviderHealthLive),

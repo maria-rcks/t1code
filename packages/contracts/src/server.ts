@@ -200,6 +200,25 @@ export const ServerRefreshProvidersInput = Schema.Struct({
 });
 export type ServerRefreshProvidersInput = typeof ServerRefreshProvidersInput.Type;
 
+export const ServerProviderUpdateInput = Schema.Struct({
+  provider: ProviderDriverKind,
+  instanceId: Schema.optionalKey(ProviderInstanceId),
+});
+export type ServerProviderUpdateInput = typeof ServerProviderUpdateInput.Type;
+
+export class ServerProviderUpdateError extends Schema.TaggedErrorClass<ServerProviderUpdateError>()(
+  "ServerProviderUpdateError",
+  {
+    provider: ProviderDriverKind,
+    reason: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect),
+  },
+) {
+  override get message(): string {
+    return `Provider update failed for ${this.provider}: ${this.reason}`;
+  }
+}
+
 export const ServerConfigUpdatedPayload = Schema.Struct({
   issues: ServerConfigIssues,
   providers: ServerProviderStatuses,

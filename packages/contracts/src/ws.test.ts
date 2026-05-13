@@ -86,6 +86,20 @@ it.effect("accepts targeted server.refreshProviders requests", () =>
   }),
 );
 
+it.effect("accepts targeted server.updateProvider requests", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWebSocketRequest({
+      id: "req-provider-update-1",
+      body: {
+        _tag: WS_METHODS.serverUpdateProvider,
+        provider: "codex",
+        instanceId: "codex",
+      },
+    });
+    assert.strictEqual(parsed.body._tag, WS_METHODS.serverUpdateProvider);
+  }),
+);
+
 it.effect("accepts typed websocket push envelopes with sequence", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeWsResponse({

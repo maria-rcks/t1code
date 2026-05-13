@@ -56,6 +56,11 @@ import {
   type ProviderInstanceRegistryShape,
 } from "./provider/Services/ProviderInstanceRegistry.ts";
 import type { ProviderInstance } from "./provider/ProviderDriver.ts";
+import {
+  ProviderMaintenanceRunner,
+  layer as ProviderMaintenanceRunnerLive,
+  type ProviderMaintenanceRunnerShape,
+} from "./provider/providerMaintenanceRunner.ts";
 import { Open, type OpenShape } from "./open";
 import { GitManager, type GitManagerShape } from "./git/Services/GitManager.ts";
 import type { GitCoreShape } from "./git/Services/GitCore.ts";
@@ -501,6 +506,7 @@ describe("WebSocket Server", () => {
       staticDir?: string;
       providerLayer?: Layer.Layer<ProviderService, never>;
       providerInstanceRegistry?: ProviderInstanceRegistryShape;
+      providerMaintenanceRunner?: ProviderMaintenanceRunnerShape;
       providerHealth?: ProviderHealthShape;
       open?: OpenShape;
       gitManager?: GitManagerShape;
@@ -558,11 +564,17 @@ describe("WebSocket Server", () => {
     const providerInstanceRegistryLayer = options.providerInstanceRegistry
       ? Layer.succeed(ProviderInstanceRegistry, options.providerInstanceRegistry)
       : ProviderInstanceRegistryHydrationLive;
+    const providerMaintenanceLayer = options.providerMaintenanceRunner
+      ? Layer.merge(
+          providerInstanceRegistryLayer,
+          Layer.succeed(ProviderMaintenanceRunner, options.providerMaintenanceRunner),
+        )
+      : ProviderMaintenanceRunnerLive.pipe(Layer.provideMerge(providerInstanceRegistryLayer));
 
     const dependenciesLayer = Layer.empty.pipe(
       Layer.provideMerge(runtimeLayer),
       Layer.provideMerge(providerHealthLayer),
-      Layer.provideMerge(providerInstanceRegistryLayer),
+      Layer.provideMerge(providerMaintenanceLayer),
       Layer.provideMerge(ProviderEventLoggersLive),
       Layer.provideMerge(ServerSettingsLive),
       Layer.provideMerge(openLayer),
@@ -1007,6 +1019,118 @@ describe("WebSocket Server", () => {
       ]),
     );
     expect(refreshCount).toBe(1);
+  });
+
+  it("responds to server.updateProvider", async () => {
+    const updatedProvider: ServerProvider = {
+      instanceId: ProviderInstanceId.makeUnsafe("codex"),
+      driver: ProviderDriverKind.makeUnsafe("codex"),
+      enabled: true,
+      installed: true,
+      version: "1.0.1",
+      status: "ready",
+      auth: { status: "authenticated" },
+      checkedAt: "2026-01-01T00:01:00.000Z",
+      availability: "available",
+      models: [],
+      slashCommands: [],
+      skills: [],
+      updateState: {
+        status: "succeeded",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        finishedAt: "2026-01-01T00:01:00.000Z",
+        message: "Provider updated.",
+        output: null,
+      },
+    };
+    const providerInstance = {
+      instanceId: ProviderInstanceId.makeUnsafe("codex"),
+      driverKind: ProviderDriverKind.makeUnsafe("codex"),
+      continuationIdentity: {
+        driverKind: ProviderDriverKind.makeUnsafe("codex"),
+        continuationKey: "codex:instance:codex",
+      },
+      displayName: undefined,
+      enabled: true,
+      snapshot: {
+        maintenanceCapabilities: {},
+        getSnapshot: Effect.succeed(updatedProvider),
+        refresh: Effect.succeed(updatedProvider),
+        streamChanges: Stream.empty,
+      },
+      adapter: {
+        provider: "codex",
+        capabilities: { sessionModelSwitch: "unsupported" },
+        startSession: () => Effect.die("not implemented"),
+        sendTurn: () => Effect.die("not implemented"),
+        interruptTurn: () => Effect.void,
+        respondToRequest: () => Effect.void,
+        respondToUserInput: () => Effect.void,
+        stopSession: () => Effect.void,
+        listSessions: () => Effect.succeed([]),
+        hasSession: () => Effect.succeed(false),
+        readThread: () => Effect.die("not implemented"),
+        rollbackThread: () => Effect.die("not implemented"),
+        stopAll: () => Effect.void,
+        streamEvents: Stream.empty,
+      },
+      textGeneration: {
+        generateCommitMessage: () => Effect.die("not implemented"),
+        generatePrContent: () => Effect.die("not implemented"),
+        generateBranchName: () => Effect.die("not implemented"),
+        generateThreadTitle: () => Effect.die("not implemented"),
+      },
+    } as unknown as ProviderInstance;
+    const registry: ProviderInstanceRegistryShape = {
+      getInstance: (instanceId) =>
+        Effect.succeed(instanceId === providerInstance.instanceId ? providerInstance : undefined),
+      listInstances: Effect.succeed([providerInstance]),
+      listUnavailable: Effect.succeed([]),
+      streamChanges: Stream.empty,
+      subscribeChanges: PubSub.unbounded<void>().pipe(Effect.flatMap(PubSub.subscribe)),
+    };
+    const updateProvider = vi.fn<ProviderMaintenanceRunnerShape["updateProvider"]>((input) =>
+      Effect.succeed({
+        providers: [
+          {
+            ...updatedProvider,
+            driver: typeof input === "string" ? input : input.provider,
+            instanceId:
+              typeof input === "string"
+                ? updatedProvider.instanceId
+                : (input.instanceId ?? updatedProvider.instanceId),
+          },
+        ],
+      }),
+    );
+
+    server = await createTestServer({
+      cwd: "/my/workspace",
+      providerInstanceRegistry: registry,
+      providerMaintenanceRunner: { updateProvider },
+    });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.serverUpdateProvider, {
+      provider: "codex",
+      instanceId: "codex",
+    });
+    expect(response.error).toBeUndefined();
+    expect(updateProvider).toHaveBeenCalledWith({
+      provider: ProviderDriverKind.makeUnsafe("codex"),
+      instanceId: ProviderInstanceId.makeUnsafe("codex"),
+    });
+    expect((response.result as { providers: ReadonlyArray<ServerProvider> }).providers).toEqual([
+      expect.objectContaining({
+        instanceId: "codex",
+        driver: "codex",
+        updateState: expect.objectContaining({ status: "succeeded" }),
+      }),
+    ]);
   });
 
   it("responds to server settings RPC methods with redacted provider secrets", async () => {

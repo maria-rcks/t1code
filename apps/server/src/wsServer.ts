@@ -58,6 +58,7 @@ import { OrchestrationReactor } from "./orchestration/Services/OrchestrationReac
 import { ProviderService } from "./provider/Services/ProviderService";
 import { ProviderHealth } from "./provider/Services/ProviderHealth";
 import { ProviderInstanceRegistry } from "./provider/Services/ProviderInstanceRegistry";
+import { ProviderMaintenanceRunner } from "./provider/providerMaintenanceRunner.ts";
 import { redactServerSettingsForClient, ServerSettingsService } from "./serverSettings";
 import { CheckpointDiffQuery } from "./checkpointing/Services/CheckpointDiffQuery";
 import { clamp } from "effect/Number";
@@ -218,6 +219,7 @@ export type ServerCoreRuntimeServices =
   | ProviderService
   | ProviderHealth
   | ProviderInstanceRegistry
+  | ProviderMaintenanceRunner
   | ServerSettingsService;
 
 export type ServerRuntimeServices =
@@ -265,6 +267,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const keybindingsManager = yield* Keybindings;
   const providerHealth = yield* ProviderHealth;
   const providerInstanceRegistry = yield* ProviderInstanceRegistry;
+  const providerMaintenanceRunner = yield* ProviderMaintenanceRunner;
   const serverSettings = yield* ServerSettingsService;
   const git = yield* GitCore;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -980,6 +983,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         const body = stripRequestTag(request.body);
         const providers = yield* refreshProviderInstances(body.instanceId);
         return { providers };
+      }
+
+      case WS_METHODS.serverUpdateProvider: {
+        const body = stripRequestTag(request.body);
+        return yield* providerMaintenanceRunner.updateProvider(body);
       }
 
       case WS_METHODS.serverGetSettings:

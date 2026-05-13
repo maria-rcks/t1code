@@ -1033,6 +1033,51 @@ function formatCheckedRelativeTime(iso: string | null | undefined): string {
   return relativeTime === "now" ? "Checked now" : `Checked ${relativeTime} ago`;
 }
 
+function isProviderUpdateActive(provider: ServerProvider | null | undefined): boolean {
+  const status = provider?.updateState?.status;
+  return status === "queued" || status === "running";
+}
+
+function canRunProviderUpdate(provider: ServerProvider | null | undefined): boolean {
+  return (
+    provider?.versionAdvisory?.canUpdate === true &&
+    provider.versionAdvisory.status === "behind_latest" &&
+    !isProviderUpdateActive(provider)
+  );
+}
+
+function providerUpdateButtonLabel(provider: ServerProvider | null | undefined): string {
+  const status = provider?.updateState?.status;
+  if (status === "queued") return "Queued";
+  if (status === "running") return "Updating...";
+  return "Update";
+}
+
+function formatProviderVersionStatus(provider: ServerProvider | null | undefined): string | null {
+  if (!provider) return null;
+  const updateState = provider.updateState;
+  if (updateState) {
+    if (updateState.status === "running") return updateState.message ?? "Updating provider.";
+    if (updateState.status === "queued") return updateState.message ?? "Update queued.";
+    if (updateState.status === "succeeded") return updateState.message ?? "Provider updated.";
+    if (updateState.status === "failed") return updateState.message ?? "Provider update failed.";
+    if (updateState.status === "unchanged")
+      return updateState.message ?? "Provider still outdated.";
+  }
+
+  const advisory = provider.versionAdvisory;
+  if (advisory?.status === "behind_latest") {
+    const current = advisory.currentVersion ?? provider.version ?? "installed";
+    const latest = advisory.latestVersion ?? "latest";
+    return `Update available ${current} -> ${latest}`;
+  }
+  if (advisory?.status === "current") {
+    return provider.version ? `Current ${provider.version}` : "Current";
+  }
+  if (provider.version) return `Version ${provider.version}`;
+  return provider.installed ? "Installed" : "Not installed";
+}
+
 const timestampFormatterCache = new Map<TimestampFormat, Intl.DateTimeFormat>();
 
 function getTimestampFormatter(timestampFormat: TimestampFormat): Intl.DateTimeFormat {
@@ -3165,6 +3210,8 @@ export function App({
   const [showAllCustomModels, setShowAllCustomModels] = useState(false);
   const [showAllModelPreferenceRows, setShowAllModelPreferenceRows] = useState(false);
   const [isRefreshingProviders, setIsRefreshingProviders] = useState(false);
+  const [updatingProviderInstanceId, setUpdatingProviderInstanceId] =
+    useState<ProviderInstanceId | null>(null);
   const [openInstallProviders, setOpenInstallProviders] = useState<
     Record<InstallProviderKey, boolean>
   >({
@@ -3240,6 +3287,41 @@ export function App({
       }
     },
     [api, isRefreshingProviders, logger],
+  );
+
+  const runProviderUpdate = useCallback(
+    async (provider: ServerProvider) => {
+      if (!api || updatingProviderInstanceId) return;
+      setUpdatingProviderInstanceId(provider.instanceId);
+      try {
+        const payload = await api.server.updateProvider({
+          provider: provider.driver,
+          instanceId: provider.instanceId,
+        });
+        setServerConfig((current) =>
+          current
+            ? {
+                ...current,
+                providerInstances: payload.providers,
+              }
+            : current,
+        );
+        const updated = payload.providers.find(
+          (candidate) => candidate.instanceId === provider.instanceId,
+        );
+        setStatus(updated?.updateState?.message ?? "Provider update finished");
+      } catch (error) {
+        logger.log("server.providers.updateFailed", {
+          provider: provider.driver,
+          instanceId: provider.instanceId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        setStatus("Provider update failed");
+      } finally {
+        setUpdatingProviderInstanceId(null);
+      }
+    },
+    [api, logger, updatingProviderInstanceId],
   );
   const updateAssistantStreamingSetting = useCallback(
     (enableAssistantStreaming: boolean) => {
@@ -3942,6 +4024,10 @@ export function App({
     [appSettings, serverSettings],
   );
   const providerSnapshots = serverConfig?.providerInstances ?? EMPTY_PROVIDER_SNAPSHOTS;
+  const providerSnapshotByInstanceId = useMemo(
+    () => new Map(providerSnapshots.map((provider) => [provider.instanceId, provider] as const)),
+    [providerSnapshots],
+  );
   const providerLastCheckedAt =
     providerSnapshots.length > 0
       ? providerSnapshots.reduce(
@@ -10393,6 +10479,16 @@ export function App({
                               serverSettings,
                               providerSettings.provider,
                             );
+                            const defaultProviderSnapshot = providerSnapshotByInstanceId.get(
+                              defaultProviderInstanceIdForSettingsKey(providerSettings.provider),
+                            );
+                            const defaultProviderStatus =
+                              formatProviderVersionStatus(defaultProviderSnapshot);
+                            const canUpdateDefaultProvider =
+                              canRunProviderUpdate(defaultProviderSnapshot);
+                            const isDefaultProviderUpdating =
+                              isProviderUpdateActive(defaultProviderSnapshot) ||
+                              updatingProviderInstanceId === defaultProviderSnapshot?.instanceId;
                             return (
                               <box
                                 key={providerSettings.provider}
@@ -10424,8 +10520,27 @@ export function App({
                                     {isProviderDirty ? (
                                       <text content="Custom" style={{ fg: PALETTE.subtle }} />
                                     ) : null}
+                                    {defaultProviderStatus ? (
+                                      <text
+                                        content={defaultProviderStatus}
+                                        style={{ fg: PALETTE.subtle, marginLeft: 1 }}
+                                      />
+                                    ) : null}
                                   </box>
                                   <box style={{ flexDirection: "row", alignItems: "center" }}>
+                                    {defaultProviderSnapshot?.versionAdvisory?.canUpdate ? (
+                                      <ToolbarButton
+                                        label={providerUpdateButtonLabel(defaultProviderSnapshot)}
+                                        disabled={
+                                          !api ||
+                                          !canUpdateDefaultProvider ||
+                                          isDefaultProviderUpdating
+                                        }
+                                        onPress={() => {
+                                          void runProviderUpdate(defaultProviderSnapshot);
+                                        }}
+                                      />
+                                    ) : null}
                                     <TogglePill
                                       checked={isProviderEnabled}
                                       onPress={() =>
@@ -10603,7 +10718,14 @@ export function App({
                                                     style={{ fg: PALETTE.text }}
                                                   />
                                                   <text
-                                                    content="Copied install settings can be edited independently."
+                                                    content={
+                                                      formatProviderVersionStatus(
+                                                        providerSnapshotByInstanceId.get(
+                                                          instanceId,
+                                                        ),
+                                                      ) ??
+                                                      "Copied install settings can be edited independently."
+                                                    }
                                                     style={{ fg: PALETTE.subtle }}
                                                   />
                                                 </box>
@@ -10613,6 +10735,39 @@ export function App({
                                                     alignItems: "center",
                                                   }}
                                                 >
+                                                  {providerSnapshotByInstanceId.get(instanceId)
+                                                    ?.versionAdvisory?.canUpdate ? (
+                                                    <ToolbarButton
+                                                      label={providerUpdateButtonLabel(
+                                                        providerSnapshotByInstanceId.get(
+                                                          instanceId,
+                                                        ),
+                                                      )}
+                                                      disabled={
+                                                        !api ||
+                                                        !canRunProviderUpdate(
+                                                          providerSnapshotByInstanceId.get(
+                                                            instanceId,
+                                                          ),
+                                                        ) ||
+                                                        isProviderUpdateActive(
+                                                          providerSnapshotByInstanceId.get(
+                                                            instanceId,
+                                                          ),
+                                                        ) ||
+                                                        updatingProviderInstanceId === instanceId
+                                                      }
+                                                      onPress={() => {
+                                                        const snapshot =
+                                                          providerSnapshotByInstanceId.get(
+                                                            instanceId,
+                                                          );
+                                                        if (snapshot) {
+                                                          void runProviderUpdate(snapshot);
+                                                        }
+                                                      }}
+                                                    />
+                                                  ) : null}
                                                   <TogglePill
                                                     checked={instance.enabled !== false}
                                                     onPress={() =>

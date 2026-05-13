@@ -27,6 +27,7 @@ import type {
 } from "./project";
 import type {
   ServerConfig,
+  ServerProviderUpdateInput,
   ServerProviderUpdatedPayload,
   ServerRefreshProvidersInput,
 } from "./server";
@@ -168,6 +169,7 @@ export interface NativeApi {
     refreshProviders: (
       input?: ServerRefreshProvidersInput,
     ) => Promise<ServerProviderUpdatedPayload>;
+    updateProvider: (input: ServerProviderUpdateInput) => Promise<ServerProviderUpdatedPayload>;
     getSettings: () => Promise<ServerSettings>;
     updateSettings: (patch: ServerSettingsPatch) => Promise<ServerSettings>;
     upsertKeybinding: (input: ServerUpsertKeybindingInput) => Promise<ServerUpsertKeybindingResult>;
