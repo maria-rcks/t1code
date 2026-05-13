@@ -100,6 +100,7 @@ import {
 } from "@t3tools/client-core";
 import {
   applyClaudePromptEffortPrefix,
+  createModelSelection,
   getDefaultReasoningEffort,
   getModelOptions,
   getReasoningEffortOptions,
@@ -2843,6 +2844,25 @@ export function App({
     },
     [updateAppSettings, updateServerSettings],
   );
+  const updateGitTextGenerationModel = useCallback(
+    (model: string) => {
+      const textGenerationModelSelection = createModelSelection(
+        defaultInstanceIdForDriver("codex" as ProviderDriverKind),
+        model,
+      );
+      updateAppSettings({ textGenerationModel: model });
+      setServerSettings((current) =>
+        current
+          ? {
+              ...current,
+              textGenerationModelSelection,
+            }
+          : current,
+      );
+      updateServerSettings({ textGenerationModelSelection });
+    },
+    [updateAppSettings, updateServerSettings],
+  );
   const tracksSystemThemeMode = shouldTrackSystemThemeMode(appSettings.theme);
   const usesTerminalPalette = shouldResolveTerminalPalette(tuiThemeId);
   const listensForRendererThemeChanges = shouldListenForRendererThemeChanges(
@@ -3507,13 +3527,17 @@ export function App({
     () => getProviderStartOptions(appSettings),
     [appSettings],
   );
-  const gitTextGenerationModelOptions = useMemo(
-    () =>
-      getAppModelOptions("codex", customModelsByProvider.codex, appSettings.textGenerationModel),
-    [appSettings.textGenerationModel, customModelsByProvider.codex],
-  );
   const currentGitTextGenerationModel =
-    appSettings.textGenerationModel ?? DEFAULT_GIT_TEXT_GENERATION_MODEL;
+    serverSettings?.textGenerationModelSelection.model ??
+    appSettings.textGenerationModel ??
+    DEFAULT_GIT_TEXT_GENERATION_MODEL;
+  const currentGitTextGenerationInstanceId =
+    serverSettings?.textGenerationModelSelection.instanceId ??
+    defaultInstanceIdForDriver("codex" as ProviderDriverKind);
+  const gitTextGenerationModelOptions = useMemo(
+    () => getAppModelOptions("codex", customModelsByProvider.codex, currentGitTextGenerationModel),
+    [customModelsByProvider.codex, currentGitTextGenerationModel],
+  );
   const isGitRepo = gitBranchList?.isRepo ?? true;
   const hasOriginRemote = gitBranchList?.hasOriginRemote ?? false;
   const visibleGitBranches = useMemo(
@@ -3584,8 +3608,10 @@ export function App({
     return items;
   }, [gitActionBusy, gitCwd, gitQuickAction, gitStatusForActions, hasOriginRemote, isGitRepo]);
   const isGitTextGenerationModelDirty =
-    currentGitTextGenerationModel !==
-    (DEFAULT_APP_SETTINGS.textGenerationModel ?? DEFAULT_GIT_TEXT_GENERATION_MODEL);
+    currentGitTextGenerationInstanceId !==
+      DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.instanceId ||
+    currentGitTextGenerationModel !== DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model ||
+    (serverSettings?.textGenerationModelSelection.options?.length ?? 0) > 0;
   const selectedThemeLabel =
     THEME_OPTIONS.find((option) => option === appSettings.theme) === "system"
       ? "System"
@@ -3716,7 +3742,7 @@ export function App({
           label: option.name,
           selected: option.slug === currentGitTextGenerationModel,
           onSelect: () => {
-            updateAppSettings({ textGenerationModel: option.slug });
+            updateGitTextGenerationModel(option.slug);
             setOverlayMenu(null);
           },
         }));
@@ -3742,6 +3768,7 @@ export function App({
     tuiThemeId,
     updateAppSettings,
     updateDefaultThreadEnvModeSetting,
+    updateGitTextGenerationModel,
   ]);
   const sidebarSortItems = useMemo<SidebarSortMenuItem[]>(
     () => [
@@ -5765,6 +5792,7 @@ export function App({
     updateServerSettings({
       defaultThreadEnvMode: DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode,
       enableAssistantStreaming: DEFAULT_SERVER_SETTINGS.enableAssistantStreaming,
+      textGenerationModelSelection: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection,
       providers: {
         codex: {
           binaryPath: DEFAULT_SERVER_SETTINGS.providers.codex.binaryPath,
@@ -5783,6 +5811,7 @@ export function App({
             ...current,
             defaultThreadEnvMode: DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode,
             enableAssistantStreaming: DEFAULT_SERVER_SETTINGS.enableAssistantStreaming,
+            textGenerationModelSelection: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection,
             providers: {
               ...current.providers,
               codex: {
@@ -5903,6 +5932,20 @@ export function App({
     });
     setCustomModelErrorByProvider({});
     setShowAllCustomModels(false);
+  }
+
+  function resetGitTextGenerationModel() {
+    const textGenerationModelSelection = DEFAULT_SERVER_SETTINGS.textGenerationModelSelection;
+    updateAppSettings({ textGenerationModel: DEFAULT_APP_SETTINGS.textGenerationModel });
+    setServerSettings((current) =>
+      current
+        ? {
+            ...current,
+            textGenerationModelSelection,
+          }
+        : current,
+    );
+    updateServerSettings({ textGenerationModelSelection });
   }
 
   function updateCodexInstallSettings(
@@ -8707,13 +8750,7 @@ export function App({
                           description="Used for generated commit messages, PR titles, and branch names."
                           resetAction={
                             isGitTextGenerationModelDirty ? (
-                              <SettingResetButton
-                                onPress={() =>
-                                  updateAppSettings({
-                                    textGenerationModel: DEFAULT_APP_SETTINGS.textGenerationModel,
-                                  })
-                                }
-                              />
+                              <SettingResetButton onPress={resetGitTextGenerationModel} />
                             ) : null
                           }
                           control={
