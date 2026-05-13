@@ -332,6 +332,11 @@ removing those fork surfaces unless a replacement has been implemented and wired
   per-instance `claude -p` structured-output text generation with effort,
   fast-mode/thinking settings, Claude HOME environment resolution, schema
   decoding, and focused fake-binary coverage.
+- Codex session runtime: partially align with upstream `08e6d4cf` by adding
+  the per-instance Codex app-server runtime, collaboration-mode developer
+  instructions, thread open/resume fallback handling, turn-start parameter
+  construction, and focused runtime regression tests adapted to this fork's
+  current runtime-mode contract.
 
 ## Remaining upstream groups
 
