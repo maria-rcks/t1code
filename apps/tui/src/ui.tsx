@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import * as Duration from "effect/Duration";
 import type {
   CliRenderer,
   InputRenderable,
@@ -23,6 +24,7 @@ import {
   ApprovalRequestId,
   type ClaudeCodeEffort,
   type CodexReasoningEffort,
+  DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL,
   DEFAULT_GIT_TEXT_GENERATION_MODEL,
   DEFAULT_MODEL_BY_PROVIDER,
   DEFAULT_SERVER_SETTINGS,
@@ -275,6 +277,7 @@ type TuiProviderInstancePatch = {
 
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Readonly<Record<string, PendingUserInputDraftAnswer>> = {};
 const PROVIDER_ENVIRONMENT_VARIABLE_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+const GIT_FETCH_INTERVAL_STEP_SECONDS = 5;
 type T1Api = ReturnType<typeof createTransportNativeApi>["api"];
 type ThreadReadModel = OrchestrationReadModel["threads"][number];
 type ProjectReadModel = OrchestrationReadModel["projects"][number];
@@ -697,6 +700,14 @@ function readDefaultProviderInstanceEnvironment(
   return (
     settings.providerInstances[defaultProviderInstanceIdForSettingsKey(provider)]?.environment ?? []
   );
+}
+
+function durationToSeconds(duration: Duration.Duration): number {
+  return Math.round(Duration.toMillis(duration) / 1_000);
+}
+
+function normalizeFetchIntervalSeconds(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
 }
 
 function readProviderInstanceConfigStringArray(
@@ -4054,6 +4065,12 @@ export function App({
   const selectedTuiThemeLabel = TUI_THEME_LABELS[tuiThemeId] ?? TUI_THEME_LABELS.default;
   const selectedThreadEnvLabel = defaultThreadEnvMode === "worktree" ? "New worktree" : "Local";
   const addProjectBaseDirectory = serverSettings?.addProjectBaseDirectory ?? "";
+  const automaticGitFetchIntervalSeconds = durationToSeconds(
+    serverSettings?.automaticGitFetchInterval ?? DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL,
+  );
+  const defaultAutomaticGitFetchIntervalSeconds = durationToSeconds(
+    DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL,
+  );
   const sidebarThreadPreviewCount =
     appSettings.sidebarThreadPreviewCount ?? DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT;
   const composerEnvMenuItems: ComposerEnvMenuItem[] = ENV_MODE_OPTIONS.map((option) => ({
@@ -4373,6 +4390,9 @@ export function App({
       : []),
     ...(assistantStreamingEnabled !== DEFAULT_SERVER_SETTINGS.enableAssistantStreaming
       ? ["Assistant output"]
+      : []),
+    ...(automaticGitFetchIntervalSeconds !== defaultAutomaticGitFetchIntervalSeconds
+      ? ["Automatic Git fetch interval"]
       : []),
     ...(defaultThreadEnvMode !== DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode
       ? ["New threads"]
@@ -6413,6 +6433,23 @@ export function App({
     });
   }
 
+  function updateAutomaticGitFetchInterval(seconds: number) {
+    const automaticGitFetchInterval = Duration.seconds(normalizeFetchIntervalSeconds(seconds));
+    setServerSettings((current) =>
+      current
+        ? {
+            ...current,
+            automaticGitFetchInterval,
+          }
+        : current,
+    );
+    updateServerSettings({ automaticGitFetchInterval });
+  }
+
+  function updateAutomaticGitFetchIntervalBy(deltaSeconds: number) {
+    updateAutomaticGitFetchInterval(automaticGitFetchIntervalSeconds + deltaSeconds);
+  }
+
   function updateProviderModelPreferences(
     instanceId: ProviderInstanceId,
     nextPreferences: {
@@ -6517,6 +6554,7 @@ export function App({
       defaultThreadEnvMode: DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode,
       addProjectBaseDirectory: DEFAULT_SERVER_SETTINGS.addProjectBaseDirectory,
       enableAssistantStreaming: DEFAULT_SERVER_SETTINGS.enableAssistantStreaming,
+      automaticGitFetchInterval: DEFAULT_SERVER_SETTINGS.automaticGitFetchInterval,
       textGenerationModelSelection: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection,
       providers: {
         codex: {
@@ -6537,6 +6575,7 @@ export function App({
             defaultThreadEnvMode: DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode,
             addProjectBaseDirectory: DEFAULT_SERVER_SETTINGS.addProjectBaseDirectory,
             enableAssistantStreaming: DEFAULT_SERVER_SETTINGS.enableAssistantStreaming,
+            automaticGitFetchInterval: DEFAULT_SERVER_SETTINGS.automaticGitFetchInterval,
             textGenerationModelSelection: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection,
             providers: {
               ...current.providers,
@@ -9698,6 +9737,46 @@ export function App({
                                 updateAssistantStreamingSetting(!assistantStreamingEnabled)
                               }
                             />
+                          }
+                        />
+                        <SettingsRow
+                          title="Git fetch interval"
+                          description="Refresh remote branch status in the background. Set to 0 seconds to only fetch during explicit Git actions."
+                          status={`${automaticGitFetchIntervalSeconds}s`}
+                          resetAction={
+                            automaticGitFetchIntervalSeconds !==
+                            defaultAutomaticGitFetchIntervalSeconds ? (
+                              <SettingResetButton
+                                onPress={() =>
+                                  updateAutomaticGitFetchInterval(
+                                    defaultAutomaticGitFetchIntervalSeconds,
+                                  )
+                                }
+                              />
+                            ) : null
+                          }
+                          control={
+                            <box style={{ flexDirection: "row", alignItems: "center" }}>
+                              <ToolbarButton
+                                label="-"
+                                disabled={automaticGitFetchIntervalSeconds <= 0}
+                                onPress={() =>
+                                  updateAutomaticGitFetchIntervalBy(
+                                    -GIT_FETCH_INTERVAL_STEP_SECONDS,
+                                  )
+                                }
+                              />
+                              <text
+                                content={`${automaticGitFetchIntervalSeconds}s`}
+                                style={{ fg: PALETTE.text, marginLeft: 1, marginRight: 1 }}
+                              />
+                              <ToolbarButton
+                                label="+"
+                                onPress={() =>
+                                  updateAutomaticGitFetchIntervalBy(GIT_FETCH_INTERVAL_STEP_SECONDS)
+                                }
+                              />
+                            </box>
                           }
                         />
                         <SettingsRow
