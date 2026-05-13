@@ -663,6 +663,22 @@ function readProviderInstallSettingValue(
     : "";
 }
 
+function readProviderInstanceConfigStringArray(
+  settings: ServerSettings | null,
+  provider: InstallProviderKey,
+  key: string,
+): readonly string[] | undefined {
+  const config =
+    settings?.providerInstances[defaultProviderInstanceIdForSettingsKey(provider)]?.config;
+  if (!config || typeof config !== "object" || globalThis.Array.isArray(config)) {
+    return undefined;
+  }
+  const value = (config as Record<string, unknown>)[key];
+  return globalThis.Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : undefined;
+}
+
 function readProviderInstallEnabled(
   settings: ServerSettings,
   provider: InstallProviderKey,
@@ -3740,17 +3756,15 @@ export function App({
   const customModelsByProvider = useMemo(
     () => ({
       codex:
+        readProviderInstanceConfigStringArray(serverSettings, "codex", "customModels") ??
         serverSettings?.providers.codex.customModels ??
         getCustomModelsForProvider(appSettings, "codex"),
       claudeAgent:
+        readProviderInstanceConfigStringArray(serverSettings, "claudeAgent", "customModels") ??
         serverSettings?.providers.claudeAgent.customModels ??
         getCustomModelsForProvider(appSettings, "claudeAgent"),
     }),
-    [
-      appSettings,
-      serverSettings?.providers.claudeAgent.customModels,
-      serverSettings?.providers.codex.customModels,
-    ],
+    [appSettings, serverSettings],
   );
   const providerSnapshots = serverConfig?.providerInstances ?? EMPTY_PROVIDER_SNAPSHOTS;
   const modelMenuEntries = useMemo<ReadonlyArray<ModelMenuInstanceEntry>>(() => {
@@ -6339,21 +6353,29 @@ export function App({
   function updateProviderCustomModels(provider: ProviderKind, models: readonly string[]) {
     const nextModels = normalizeCustomModelSlugs(models, provider);
     updateAppSettings(patchCustomModels(provider, nextModels));
+    if (!serverSettings) {
+      setStatus("Settings loading");
+      return;
+    }
+    const settingsPatch = buildDefaultProviderInstanceUpdatePatch({
+      settings: serverSettings,
+      provider,
+      configPatch: { customModels: nextModels },
+    });
+    const providerPatch = settingsPatch.providers as NonNullable<ServerSettingsPatch["providers"]>;
     setServerSettings((current) =>
       current
         ? {
             ...current,
             providers: {
               ...current.providers,
-              [provider]: {
-                ...current.providers[provider],
-                customModels: nextModels,
-              },
-            },
+              ...providerPatch,
+            } as ServerSettings["providers"],
+            providerInstances: settingsPatch.providerInstances ?? current.providerInstances,
           }
         : current,
     );
-    updateServerSettings({ providers: { [provider]: { customModels: nextModels } } });
+    updateServerSettings(settingsPatch);
   }
 
   function resetProviderCustomModels() {
@@ -6361,34 +6383,54 @@ export function App({
       customCodexModels: DEFAULT_APP_SETTINGS.customCodexModels,
       customClaudeModels: DEFAULT_APP_SETTINGS.customClaudeModels,
     });
+    if (!serverSettings) {
+      setStatus("Settings loading");
+      return;
+    }
+    const codexPatch = buildDefaultProviderInstanceUpdatePatch({
+      settings: serverSettings,
+      provider: "codex",
+      configPatch: { customModels: DEFAULT_SERVER_SETTINGS.providers.codex.customModels },
+    });
+    const settingsAfterCodex = {
+      ...serverSettings,
+      providers: {
+        ...serverSettings.providers,
+        ...(codexPatch.providers as NonNullable<ServerSettingsPatch["providers"]>),
+      } as ServerSettings["providers"],
+      providerInstances: codexPatch.providerInstances ?? serverSettings.providerInstances,
+    };
+    const claudePatch = buildDefaultProviderInstanceUpdatePatch({
+      settings: settingsAfterCodex,
+      provider: "claudeAgent",
+      configPatch: {
+        customModels: DEFAULT_SERVER_SETTINGS.providers.claudeAgent.customModels,
+      },
+    });
+    const providerPatch = {
+      ...(codexPatch.providers as NonNullable<ServerSettingsPatch["providers"]>),
+      ...(claudePatch.providers as NonNullable<ServerSettingsPatch["providers"]>),
+    } as NonNullable<ServerSettingsPatch["providers"]>;
+    const providerInstancesPatch = claudePatch.providerInstances as NonNullable<
+      ServerSettingsPatch["providerInstances"]
+    >;
+    const settingsPatch: ServerSettingsPatch = {
+      providers: providerPatch,
+      providerInstances: providerInstancesPatch,
+    };
     setServerSettings((current) =>
       current
         ? {
             ...current,
             providers: {
               ...current.providers,
-              codex: {
-                ...current.providers.codex,
-                customModels: DEFAULT_SERVER_SETTINGS.providers.codex.customModels,
-              },
-              claudeAgent: {
-                ...current.providers.claudeAgent,
-                customModels: DEFAULT_SERVER_SETTINGS.providers.claudeAgent.customModels,
-              },
-            },
+              ...providerPatch,
+            } as ServerSettings["providers"],
+            providerInstances: settingsPatch.providerInstances ?? current.providerInstances,
           }
         : current,
     );
-    updateServerSettings({
-      providers: {
-        codex: {
-          customModels: DEFAULT_SERVER_SETTINGS.providers.codex.customModels,
-        },
-        claudeAgent: {
-          customModels: DEFAULT_SERVER_SETTINGS.providers.claudeAgent.customModels,
-        },
-      },
-    });
+    updateServerSettings(settingsPatch);
     setCustomModelErrorByProvider({});
     setShowAllCustomModels(false);
   }
