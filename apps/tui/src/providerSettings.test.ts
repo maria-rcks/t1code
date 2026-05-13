@@ -10,6 +10,7 @@ import {
   buildDeleteProviderInstancePatch,
   buildDefaultProviderInstanceUpdatePatch,
   buildDuplicateDefaultProviderInstancePatch,
+  buildProviderInstanceUpdatePatch,
   buildResetDefaultProviderInstancesPatch,
   defaultProviderInstanceIdForSettingsKey,
   providerDriverKindForSettingsKey,
@@ -249,6 +250,69 @@ describe("providerSettings", () => {
     expect(patch.providerInstances?.[customId]).toBeUndefined();
     expect(patch.providerInstances?.[codexId]).toEqual({
       driver: decodeProviderDriverKind("codex"),
+    });
+  });
+
+  it("updates a custom provider instance envelope and config in place", () => {
+    const customId = decodeProviderInstanceId("claudeAgent_work");
+    const patch = buildProviderInstanceUpdatePatch({
+      settings: {
+        providerInstances: {
+          [customId]: {
+            driver: decodeProviderDriverKind("claudeAgent"),
+            displayName: "Work Claude",
+            config: {
+              binaryPath: "/usr/bin/claude",
+              homePath: "/Users/maria",
+            },
+          },
+        },
+      },
+      instanceId: customId,
+      configPatch: {
+        homePath: "/Users/maria/.claude-work",
+        launchArgs: "--chrome",
+      },
+      instancePatch: {
+        displayName: "Claude Work",
+        enabled: false,
+      },
+    });
+
+    expect(patch.providerInstances?.[customId]).toEqual({
+      driver: decodeProviderDriverKind("claudeAgent"),
+      displayName: "Claude Work",
+      enabled: false,
+      config: {
+        binaryPath: "/usr/bin/claude",
+        homePath: "/Users/maria/.claude-work",
+        launchArgs: "--chrome",
+      },
+    });
+  });
+
+  it("clears empty custom provider instance metadata", () => {
+    const customId = decodeProviderInstanceId("codex_work");
+    const patch = buildProviderInstanceUpdatePatch({
+      settings: {
+        providerInstances: {
+          [customId]: {
+            driver: decodeProviderDriverKind("codex"),
+            displayName: "Work",
+            accentColor: "#112233",
+          },
+        },
+      },
+      instanceId: customId,
+      instancePatch: {
+        displayName: undefined,
+        accentColor: undefined,
+      },
+    });
+
+    expect(patch.providerInstances?.[customId]).toEqual({
+      driver: decodeProviderDriverKind("codex"),
+      config: {},
     });
   });
 });

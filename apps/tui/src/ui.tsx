@@ -165,6 +165,7 @@ import {
   buildDeleteProviderInstancePatch,
   buildDefaultProviderInstanceUpdatePatch,
   buildDuplicateDefaultProviderInstancePatch,
+  buildProviderInstanceUpdatePatch,
   buildResetDefaultProviderInstancesPatch,
   defaultProviderInstanceIdForSettingsKey,
 } from "./providerSettings";
@@ -725,6 +726,17 @@ function formatProviderInstanceSummary(
   const label = instance.displayName?.trim() || String(instanceId);
   const state = instance.enabled === false ? "disabled" : "enabled";
   return `${label} · ${String(instanceId)} · ${state}`;
+}
+
+function readProviderInstanceConfigValue(
+  instance: ProviderInstanceConfig,
+  field: InstallProviderFieldKey,
+): string {
+  const config = instance.config;
+  if (!config || typeof config !== "object" || globalThis.Array.isArray(config)) {
+    return "";
+  }
+  return String((config as Record<string, unknown>)[field] ?? "");
 }
 
 function durationToSeconds(duration: Duration.Duration): number {
@@ -6964,6 +6976,57 @@ export function App({
     setStatus(`Removed ${String(instanceId)}`);
   }
 
+  function updateProviderInstallInstance(
+    instanceId: ProviderInstanceId,
+    patch: Parameters<typeof buildProviderInstanceUpdatePatch>[0]["configPatch"],
+    instancePatch?: Parameters<typeof buildProviderInstanceUpdatePatch>[0]["instancePatch"],
+  ) {
+    if (!serverSettings) {
+      setStatus("Settings loading");
+      return;
+    }
+    const settingsPatch = buildProviderInstanceUpdatePatch({
+      settings: serverSettings,
+      instanceId,
+      configPatch: patch,
+      instancePatch,
+    });
+    const textGenerationModelSelection =
+      instancePatch?.enabled === false && currentGitTextGenerationInstanceId === instanceId
+        ? DEFAULT_SERVER_SETTINGS.textGenerationModelSelection
+        : undefined;
+    setServerSettings((current) =>
+      current
+        ? {
+            ...current,
+            ...(textGenerationModelSelection ? { textGenerationModelSelection } : {}),
+            providerInstances: settingsPatch.providerInstances ?? current.providerInstances,
+          }
+        : current,
+    );
+    updateServerSettings({
+      ...settingsPatch,
+      ...(textGenerationModelSelection ? { textGenerationModelSelection } : {}),
+    });
+  }
+
+  function updateProviderInstallInstanceDisplayName(instanceId: ProviderInstanceId, value: string) {
+    const trimmed = value.trim();
+    updateProviderInstallInstance(instanceId, {}, { displayName: trimmed || undefined });
+  }
+
+  function updateProviderInstallInstanceField(
+    instanceId: ProviderInstanceId,
+    field: InstallProviderFieldKey,
+    value: string,
+  ) {
+    updateProviderInstallInstance(instanceId, { [field]: value });
+  }
+
+  function updateProviderInstallInstanceEnabled(instanceId: ProviderInstanceId, enabled: boolean) {
+    updateProviderInstallInstance(instanceId, {}, { enabled });
+  }
+
   function updateProviderInstallEnabled(provider: InstallProviderKey, enabled: boolean) {
     if (!serverSettings) {
       setStatus("Settings loading");
@@ -10459,41 +10522,146 @@ export function App({
                                           ([instanceId, instance]) => (
                                             <box
                                               key={`${providerSettings.provider}:instance:${String(instanceId)}`}
-                                              style={{
-                                                flexDirection: "row",
-                                                alignItems: "center",
-                                                justifyContent: "space-between",
-                                                backgroundColor: PALETTE.surfaceAlt,
-                                                paddingLeft: 1,
-                                                paddingRight: 1,
-                                                marginBottom: 1,
-                                              }}
+                                              style={{ flexDirection: "column", marginBottom: 1 }}
                                             >
                                               <box
                                                 style={{
+                                                  flexDirection: "row",
+                                                  alignItems: "center",
+                                                  justifyContent: "space-between",
+                                                  backgroundColor: PALETTE.surfaceAlt,
+                                                  paddingLeft: 1,
+                                                  paddingRight: 1,
+                                                }}
+                                              >
+                                                <box
+                                                  style={{
+                                                    flexDirection: "column",
+                                                    flexGrow: 1,
+                                                    flexShrink: 1,
+                                                  }}
+                                                >
+                                                  <text
+                                                    content={formatProviderInstanceSummary(
+                                                      instanceId,
+                                                      instance,
+                                                    )}
+                                                    style={{ fg: PALETTE.text }}
+                                                  />
+                                                  <text
+                                                    content="Copied install settings can be edited independently."
+                                                    style={{ fg: PALETTE.subtle }}
+                                                  />
+                                                </box>
+                                                <box
+                                                  style={{
+                                                    flexDirection: "row",
+                                                    alignItems: "center",
+                                                  }}
+                                                >
+                                                  <TogglePill
+                                                    checked={instance.enabled !== false}
+                                                    onPress={() =>
+                                                      updateProviderInstallInstanceEnabled(
+                                                        instanceId,
+                                                        instance.enabled === false,
+                                                      )
+                                                    }
+                                                  />
+                                                  <ToolbarButton
+                                                    label="Remove"
+                                                    onPress={() =>
+                                                      removeProviderInstallInstance(instanceId)
+                                                    }
+                                                  />
+                                                </box>
+                                              </box>
+                                              <box
+                                                style={{
                                                   flexDirection: "column",
-                                                  flexGrow: 1,
-                                                  flexShrink: 1,
+                                                  paddingLeft: 1,
+                                                  paddingRight: 1,
+                                                  marginBottom: 1,
                                                 }}
                                               >
                                                 <text
-                                                  content={formatProviderInstanceSummary(
-                                                    instanceId,
-                                                    instance,
-                                                  )}
-                                                  style={{ fg: PALETTE.text }}
+                                                  content="Display name"
+                                                  style={{ fg: PALETTE.text, marginBottom: 1 }}
                                                 />
-                                                <text
-                                                  content="Configure detailed metadata and model preferences from the provider and model pickers."
-                                                  style={{ fg: PALETTE.subtle }}
-                                                />
+                                                <box
+                                                  style={{
+                                                    backgroundColor: PALETTE.input,
+                                                    paddingLeft: 1,
+                                                    paddingRight: 1,
+                                                    height: 3,
+                                                    justifyContent: "center",
+                                                    marginBottom: 1,
+                                                  }}
+                                                >
+                                                  <input
+                                                    value={instance.displayName?.trim() ?? ""}
+                                                    onInput={(value) =>
+                                                      updateProviderInstallInstanceDisplayName(
+                                                        instanceId,
+                                                        value,
+                                                      )
+                                                    }
+                                                    placeholder={String(instanceId)}
+                                                    cursorColor={PALETTE.cursor}
+                                                    style={{
+                                                      backgroundColor: PALETTE.input,
+                                                      focusedBackgroundColor: PALETTE.input,
+                                                      textColor: PALETTE.text,
+                                                      focusedTextColor: PALETTE.text,
+                                                      placeholderColor: PALETTE.subtle,
+                                                    }}
+                                                  />
+                                                </box>
+                                                {providerSettings.fields.map((field) => (
+                                                  <box
+                                                    key={`${providerSettings.provider}:instance:${String(instanceId)}:${field.key}`}
+                                                    style={{ flexDirection: "column" }}
+                                                  >
+                                                    <text
+                                                      content={field.label}
+                                                      style={{ fg: PALETTE.text, marginBottom: 1 }}
+                                                    />
+                                                    <box
+                                                      style={{
+                                                        backgroundColor: PALETTE.input,
+                                                        paddingLeft: 1,
+                                                        paddingRight: 1,
+                                                        height: 3,
+                                                        justifyContent: "center",
+                                                        marginBottom: 1,
+                                                      }}
+                                                    >
+                                                      <input
+                                                        value={readProviderInstanceConfigValue(
+                                                          instance,
+                                                          field.key,
+                                                        )}
+                                                        onInput={(value) =>
+                                                          updateProviderInstallInstanceField(
+                                                            instanceId,
+                                                            field.key,
+                                                            value,
+                                                          )
+                                                        }
+                                                        placeholder={field.placeholder}
+                                                        cursorColor={PALETTE.cursor}
+                                                        style={{
+                                                          backgroundColor: PALETTE.input,
+                                                          focusedBackgroundColor: PALETTE.input,
+                                                          textColor: PALETTE.text,
+                                                          focusedTextColor: PALETTE.text,
+                                                          placeholderColor: PALETTE.subtle,
+                                                        }}
+                                                      />
+                                                    </box>
+                                                  </box>
+                                                ))}
                                               </box>
-                                              <ToolbarButton
-                                                label="Remove"
-                                                onPress={() =>
-                                                  removeProviderInstallInstance(instanceId)
-                                                }
-                                              />
                                             </box>
                                           ),
                                         )

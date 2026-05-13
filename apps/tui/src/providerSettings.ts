@@ -16,6 +16,7 @@ type DefaultProviderInstancePatch = {
   readonly enabled?: ProviderInstanceConfig["enabled"] | undefined;
   readonly environment?: ProviderInstanceConfig["environment"] | undefined;
 };
+type ProviderInstancePatch = DefaultProviderInstancePatch;
 
 const decodeProviderDriverKind = Schema.decodeUnknownSync(ProviderDriverKind);
 const decodeProviderInstanceId = Schema.decodeUnknownSync(ProviderInstanceId);
@@ -38,6 +39,38 @@ function recordConfig(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function definedProviderInstancePatch(
+  patch: ProviderInstancePatch | undefined,
+): Partial<
+  Pick<ProviderInstanceConfig, "accentColor" | "displayName" | "enabled" | "environment">
+> {
+  return Object.fromEntries(
+    Object.entries(patch ?? {}).filter(([, value]) => value !== undefined),
+  ) as Partial<
+    Pick<ProviderInstanceConfig, "accentColor" | "displayName" | "enabled" | "environment">
+  >;
+}
+
+function clearEmptyProviderInstanceFields(
+  instance: ProviderInstanceConfig,
+  patch: ProviderInstancePatch | undefined,
+): ProviderInstanceConfig {
+  let nextInstance = instance;
+  if (patch && "displayName" in patch && !patch.displayName) {
+    const { displayName: _displayName, ...rest } = nextInstance;
+    nextInstance = rest as ProviderInstanceConfig;
+  }
+  if (patch && "accentColor" in patch && !patch.accentColor) {
+    const { accentColor: _accentColor, ...rest } = nextInstance;
+    nextInstance = rest as ProviderInstanceConfig;
+  }
+  if (patch && "environment" in patch && !patch.environment) {
+    const { environment: _environment, ...rest } = nextInstance;
+    nextInstance = rest as ProviderInstanceConfig;
+  }
+  return nextInstance;
+}
+
 export function buildDefaultProviderInstanceUpdatePatch(input: {
   readonly settings: Pick<ServerSettings, "providerInstances" | "providers">;
   readonly provider: ProviderSettingsKey;
@@ -49,45 +82,19 @@ export function buildDefaultProviderInstanceUpdatePatch(input: {
   const existing = input.settings.providerInstances[instanceId];
   const legacyConfig = input.settings.providers[input.provider];
   const defaultLegacyConfig = DEFAULT_SERVER_SETTINGS.providers[input.provider];
-  const definedInstancePatch = Object.fromEntries(
-    Object.entries(input.instancePatch ?? {}).filter(([, value]) => value !== undefined),
-  ) as Partial<
-    Pick<ProviderInstanceConfig, "accentColor" | "displayName" | "enabled" | "environment">
-  >;
-  let nextInstance: ProviderInstanceConfig = {
-    ...existing,
-    driver,
-    ...definedInstancePatch,
-    config: {
-      ...legacyConfig,
-      ...recordConfig(existing?.config),
-      ...input.configPatch,
+  const nextInstance = clearEmptyProviderInstanceFields(
+    {
+      ...existing,
+      driver,
+      ...definedProviderInstancePatch(input.instancePatch),
+      config: {
+        ...legacyConfig,
+        ...recordConfig(existing?.config),
+        ...input.configPatch,
+      },
     },
-  };
-  if (
-    input.instancePatch &&
-    "displayName" in input.instancePatch &&
-    !input.instancePatch.displayName
-  ) {
-    const { displayName: _displayName, ...rest } = nextInstance;
-    nextInstance = rest as ProviderInstanceConfig;
-  }
-  if (
-    input.instancePatch &&
-    "accentColor" in input.instancePatch &&
-    !input.instancePatch.accentColor
-  ) {
-    const { accentColor: _accentColor, ...rest } = nextInstance;
-    nextInstance = rest as ProviderInstanceConfig;
-  }
-  if (
-    input.instancePatch &&
-    "environment" in input.instancePatch &&
-    !input.instancePatch.environment
-  ) {
-    const { environment: _environment, ...rest } = nextInstance;
-    nextInstance = rest as ProviderInstanceConfig;
-  }
+    input.instancePatch,
+  );
 
   return {
     providers: {
@@ -168,4 +175,34 @@ export function buildDeleteProviderInstancePatch(input: {
   const providerInstances = { ...input.settings.providerInstances };
   delete providerInstances[input.instanceId];
   return { providerInstances };
+}
+
+export function buildProviderInstanceUpdatePatch(input: {
+  readonly settings: Pick<ServerSettings, "providerInstances">;
+  readonly instanceId: ProviderInstanceId;
+  readonly configPatch?: Readonly<Record<string, unknown>> | undefined;
+  readonly instancePatch?: ProviderInstancePatch | undefined;
+}): ServerSettingsPatch {
+  const existing = input.settings.providerInstances[input.instanceId];
+  if (!existing) {
+    throw new Error(`Provider instance ${String(input.instanceId)} does not exist.`);
+  }
+  const nextInstance = clearEmptyProviderInstanceFields(
+    {
+      ...existing,
+      ...definedProviderInstancePatch(input.instancePatch),
+      config: {
+        ...recordConfig(existing.config),
+        ...input.configPatch,
+      },
+    },
+    input.instancePatch,
+  );
+
+  return {
+    providerInstances: {
+      ...input.settings.providerInstances,
+      [input.instanceId]: nextInstance,
+    },
+  };
 }
