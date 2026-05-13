@@ -90,6 +90,29 @@ describe("providerSettings", () => {
     });
   });
 
+  it("writes default provider envelope updates alongside config edits", () => {
+    const instanceId = decodeProviderInstanceId("claudeAgent");
+    const patch = buildDefaultProviderInstanceUpdatePatch({
+      settings: DEFAULT_SERVER_SETTINGS,
+      provider: "claudeAgent",
+      configPatch: {
+        launchArgs: "--chrome",
+      },
+      instancePatch: {
+        enabled: false,
+      },
+    });
+
+    expect(patch.providerInstances?.[instanceId]).toEqual({
+      driver: decodeProviderDriverKind("claudeAgent"),
+      enabled: false,
+      config: {
+        ...DEFAULT_SERVER_SETTINGS.providers.claudeAgent,
+        launchArgs: "--chrome",
+      },
+    });
+  });
+
   it("resets default provider instances by deleting explicit default entries", () => {
     const codexId = decodeProviderInstanceId("codex");
     const customId = decodeProviderInstanceId("codex_personal");

@@ -659,10 +659,44 @@ function readProviderInstallSettingValue(
     : "";
 }
 
+function readProviderInstallEnabled(
+  settings: ServerSettings,
+  provider: InstallProviderKey,
+): boolean {
+  const instance = settings.providerInstances[defaultProviderInstanceIdForSettingsKey(provider)];
+  if (typeof instance?.enabled === "boolean") {
+    return instance.enabled;
+  }
+  if (
+    instance?.config &&
+    typeof instance.config === "object" &&
+    !globalThis.Array.isArray(instance.config)
+  ) {
+    const enabled = (instance.config as Record<string, unknown>).enabled;
+    if (typeof enabled === "boolean") {
+      return enabled;
+    }
+  }
+  return settings.providers[provider].enabled;
+}
+
 function isProviderInstallSettingsDirtyForSettings(
   settings: ServerSettings,
   providerSettings: InstallProviderSettings,
 ): boolean {
+  if (
+    settings.providerInstances[
+      defaultProviderInstanceIdForSettingsKey(providerSettings.provider)
+    ] !== undefined
+  ) {
+    return true;
+  }
+  if (
+    readProviderInstallEnabled(settings, providerSettings.provider) !==
+    DEFAULT_SERVER_SETTINGS.providers[providerSettings.provider].enabled
+  ) {
+    return true;
+  }
   return providerSettings.fields.some(
     (field) =>
       readProviderInstallSettingValue(settings, providerSettings.provider, field.key) !==
@@ -3961,6 +3995,11 @@ export function App({
             ),
         );
   }
+  function providerInstallEnabled(provider: InstallProviderKey): boolean {
+    return serverSettings
+      ? readProviderInstallEnabled(serverSettings, provider)
+      : DEFAULT_SERVER_SETTINGS.providers[provider].enabled;
+  }
   const isInstallSettingsDirty = INSTALL_PROVIDER_SETTINGS.some(isProviderInstallSettingsDirty);
   const savedCustomModelRows = MODEL_PROVIDER_SETTINGS.flatMap((providerSettings) =>
     customModelsByProvider[providerSettings.provider].map((slug) => ({
@@ -6345,6 +6384,42 @@ export function App({
         : current,
     );
     updateServerSettings(settingsPatch);
+  }
+
+  function updateProviderInstallEnabled(provider: InstallProviderKey, enabled: boolean) {
+    if (!serverSettings) {
+      setStatus("Settings loading");
+      return;
+    }
+    const instanceId = defaultProviderInstanceIdForSettingsKey(provider);
+    const settingsPatch = buildDefaultProviderInstanceUpdatePatch({
+      settings: serverSettings,
+      provider,
+      configPatch: {},
+      instancePatch: { enabled },
+    });
+    const textGenerationModelSelection =
+      !enabled && currentGitTextGenerationInstanceId === instanceId
+        ? DEFAULT_SERVER_SETTINGS.textGenerationModelSelection
+        : undefined;
+    const providerPatch = settingsPatch.providers as NonNullable<ServerSettingsPatch["providers"]>;
+    setServerSettings((current) =>
+      current
+        ? {
+            ...current,
+            ...(textGenerationModelSelection ? { textGenerationModelSelection } : {}),
+            providers: {
+              ...current.providers,
+              ...providerPatch,
+            } as ServerSettings["providers"],
+            providerInstances: settingsPatch.providerInstances ?? current.providerInstances,
+          }
+        : current,
+    );
+    updateServerSettings({
+      ...settingsPatch,
+      ...(textGenerationModelSelection ? { textGenerationModelSelection } : {}),
+    });
   }
 
   function resetProviderInstallSettings() {
@@ -9289,6 +9364,9 @@ export function App({
                             const isOpen = openInstallProviders[providerSettings.provider];
                             const isProviderDirty =
                               isProviderInstallSettingsDirty(providerSettings);
+                            const isProviderEnabled = providerInstallEnabled(
+                              providerSettings.provider,
+                            );
                             return (
                               <box
                                 key={providerSettings.provider}
@@ -9321,16 +9399,27 @@ export function App({
                                       <text content="Custom" style={{ fg: PALETTE.subtle }} />
                                     ) : null}
                                   </box>
-                                  <ToolbarButton
-                                    label={isOpen ? "Hide" : "Edit"}
-                                    onPress={() =>
-                                      setOpenInstallProviders((current) => ({
-                                        ...current,
-                                        [providerSettings.provider]:
-                                          !current[providerSettings.provider],
-                                      }))
-                                    }
-                                  />
+                                  <box style={{ flexDirection: "row", alignItems: "center" }}>
+                                    <TogglePill
+                                      checked={isProviderEnabled}
+                                      onPress={() =>
+                                        updateProviderInstallEnabled(
+                                          providerSettings.provider,
+                                          !isProviderEnabled,
+                                        )
+                                      }
+                                    />
+                                    <ToolbarButton
+                                      label={isOpen ? "Hide" : "Edit"}
+                                      onPress={() =>
+                                        setOpenInstallProviders((current) => ({
+                                          ...current,
+                                          [providerSettings.provider]:
+                                            !current[providerSettings.provider],
+                                        }))
+                                      }
+                                    />
+                                  </box>
                                 </box>
                                 {isOpen ? (
                                   <box

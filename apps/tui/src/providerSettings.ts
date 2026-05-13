@@ -35,6 +35,7 @@ export function buildDefaultProviderInstanceUpdatePatch(input: {
   readonly settings: Pick<ServerSettings, "providerInstances" | "providers">;
   readonly provider: ProviderSettingsKey;
   readonly configPatch: Readonly<Record<string, unknown>>;
+  readonly instancePatch?: Pick<ProviderInstanceConfig, "enabled"> | undefined;
 }): ServerSettingsPatch {
   const driver = providerDriverKindForSettingsKey(input.provider);
   const instanceId = defaultInstanceIdForDriver(driver);
@@ -44,6 +45,7 @@ export function buildDefaultProviderInstanceUpdatePatch(input: {
   const nextInstance: ProviderInstanceConfig = {
     ...existing,
     driver,
+    ...input.instancePatch,
     config: {
       ...legacyConfig,
       ...recordConfig(existing?.config),
