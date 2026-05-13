@@ -25,6 +25,7 @@ import {
   type CodexReasoningEffort,
   DEFAULT_GIT_TEXT_GENERATION_MODEL,
   DEFAULT_MODEL_BY_PROVIDER,
+  DEFAULT_SERVER_SETTINGS,
   MODEL_OPTIONS_BY_PROVIDER,
   ORCHESTRATION_WS_METHODS,
   defaultInstanceIdForDriver,
@@ -44,6 +45,8 @@ import {
   type RuntimeMode,
   type ServerConfig,
   type ServerProvider,
+  type ServerSettings,
+  type ServerSettingsPatch,
 } from "@t3tools/contracts";
 import {
   DEFAULT_APP_SETTINGS,
@@ -2640,6 +2643,7 @@ export function App({
   const [api, setApi] = useState<T1Api | null>(null);
   const [snapshot, setSnapshot] = useState<OrchestrationReadModel | null>(null);
   const [serverConfig, setServerConfig] = useState<TuiServerConfig>(null);
+  const [serverSettings, setServerSettings] = useState<ServerSettings | null>(null);
   const [, setStatus] = useState("Booting");
   const [selectionCopyToast, setSelectionCopyToast] = useState<string | null>(null);
   const [startupIssue, setStartupIssue] = useState<string | null>(null);
@@ -2790,6 +2794,24 @@ export function App({
   const updateAppSettings = useCallback((patch: Partial<AppSettings>) => {
     setAppSettings((current) => normalizeAppSettings({ ...current, ...patch }));
   }, []);
+  const updateServerSettings = useCallback(
+    (patch: ServerSettingsPatch) => {
+      if (!api) return;
+      void api.server
+        .updateSettings(patch)
+        .then((settings) => {
+          setServerSettings(settings);
+          logger.log("serverSettings.updated", patch as Record<string, unknown>);
+        })
+        .catch((error) => {
+          logger.log("serverSettings.updateFailed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+          setStatus("Settings update failed");
+        });
+    },
+    [api, logger],
+  );
   const tracksSystemThemeMode = shouldTrackSystemThemeMode(appSettings.theme);
   const usesTerminalPalette = shouldResolveTerminalPalette(tuiThemeId);
   const listensForRendererThemeChanges = shouldListenForRendererThemeChanges(
@@ -3060,6 +3082,28 @@ export function App({
           })
           .catch((error) => {
             logger.log("serverConfig.loadFailed", {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
+        void nativeApi.server
+          .getSettings()
+          .then((settings) => {
+            if (!disposed) {
+              setServerSettings(settings);
+              setOpenInstallProviders({
+                codex:
+                  settings.providers.codex.binaryPath !==
+                    DEFAULT_SERVER_SETTINGS.providers.codex.binaryPath ||
+                  settings.providers.codex.homePath !==
+                    DEFAULT_SERVER_SETTINGS.providers.codex.homePath,
+                claudeAgent:
+                  settings.providers.claudeAgent.binaryPath !==
+                  DEFAULT_SERVER_SETTINGS.providers.claudeAgent.binaryPath,
+              });
+            }
+          })
+          .catch((error) => {
+            logger.log("serverSettings.loadFailed", {
               error: error instanceof Error ? error.message : String(error),
             });
           });
@@ -3558,10 +3602,19 @@ export function App({
       ?.name ?? currentGitTextGenerationModel;
   const totalCustomModels =
     appSettings.customCodexModels.length + appSettings.customClaudeModels.length;
-  const isInstallSettingsDirty =
-    appSettings.claudeBinaryPath !== DEFAULT_APP_SETTINGS.claudeBinaryPath ||
-    appSettings.codexBinaryPath !== DEFAULT_APP_SETTINGS.codexBinaryPath ||
-    appSettings.codexHomePath !== DEFAULT_APP_SETTINGS.codexHomePath;
+  const providerInstallValues = {
+    codexBinaryPath: serverSettings?.providers.codex.binaryPath ?? appSettings.codexBinaryPath,
+    codexHomePath: serverSettings?.providers.codex.homePath ?? appSettings.codexHomePath,
+    claudeBinaryPath:
+      serverSettings?.providers.claudeAgent.binaryPath ?? appSettings.claudeBinaryPath,
+  };
+  const isCodexInstallSettingsDirty =
+    providerInstallValues.codexBinaryPath !== DEFAULT_SERVER_SETTINGS.providers.codex.binaryPath ||
+    providerInstallValues.codexHomePath !== DEFAULT_SERVER_SETTINGS.providers.codex.homePath;
+  const isClaudeInstallSettingsDirty =
+    providerInstallValues.claudeBinaryPath !==
+    DEFAULT_SERVER_SETTINGS.providers.claudeAgent.binaryPath;
+  const isInstallSettingsDirty = isCodexInstallSettingsDirty || isClaudeInstallSettingsDirty;
   const savedCustomModelRows = MODEL_PROVIDER_SETTINGS.flatMap((providerSettings) =>
     getCustomModelsForProvider(appSettings, providerSettings.provider).map((slug) => ({
       key: `${providerSettings.provider}:${slug}`,
@@ -5712,6 +5765,95 @@ export function App({
     updateAppSettings(patchCustomModels(provider, [...customModels, normalized]));
     setCustomModelInputByProvider((current) => ({ ...current, [provider]: "" }));
     setCustomModelErrorByProvider((current) => ({ ...current, [provider]: null }));
+  }
+
+  function updateCodexInstallSettings(
+    patch: Partial<Pick<ServerSettings["providers"]["codex"], "binaryPath" | "homePath">>,
+  ) {
+    updateAppSettings({
+      ...(patch.binaryPath !== undefined ? { codexBinaryPath: patch.binaryPath } : {}),
+      ...(patch.homePath !== undefined ? { codexHomePath: patch.homePath } : {}),
+    });
+    setServerSettings((current) =>
+      current
+        ? {
+            ...current,
+            providers: {
+              ...current.providers,
+              codex: {
+                ...current.providers.codex,
+                ...patch,
+              },
+            },
+          }
+        : current,
+    );
+    updateServerSettings({ providers: { codex: patch } });
+  }
+
+  function updateClaudeInstallSettings(
+    patch: Partial<Pick<ServerSettings["providers"]["claudeAgent"], "binaryPath">>,
+  ) {
+    if (patch.binaryPath !== undefined) {
+      updateAppSettings({ claudeBinaryPath: patch.binaryPath });
+    }
+    setServerSettings((current) =>
+      current
+        ? {
+            ...current,
+            providers: {
+              ...current.providers,
+              claudeAgent: {
+                ...current.providers.claudeAgent,
+                ...patch,
+              },
+            },
+          }
+        : current,
+    );
+    updateServerSettings({ providers: { claudeAgent: patch } });
+  }
+
+  function resetProviderInstallSettings() {
+    updateAppSettings({
+      claudeBinaryPath: DEFAULT_APP_SETTINGS.claudeBinaryPath,
+      codexBinaryPath: DEFAULT_APP_SETTINGS.codexBinaryPath,
+      codexHomePath: DEFAULT_APP_SETTINGS.codexHomePath,
+    });
+    setServerSettings((current) =>
+      current
+        ? {
+            ...current,
+            providers: {
+              ...current.providers,
+              codex: {
+                ...current.providers.codex,
+                binaryPath: DEFAULT_SERVER_SETTINGS.providers.codex.binaryPath,
+                homePath: DEFAULT_SERVER_SETTINGS.providers.codex.homePath,
+              },
+              claudeAgent: {
+                ...current.providers.claudeAgent,
+                binaryPath: DEFAULT_SERVER_SETTINGS.providers.claudeAgent.binaryPath,
+              },
+            },
+          }
+        : current,
+    );
+    updateServerSettings({
+      providers: {
+        codex: {
+          binaryPath: DEFAULT_SERVER_SETTINGS.providers.codex.binaryPath,
+          homePath: DEFAULT_SERVER_SETTINGS.providers.codex.homePath,
+        },
+        claudeAgent: {
+          binaryPath: DEFAULT_SERVER_SETTINGS.providers.claudeAgent.binaryPath,
+        },
+      },
+    });
+    setOpenInstallProviders({
+      codex: false,
+      claudeAgent: false,
+    });
   }
 
   function removeCustomModel(provider: ProviderKind, slug: string) {
@@ -8612,19 +8754,7 @@ export function App({
                           description="Override the CLI used for new sessions."
                           resetAction={
                             isInstallSettingsDirty ? (
-                              <SettingResetButton
-                                onPress={() => {
-                                  updateAppSettings({
-                                    claudeBinaryPath: DEFAULT_APP_SETTINGS.claudeBinaryPath,
-                                    codexBinaryPath: DEFAULT_APP_SETTINGS.codexBinaryPath,
-                                    codexHomePath: DEFAULT_APP_SETTINGS.codexHomePath,
-                                  });
-                                  setOpenInstallProviders({
-                                    codex: false,
-                                    claudeAgent: false,
-                                  });
-                                }}
-                              />
+                              <SettingResetButton onPress={resetProviderInstallSettings} />
                             ) : null
                           }
                         >
@@ -8632,8 +8762,8 @@ export function App({
                             const isOpen = openInstallProviders[providerSettings.provider];
                             const binaryPathValue =
                               providerSettings.binaryPathKey === "claudeBinaryPath"
-                                ? appSettings.claudeBinaryPath
-                                : appSettings.codexBinaryPath;
+                                ? providerInstallValues.claudeBinaryPath
+                                : providerInstallValues.codexBinaryPath;
                             return (
                               <box
                                 key={providerSettings.provider}
@@ -8664,12 +8794,8 @@ export function App({
                                     />
                                     {(
                                       providerSettings.provider === "codex"
-                                        ? appSettings.codexBinaryPath !==
-                                            DEFAULT_APP_SETTINGS.codexBinaryPath ||
-                                          appSettings.codexHomePath !==
-                                            DEFAULT_APP_SETTINGS.codexHomePath
-                                        : appSettings.claudeBinaryPath !==
-                                          DEFAULT_APP_SETTINGS.claudeBinaryPath
+                                        ? isCodexInstallSettingsDirty
+                                        : isClaudeInstallSettingsDirty
                                     ) ? (
                                       <text content="Custom" style={{ fg: PALETTE.subtle }} />
                                     ) : null}
@@ -8711,11 +8837,9 @@ export function App({
                                       <input
                                         value={binaryPathValue}
                                         onInput={(value) =>
-                                          updateAppSettings(
-                                            providerSettings.binaryPathKey === "claudeBinaryPath"
-                                              ? { claudeBinaryPath: value }
-                                              : { codexBinaryPath: value },
-                                          )
+                                          providerSettings.binaryPathKey === "claudeBinaryPath"
+                                            ? updateClaudeInstallSettings({ binaryPath: value })
+                                            : updateCodexInstallSettings({ binaryPath: value })
                                         }
                                         placeholder={providerSettings.binaryPlaceholder}
                                         cursorColor={PALETTE.cursor}
@@ -8749,9 +8873,9 @@ export function App({
                                           }}
                                         >
                                           <input
-                                            value={appSettings.codexHomePath}
+                                            value={providerInstallValues.codexHomePath}
                                             onInput={(value) =>
-                                              updateAppSettings({ codexHomePath: value })
+                                              updateCodexInstallSettings({ homePath: value })
                                             }
                                             placeholder={
                                               providerSettings.homePlaceholder || "CODEX_HOME"
