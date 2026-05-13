@@ -138,6 +138,10 @@ import {
   scheduleDeferredComposerSync,
 } from "./composerSync";
 import {
+  getProviderUpdateNoticeView,
+  type ProviderUpdateNoticeView,
+} from "./providerUpdateNotifications";
+import {
   resolveComposerSubmission,
   resolveImageAttachmentFromPath,
   type ResolvedComposerImageAttachment,
@@ -2644,6 +2648,72 @@ function ToolbarButton(props: {
   );
 }
 
+function providerUpdateNoticeColors(tone: ProviderUpdateNoticeView["tone"]): {
+  readonly accent: TuiColor;
+  readonly background: TuiColor;
+} {
+  if (tone === "loading") return { accent: PALETTE.info, background: PALETTE.surfaceInfo };
+  if (tone === "error") return { accent: PALETTE.composerStop, background: PALETTE.controlInset };
+  if (tone === "success") return { accent: PALETTE.success, background: PALETTE.controlInset };
+  return { accent: PALETTE.warning, background: PALETTE.surfaceWarn };
+}
+
+function ProviderUpdateNoticeCard(props: {
+  view: ProviderUpdateNoticeView;
+  onOpenSettings: () => void;
+  onDismiss: (key: string) => void;
+}) {
+  const colors = providerUpdateNoticeColors(props.view.tone);
+  return (
+    <box
+      onMouseDown={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        props.onOpenSettings();
+      }}
+      style={{
+        flexDirection: "column",
+        marginLeft: 1,
+        marginRight: 1,
+        marginBottom: 1,
+        paddingLeft: 1,
+        paddingRight: 1,
+        paddingTop: 1,
+        paddingBottom: 1,
+        backgroundColor: colors.background,
+        border: ["left"],
+        borderColor: colors.accent,
+      }}
+    >
+      <box style={{ flexDirection: "row", alignItems: "center" }}>
+        <text content="↻" style={{ fg: colors.accent, marginRight: 1 }} />
+        <box style={{ flexGrow: 1, overflow: "hidden", height: 1 }}>
+          <text content={props.view.title} style={{ fg: PALETTE.text }} />
+        </box>
+      </box>
+      <box style={{ overflow: "hidden", height: 1, marginTop: 1 }}>
+        <text content={props.view.description} style={{ fg: PALETTE.muted }} />
+      </box>
+      <box style={{ flexDirection: "row", alignItems: "center", marginTop: 1 }}>
+        <ToolbarButton
+          label="Settings"
+          compact
+          surface="inset"
+          onPress={() => props.onOpenSettings()}
+        />
+        {props.view.dismissible ? (
+          <ToolbarButton
+            label="Dismiss"
+            compact
+            surface="inset"
+            onPress={() => props.onDismiss(props.view.key)}
+          />
+        ) : null}
+      </box>
+    </box>
+  );
+}
+
 function TogglePill(props: { checked: boolean; onPress: () => void; disabled?: boolean }) {
   const [hovered, setHovered] = useState(false);
   const background = props.disabled
@@ -3322,6 +3392,16 @@ export function App({
       }
     },
     [api, logger, updatingProviderInstanceId],
+  );
+  const dismissProviderUpdateNotice = useCallback(
+    (key: string) => {
+      updateAppSettings({
+        dismissedProviderUpdateNotificationKeys: [
+          ...new Set([...appSettings.dismissedProviderUpdateNotificationKeys, key]),
+        ],
+      });
+    },
+    [appSettings.dismissedProviderUpdateNotificationKeys, updateAppSettings],
   );
   const updateAssistantStreamingSetting = useCallback(
     (enableAssistantStreaming: boolean) => {
@@ -4028,6 +4108,24 @@ export function App({
     () => new Map(providerSnapshots.map((provider) => [provider.instanceId, provider] as const)),
     [providerSnapshots],
   );
+  const dismissedProviderUpdateNoticeKeys = useMemo(
+    () => new Set(appSettings.dismissedProviderUpdateNotificationKeys),
+    [appSettings.dismissedProviderUpdateNotificationKeys],
+  );
+  const providerUpdateNotice = useMemo(
+    () =>
+      getProviderUpdateNoticeView(providerSnapshots, {
+        dismissedKeys: dismissedProviderUpdateNoticeKeys,
+      }),
+    [dismissedProviderUpdateNoticeKeys, providerSnapshots],
+  );
+  useEffect(() => {
+    if (!providerUpdateNotice?.dismissAfterVisibleMs) return;
+    const timeout = setTimeout(() => {
+      dismissProviderUpdateNotice(providerUpdateNotice.key);
+    }, providerUpdateNotice.dismissAfterVisibleMs);
+    return () => clearTimeout(timeout);
+  }, [dismissProviderUpdateNotice, providerUpdateNotice]);
   const providerLastCheckedAt =
     providerSnapshots.length > 0
       ? providerSnapshots.reduce(
@@ -9375,6 +9473,17 @@ export function App({
               {responsiveLayout.showSidebarAlphaBadge ? <Badge label="ALPHA" /> : null}
             </box>
           </box>
+
+          {providerUpdateNotice ? (
+            <ProviderUpdateNoticeCard
+              view={providerUpdateNotice}
+              onOpenSettings={() => {
+                setMainView("settings");
+                setFocusArea("settings");
+              }}
+              onDismiss={dismissProviderUpdateNotice}
+            />
+          ) : null}
 
           <scrollbox
             focused={focusArea === "projects" || focusArea === "threads"}

@@ -111,6 +111,9 @@ export const AppSettingsSchema = Schema.Struct({
       modelOrder: Schema.Array(Schema.String).pipe(withDefaults(() => [])),
     }),
   ).pipe(withDefaults(() => ({}))),
+  dismissedProviderUpdateNotificationKeys: Schema.Array(TrimmedNonEmptyString).pipe(
+    withDefaults(() => []),
+  ),
   customCodexModels: Schema.Array(Schema.String).pipe(withDefaults(() => [])),
   customClaudeModels: Schema.Array(Schema.String).pipe(withDefaults(() => [])),
   textGenerationModel: Schema.optional(TrimmedNonEmptyString),
@@ -186,6 +189,9 @@ export function normalizeAppSettings(settings: AppSettings): AppSettings {
       MAX_SIDEBAR_THREAD_PREVIEW_COUNT,
       Math.max(MIN_SIDEBAR_THREAD_PREVIEW_COUNT, settings.sidebarThreadPreviewCount),
     ) as SidebarThreadPreviewCount,
+    dismissedProviderUpdateNotificationKeys: [
+      ...new Set(settings.dismissedProviderUpdateNotificationKeys),
+    ],
   };
 }
 
