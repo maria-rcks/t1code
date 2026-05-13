@@ -250,6 +250,7 @@ type SettingsSelectKind =
   | "thread-env"
   | "git-model-provider"
   | "git-model"
+  | "model-preferences-provider"
   | "custom-model-provider";
 type SidebarSortMenuItem = {
   id: string;
@@ -690,6 +691,21 @@ function applyProviderModelPreferences(
 ): ReadonlyArray<{ readonly slug: string; readonly name: string; readonly isCustom: boolean }> {
   const preferences = appSettings.providerModelPreferences[instanceId];
   const hiddenModels = new Set(preferences?.hiddenModels ?? []);
+  return sortProviderModelPreferenceOptions(options, appSettings, instanceId).filter(
+    (option) => option.isCustom || !hiddenModels.has(option.slug),
+  );
+}
+
+function sortProviderModelPreferenceOptions(
+  options: ReadonlyArray<{
+    readonly slug: string;
+    readonly name: string;
+    readonly isCustom: boolean;
+  }>,
+  appSettings: AppSettings,
+  instanceId: ProviderInstanceId,
+): ReadonlyArray<{ readonly slug: string; readonly name: string; readonly isCustom: boolean }> {
+  const preferences = appSettings.providerModelPreferences[instanceId];
   const modelOrder = new Map((preferences?.modelOrder ?? []).map((slug, index) => [slug, index]));
   const favoriteModels = new Set(
     appSettings.favorites
@@ -697,7 +713,6 @@ function applyProviderModelPreferences(
       .map((favorite) => favorite.model),
   );
   return options
-    .filter((option) => option.isCustom || !hiddenModels.has(option.slug))
     .map((option, index) => ({ option, index }))
     .toSorted((left, right) => {
       const favoriteDelta =
@@ -3040,6 +3055,8 @@ export function App({
     useState<Readonly<Record<string, number>>>({});
   const [selectedCustomModelProvider, setSelectedCustomModelProvider] =
     useState<ProviderKind>("codex");
+  const [selectedModelPreferencesInstanceId, setSelectedModelPreferencesInstanceId] =
+    useState<ProviderInstanceId>(DEFAULT_CODEX_INSTANCE_ID);
   const [customModelInputByProvider, setCustomModelInputByProvider] = useState<
     Record<ProviderKind, string>
   >({
@@ -3050,6 +3067,7 @@ export function App({
     Partial<Record<ProviderKind, string | null>>
   >({});
   const [showAllCustomModels, setShowAllCustomModels] = useState(false);
+  const [showAllModelPreferenceRows, setShowAllModelPreferenceRows] = useState(false);
   const [openInstallProviders, setOpenInstallProviders] = useState<
     Record<InstallProviderKey, boolean>
   >({
@@ -3830,7 +3848,7 @@ export function App({
     () => new Map(modelMenuEntries.map((entry) => [entry.instanceId, entry])),
     [modelMenuEntries],
   );
-  const providerModelOptionsByInstance = useMemo(() => {
+  const rawProviderModelOptionsByInstance = useMemo(() => {
     const optionsByInstance = new Map<
       ProviderInstanceId,
       ReadonlyArray<{ readonly slug: string; readonly name: string; readonly isCustom: boolean }>
@@ -3843,22 +3861,34 @@ export function App({
       );
       optionsByInstance.set(
         entry.instanceId,
+        getProviderInstanceModelOptions(providerSnapshots, entry.instanceId, fallbackOptions),
+      );
+    }
+    return optionsByInstance;
+  }, [
+    customModelsByProvider,
+    draftModel,
+    draftProviderInstanceId,
+    modelMenuEntries,
+    providerSnapshots,
+  ]);
+  const providerModelOptionsByInstance = useMemo(() => {
+    const optionsByInstance = new Map<
+      ProviderInstanceId,
+      ReadonlyArray<{ readonly slug: string; readonly name: string; readonly isCustom: boolean }>
+    >();
+    for (const entry of modelMenuEntries) {
+      optionsByInstance.set(
+        entry.instanceId,
         applyProviderModelPreferences(
-          getProviderInstanceModelOptions(providerSnapshots, entry.instanceId, fallbackOptions),
+          rawProviderModelOptionsByInstance.get(entry.instanceId) ?? [],
           appSettings,
           entry.instanceId,
         ),
       );
     }
     return optionsByInstance;
-  }, [
-    customModelsByProvider,
-    appSettings,
-    draftModel,
-    draftProviderInstanceId,
-    modelMenuEntries,
-    providerSnapshots,
-  ]);
+  }, [appSettings, modelMenuEntries, rawProviderModelOptionsByInstance]);
   const modelOptions = providerModelOptionsByInstance.get(modelMenuInstanceId) ?? [];
   const draftProviderModelOptions =
     providerModelOptionsByInstance.get(draftProviderInstanceId) ?? [];
@@ -4085,6 +4115,39 @@ export function App({
   const visibleCustomModelRows = showAllCustomModels
     ? savedCustomModelRows
     : savedCustomModelRows.slice(0, 5);
+  const selectedModelPreferencesEntry =
+    modelMenuEntryByInstanceId.get(selectedModelPreferencesInstanceId) ?? modelMenuEntries[0]!;
+  const selectedModelPreferencesOptions = sortProviderModelPreferenceOptions(
+    rawProviderModelOptionsByInstance.get(selectedModelPreferencesEntry.instanceId) ?? [],
+    appSettings,
+    selectedModelPreferencesEntry.instanceId,
+  );
+  const selectedModelPreferences = appSettings.providerModelPreferences[
+    selectedModelPreferencesEntry.instanceId
+  ] ?? {
+    hiddenModels: [],
+    modelOrder: [],
+  };
+  const selectedModelPreferencesHiddenModels = new Set(selectedModelPreferences.hiddenModels);
+  const selectedModelPreferencesFavoriteModels = new Set(
+    appSettings.favorites
+      .filter((favorite) => favorite.provider === selectedModelPreferencesEntry.instanceId)
+      .map((favorite) => favorite.model),
+  );
+  const visibleModelPreferenceRows = showAllModelPreferenceRows
+    ? selectedModelPreferencesOptions
+    : selectedModelPreferencesOptions.slice(0, 8);
+  const totalFavoriteModels = appSettings.favorites.length;
+  const totalHiddenModels = Object.values(appSettings.providerModelPreferences).reduce(
+    (count, preferences) => count + preferences.hiddenModels.length,
+    0,
+  );
+  const totalOrderedModels = Object.values(appSettings.providerModelPreferences).reduce(
+    (count, preferences) => count + preferences.modelOrder.length,
+    0,
+  );
+  const hasModelPreferenceSettings =
+    totalFavoriteModels > 0 || totalHiddenModels > 0 || totalOrderedModels > 0;
   const settingsSelectItems = useMemo(() => {
     switch (settingsSelectKind) {
       case "theme":
@@ -4157,6 +4220,17 @@ export function App({
             setOverlayMenu(null);
           },
         }));
+      case "model-preferences-provider":
+        return modelMenuEntries.map((entry) => ({
+          id: entry.instanceId,
+          label: entry.displayName,
+          selected: entry.instanceId === selectedModelPreferencesEntry.instanceId,
+          onSelect: () => {
+            setSelectedModelPreferencesInstanceId(entry.instanceId);
+            setShowAllModelPreferenceRows(false);
+            setOverlayMenu(null);
+          },
+        }));
       case "custom-model-provider":
         return MODEL_PROVIDER_SETTINGS.map((option) => ({
           id: option.provider,
@@ -4178,6 +4252,7 @@ export function App({
     gitTextGenerationModelOptions,
     modelMenuEntries,
     providerModelOptionsByInstance,
+    selectedModelPreferencesEntry.instanceId,
     selectedCustomModelProvider,
     settingsSelectKind,
     tuiThemeId,
@@ -4253,6 +4328,7 @@ export function App({
       ? ["Delete confirmation"]
       : []),
     ...(isGitTextGenerationModelDirty ? ["Text generation model"] : []),
+    ...(hasModelPreferenceSettings ? ["Model preferences"] : []),
     ...(totalCustomModels > 0 ? ["Custom models"] : []),
     ...(isInstallSettingsDirty ? ["Provider installs"] : []),
   ];
@@ -6279,6 +6355,92 @@ export function App({
         Math.max(MIN_SIDEBAR_THREAD_PREVIEW_COUNT, sidebarThreadPreviewCount + delta),
       ),
     });
+  }
+
+  function updateProviderModelPreferences(
+    instanceId: ProviderInstanceId,
+    nextPreferences: {
+      readonly hiddenModels: readonly string[];
+      readonly modelOrder: readonly string[];
+    },
+  ) {
+    updateAppSettings({
+      providerModelPreferences: {
+        ...appSettings.providerModelPreferences,
+        [instanceId]: {
+          hiddenModels: [
+            ...new Set(nextPreferences.hiddenModels.filter((slug) => slug.length > 0)),
+          ],
+          modelOrder: [...new Set(nextPreferences.modelOrder.filter((slug) => slug.length > 0))],
+        },
+      },
+    });
+  }
+
+  function updateFavoriteModels(instanceId: ProviderInstanceId, models: readonly string[]) {
+    updateAppSettings({
+      favorites: [
+        ...appSettings.favorites.filter((favorite) => favorite.provider !== instanceId),
+        ...[...new Set(models.filter((slug) => slug.length > 0))].map((model) => ({
+          provider: instanceId,
+          model,
+        })),
+      ],
+    });
+  }
+
+  function toggleFavoriteModel(instanceId: ProviderInstanceId, slug: string) {
+    const current = appSettings.favorites
+      .filter((favorite) => favorite.provider === instanceId)
+      .map((favorite) => favorite.model);
+    updateFavoriteModels(
+      instanceId,
+      current.includes(slug) ? current.filter((model) => model !== slug) : [...current, slug],
+    );
+  }
+
+  function toggleHiddenModel(instanceId: ProviderInstanceId, slug: string) {
+    const preferences = appSettings.providerModelPreferences[instanceId] ?? {
+      hiddenModels: [],
+      modelOrder: [],
+    };
+    updateProviderModelPreferences(instanceId, {
+      ...preferences,
+      hiddenModels: preferences.hiddenModels.includes(slug)
+        ? preferences.hiddenModels.filter((model) => model !== slug)
+        : [...preferences.hiddenModels, slug],
+    });
+  }
+
+  function moveModelPreference(instanceId: ProviderInstanceId, slug: string, direction: -1 | 1) {
+    const currentOrder = sortProviderModelPreferenceOptions(
+      rawProviderModelOptionsByInstance.get(instanceId) ?? [],
+      appSettings,
+      instanceId,
+    ).map((option) => option.slug);
+    const index = currentOrder.indexOf(slug);
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= currentOrder.length) {
+      return;
+    }
+    const nextOrder = [...currentOrder];
+    [nextOrder[index], nextOrder[nextIndex]] = [nextOrder[nextIndex]!, nextOrder[index]!];
+    const preferences = appSettings.providerModelPreferences[instanceId] ?? {
+      hiddenModels: [],
+      modelOrder: [],
+    };
+    updateProviderModelPreferences(instanceId, {
+      ...preferences,
+      modelOrder: nextOrder,
+    });
+  }
+
+  function resetProviderModelPreferences() {
+    updateAppSettings({
+      favorites: DEFAULT_APP_SETTINGS.favorites,
+      providerModelPreferences: DEFAULT_APP_SETTINGS.providerModelPreferences,
+    });
+    setShowAllModelPreferenceRows(false);
   }
 
   function toggleProjectThreadPreview(projectId: string) {
@@ -8440,7 +8602,9 @@ export function App({
               ? "Custom model provider"
               : settingsSelectKind === "git-model-provider"
                 ? "Text generation provider"
-                : "Text generation model";
+                : settingsSelectKind === "model-preferences-provider"
+                  ? "Model preferences"
+                  : "Text generation model";
   const settingsSelectPopupWidth = Math.max(
     14,
     settingsSelectItems.reduce(
@@ -9510,6 +9674,136 @@ export function App({
                             </box>
                           }
                         />
+                        <SettingsRow
+                          title="Model preferences"
+                          description="Customize model picker favorites, hidden models, and order per provider instance."
+                          status={
+                            hasModelPreferenceSettings
+                              ? `${totalFavoriteModels} favorite · ${totalHiddenModels} hidden`
+                              : `${selectedModelPreferencesOptions.length} available`
+                          }
+                          resetAction={
+                            hasModelPreferenceSettings ? (
+                              <SettingResetButton onPress={resetProviderModelPreferences} />
+                            ) : null
+                          }
+                        >
+                          <box
+                            style={{ flexDirection: "row", alignItems: "center", marginBottom: 1 }}
+                          >
+                            <ToolbarButton
+                              label={`${selectedModelPreferencesEntry.displayName} ▾`}
+                              surface="inset"
+                              active={
+                                overlayMenu === "settings-select" &&
+                                settingsSelectKind === "model-preferences-provider"
+                              }
+                              onPress={(event) =>
+                                openSettingsSelectMenu("model-preferences-provider", event)
+                              }
+                            />
+                            {hasModelPreferenceSettings ? (
+                              <ToolbarButton
+                                label="Reset"
+                                onPress={resetProviderModelPreferences}
+                              />
+                            ) : null}
+                          </box>
+                          {visibleModelPreferenceRows.map((model, index) => {
+                            const isFavorite = selectedModelPreferencesFavoriteModels.has(
+                              model.slug,
+                            );
+                            const isHidden =
+                              !model.isCustom &&
+                              selectedModelPreferencesHiddenModels.has(model.slug);
+                            const previousModel = selectedModelPreferencesOptions[index - 1];
+                            const nextModel = selectedModelPreferencesOptions[index + 1];
+                            const canMoveUp =
+                              previousModel !== undefined &&
+                              selectedModelPreferencesFavoriteModels.has(previousModel.slug) ===
+                                isFavorite;
+                            const canMoveDown =
+                              nextModel !== undefined &&
+                              selectedModelPreferencesFavoriteModels.has(nextModel.slug) ===
+                                isFavorite;
+                            return (
+                              <box
+                                key={`${selectedModelPreferencesEntry.instanceId}:${model.slug}`}
+                                style={{
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  backgroundColor: PALETTE.surfaceAlt,
+                                  paddingLeft: 1,
+                                  paddingRight: 1,
+                                  marginBottom: 1,
+                                }}
+                              >
+                                <box
+                                  style={{ flexDirection: "column", flexGrow: 1, flexShrink: 1 }}
+                                >
+                                  <text
+                                    content={`${isFavorite ? "* " : ""}${model.name}${model.isCustom ? " · custom" : isHidden ? " · hidden" : ""}`}
+                                    style={{ fg: isHidden ? PALETTE.subtle : PALETTE.text }}
+                                  />
+                                  {model.name !== model.slug ? (
+                                    <text content={model.slug} style={{ fg: PALETTE.subtle }} />
+                                  ) : null}
+                                </box>
+                                <box style={{ flexDirection: "row", alignItems: "center" }}>
+                                  <ToolbarButton
+                                    label={isFavorite ? "Unstar" : "Star"}
+                                    onPress={() =>
+                                      toggleFavoriteModel(
+                                        selectedModelPreferencesEntry.instanceId,
+                                        model.slug,
+                                      )
+                                    }
+                                  />
+                                  <ToolbarButton
+                                    label="Up"
+                                    disabled={!canMoveUp}
+                                    onPress={() =>
+                                      moveModelPreference(
+                                        selectedModelPreferencesEntry.instanceId,
+                                        model.slug,
+                                        -1,
+                                      )
+                                    }
+                                  />
+                                  <ToolbarButton
+                                    label="Down"
+                                    disabled={!canMoveDown}
+                                    onPress={() =>
+                                      moveModelPreference(
+                                        selectedModelPreferencesEntry.instanceId,
+                                        model.slug,
+                                        1,
+                                      )
+                                    }
+                                  />
+                                  {!model.isCustom ? (
+                                    <ToolbarButton
+                                      label={isHidden ? "Show" : "Hide"}
+                                      onPress={() =>
+                                        toggleHiddenModel(
+                                          selectedModelPreferencesEntry.instanceId,
+                                          model.slug,
+                                        )
+                                      }
+                                    />
+                                  ) : null}
+                                </box>
+                              </box>
+                            );
+                          })}
+                          {selectedModelPreferencesOptions.length > 8 ? (
+                            <ToolbarButton
+                              label={showAllModelPreferenceRows ? "Show less" : "Show more"}
+                              onPress={() => setShowAllModelPreferenceRows((current) => !current)}
+                            />
+                          ) : null}
+                        </SettingsRow>
                         <SettingsRow
                           title="Custom models"
                           description="Add custom model slugs for supported providers."
