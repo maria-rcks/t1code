@@ -61,6 +61,10 @@ import {
   layer as ProviderMaintenanceRunnerLive,
   type ProviderMaintenanceRunnerShape,
 } from "./provider/providerMaintenanceRunner.ts";
+import {
+  ProcessDiagnostics,
+  type ProcessDiagnosticsShape,
+} from "./diagnostics/ProcessDiagnostics.ts";
 import { Open, type OpenShape } from "./open";
 import { GitManager, type GitManagerShape } from "./git/Services/GitManager.ts";
 import type { GitCoreShape } from "./git/Services/GitCore.ts";
@@ -80,6 +84,24 @@ const asTurnId = (value: string): TurnId => TurnId.makeUnsafe(value);
 const defaultOpenService: OpenShape = {
   openBrowser: () => Effect.void,
   openInEditor: () => Effect.void,
+};
+
+const defaultProcessDiagnostics: ProcessDiagnosticsShape = {
+  read: Effect.succeed({
+    serverPid: 1,
+    readAt: "2026-01-01T00:00:00.000Z",
+    processCount: 0,
+    totalRssBytes: 0,
+    totalCpuPercent: 0,
+    processes: [],
+    error: null,
+  }),
+  signal: (input) =>
+    Effect.succeed({
+      ...input,
+      signaled: true,
+      message: null,
+    }),
 };
 
 const defaultProviderStatuses: ReadonlyArray<ServerProviderStatus> = [
@@ -507,6 +529,7 @@ describe("WebSocket Server", () => {
       providerLayer?: Layer.Layer<ProviderService, never>;
       providerInstanceRegistry?: ProviderInstanceRegistryShape;
       providerMaintenanceRunner?: ProviderMaintenanceRunnerShape;
+      processDiagnostics?: ProcessDiagnosticsShape;
       providerHealth?: ProviderHealthShape;
       open?: OpenShape;
       gitManager?: GitManagerShape;
@@ -529,6 +552,10 @@ describe("WebSocket Server", () => {
       options.providerHealth ?? defaultProviderHealthService,
     );
     const openLayer = Layer.succeed(Open, options.open ?? defaultOpenService);
+    const processDiagnosticsLayer = Layer.succeed(
+      ProcessDiagnostics,
+      options.processDiagnostics ?? defaultProcessDiagnostics,
+    );
     const serverConfigLayer = Layer.succeed(ServerConfig, {
       mode: "web",
       port: 0,
@@ -575,6 +602,7 @@ describe("WebSocket Server", () => {
       Layer.provideMerge(runtimeLayer),
       Layer.provideMerge(providerHealthLayer),
       Layer.provideMerge(providerMaintenanceLayer),
+      Layer.provideMerge(processDiagnosticsLayer),
       Layer.provideMerge(ProviderEventLoggersLive),
       Layer.provideMerge(ServerSettingsLive),
       Layer.provideMerge(openLayer),
@@ -1131,6 +1159,87 @@ describe("WebSocket Server", () => {
         updateState: expect.objectContaining({ status: "succeeded" }),
       }),
     ]);
+  });
+
+  it("returns process diagnostics over websocket", async () => {
+    server = await createTestServer({
+      cwd: "/my/workspace",
+      processDiagnostics: {
+        read: Effect.succeed({
+          serverPid: 42,
+          readAt: "2026-01-01T00:00:00.000Z",
+          processCount: 1,
+          totalRssBytes: 1024,
+          totalCpuPercent: 0.5,
+          processes: [
+            {
+              pid: 43,
+              ppid: 42,
+              pgid: 42,
+              status: "S",
+              cpuPercent: 0.5,
+              rssBytes: 1024,
+              elapsed: "00:00:01",
+              command: "codex app-server",
+              depth: 0,
+              childPids: [],
+            },
+          ],
+          error: null,
+        }),
+        signal: defaultProcessDiagnostics.signal,
+      },
+    });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.serverGetProcessDiagnostics);
+    expect(response.error).toBeUndefined();
+    expect(response.result).toEqual(
+      expect.objectContaining({
+        serverPid: 42,
+        processCount: 1,
+        totalRssBytes: 1024,
+      }),
+    );
+  });
+
+  it("signals process descendants over websocket", async () => {
+    const signal = vi.fn<ProcessDiagnosticsShape["signal"]>((input) =>
+      Effect.succeed({
+        ...input,
+        signaled: true,
+        message: null,
+      }),
+    );
+    server = await createTestServer({
+      cwd: "/my/workspace",
+      processDiagnostics: {
+        ...defaultProcessDiagnostics,
+        signal,
+      },
+    });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.serverSignalProcess, {
+      pid: 123,
+      signal: "SIGINT",
+    });
+    expect(response.error).toBeUndefined();
+    expect(signal).toHaveBeenCalledWith({ pid: 123, signal: "SIGINT" });
+    expect(response.result).toEqual({
+      pid: 123,
+      signal: "SIGINT",
+      signaled: true,
+      message: null,
+    });
   });
 
   it("responds to server settings RPC methods with redacted provider secrets", async () => {

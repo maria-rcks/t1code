@@ -27,9 +27,12 @@ import type {
 } from "./project";
 import type {
   ServerConfig,
+  ServerProcessDiagnosticsResult,
   ServerProviderUpdateInput,
   ServerProviderUpdatedPayload,
   ServerRefreshProvidersInput,
+  ServerSignalProcessInput,
+  ServerSignalProcessResult,
 } from "./server";
 import type { ServerSettings, ServerSettingsPatch } from "./settings";
 import type {
@@ -173,6 +176,8 @@ export interface NativeApi {
     getSettings: () => Promise<ServerSettings>;
     updateSettings: (patch: ServerSettingsPatch) => Promise<ServerSettings>;
     upsertKeybinding: (input: ServerUpsertKeybindingInput) => Promise<ServerUpsertKeybindingResult>;
+    getProcessDiagnostics: () => Promise<ServerProcessDiagnosticsResult>;
+    signalProcess: (input: ServerSignalProcessInput) => Promise<ServerSignalProcessResult>;
   };
   orchestration: {
     getSnapshot: () => Promise<OrchestrationReadModel>;

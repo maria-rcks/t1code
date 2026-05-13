@@ -59,6 +59,7 @@ import { ProviderService } from "./provider/Services/ProviderService";
 import { ProviderHealth } from "./provider/Services/ProviderHealth";
 import { ProviderInstanceRegistry } from "./provider/Services/ProviderInstanceRegistry";
 import { ProviderMaintenanceRunner } from "./provider/providerMaintenanceRunner.ts";
+import { ProcessDiagnostics } from "./diagnostics/ProcessDiagnostics.ts";
 import { redactServerSettingsForClient, ServerSettingsService } from "./serverSettings";
 import { CheckpointDiffQuery } from "./checkpointing/Services/CheckpointDiffQuery";
 import { clamp } from "effect/Number";
@@ -220,6 +221,7 @@ export type ServerCoreRuntimeServices =
   | ProviderHealth
   | ProviderInstanceRegistry
   | ProviderMaintenanceRunner
+  | ProcessDiagnostics
   | ServerSettingsService;
 
 export type ServerRuntimeServices =
@@ -268,6 +270,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const providerHealth = yield* ProviderHealth;
   const providerInstanceRegistry = yield* ProviderInstanceRegistry;
   const providerMaintenanceRunner = yield* ProviderMaintenanceRunner;
+  const processDiagnostics = yield* ProcessDiagnostics;
   const serverSettings = yield* ServerSettingsService;
   const git = yield* GitCore;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -988,6 +991,14 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.serverUpdateProvider: {
         const body = stripRequestTag(request.body);
         return yield* providerMaintenanceRunner.updateProvider(body);
+      }
+
+      case WS_METHODS.serverGetProcessDiagnostics:
+        return yield* processDiagnostics.read;
+
+      case WS_METHODS.serverSignalProcess: {
+        const body = stripRequestTag(request.body);
+        return yield* processDiagnostics.signal(body);
       }
 
       case WS_METHODS.serverGetSettings:

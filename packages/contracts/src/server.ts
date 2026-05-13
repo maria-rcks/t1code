@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { IsoDateTime, TrimmedNonEmptyString } from "./baseSchemas";
+import { IsoDateTime, NonNegativeInt, PositiveInt, TrimmedNonEmptyString } from "./baseSchemas";
 import { KeybindingRule, ResolvedKeybindingsConfig } from "./keybindings";
 import { EditorId } from "./editor";
 import { ProviderKind } from "./orchestration";
@@ -218,6 +218,52 @@ export class ServerProviderUpdateError extends Schema.TaggedErrorClass<ServerPro
     return `Provider update failed for ${this.provider}: ${this.reason}`;
   }
 }
+
+export const ServerProcessSignal = Schema.Literals(["SIGINT", "SIGKILL"]);
+export type ServerProcessSignal = typeof ServerProcessSignal.Type;
+
+export const ServerProcessDiagnosticsEntry = Schema.Struct({
+  pid: PositiveInt,
+  ppid: NonNegativeInt,
+  pgid: Schema.NullOr(Schema.Int),
+  status: TrimmedNonEmptyString,
+  cpuPercent: Schema.Number,
+  rssBytes: NonNegativeInt,
+  elapsed: TrimmedNonEmptyString,
+  command: TrimmedNonEmptyString,
+  depth: NonNegativeInt,
+  childPids: Schema.Array(PositiveInt),
+});
+export type ServerProcessDiagnosticsEntry = typeof ServerProcessDiagnosticsEntry.Type;
+
+export const ServerProcessDiagnosticsResult = Schema.Struct({
+  serverPid: PositiveInt,
+  readAt: IsoDateTime,
+  processCount: NonNegativeInt,
+  totalRssBytes: NonNegativeInt,
+  totalCpuPercent: Schema.Number,
+  processes: Schema.Array(ServerProcessDiagnosticsEntry),
+  error: Schema.NullOr(
+    Schema.Struct({
+      message: TrimmedNonEmptyString,
+    }),
+  ),
+});
+export type ServerProcessDiagnosticsResult = typeof ServerProcessDiagnosticsResult.Type;
+
+export const ServerSignalProcessInput = Schema.Struct({
+  pid: PositiveInt,
+  signal: ServerProcessSignal,
+});
+export type ServerSignalProcessInput = typeof ServerSignalProcessInput.Type;
+
+export const ServerSignalProcessResult = Schema.Struct({
+  pid: PositiveInt,
+  signal: ServerProcessSignal,
+  signaled: Schema.Boolean,
+  message: Schema.NullOr(TrimmedNonEmptyString),
+});
+export type ServerSignalProcessResult = typeof ServerSignalProcessResult.Type;
 
 export const ServerConfigUpdatedPayload = Schema.Struct({
   issues: ServerConfigIssues,

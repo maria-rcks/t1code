@@ -50,6 +50,8 @@ import {
   type ProviderOptionSelection,
   type RuntimeMode,
   type ServerConfig,
+  type ServerProcessDiagnosticsResult,
+  type ServerProcessSignal,
   type ServerProvider,
   type ServerSettings,
   type ServerSettingsPatch,
@@ -1035,6 +1037,26 @@ function formatRelativeTime(iso: string | null | undefined): string {
 function formatCheckedRelativeTime(iso: string | null | undefined): string {
   const relativeTime = formatRelativeTime(iso);
   return relativeTime === "now" ? "Checked now" : `Checked ${relativeTime} ago`;
+}
+
+function formatMemoryBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KiB", "MiB", "GiB"] as const;
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const precision = value >= 10 ? 0 : 1;
+  return `${value.toFixed(precision)} ${units[unitIndex]}`;
+}
+
+function formatCpuPercent(value: number): string {
+  if (!Number.isFinite(value)) return "0%";
+  const precision = value >= 10 ? 0 : 1;
+  return `${value.toFixed(precision)}%`;
 }
 
 function isProviderUpdateActive(provider: ServerProvider | null | undefined): boolean {
@@ -3297,6 +3319,11 @@ export function App({
   const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
   const [prefsReady, setPrefsReady] = useState(false);
   const [serverHttpOrigin, setServerHttpOrigin] = useState<string | null>(null);
+  const [processDiagnostics, setProcessDiagnostics] =
+    useState<ServerProcessDiagnosticsResult | null>(null);
+  const [processDiagnosticsError, setProcessDiagnosticsError] = useState<string | null>(null);
+  const [isLoadingProcessDiagnostics, setIsLoadingProcessDiagnostics] = useState(false);
+  const [signalingProcessPid, setSignalingProcessPid] = useState<number | null>(null);
   const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null);
   const [gitBranchList, setGitBranchList] = useState<GitListBranchesResult | null>(null);
   const [gitStateError, setGitStateError] = useState<string | null>(null);
@@ -3392,6 +3419,40 @@ export function App({
       }
     },
     [api, logger, updatingProviderInstanceId],
+  );
+  const refreshProcessDiagnostics = useCallback(async () => {
+    if (!api || isLoadingProcessDiagnostics) return;
+    setIsLoadingProcessDiagnostics(true);
+    setProcessDiagnosticsError(null);
+    try {
+      const diagnostics = await api.server.getProcessDiagnostics();
+      setProcessDiagnostics(diagnostics);
+      setProcessDiagnosticsError(diagnostics.error?.message ?? null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Process diagnostics unavailable";
+      logger.log("server.processDiagnostics.refreshFailed", { error: message });
+      setProcessDiagnosticsError(message);
+    } finally {
+      setIsLoadingProcessDiagnostics(false);
+    }
+  }, [api, isLoadingProcessDiagnostics, logger]);
+  const signalProcess = useCallback(
+    async (pid: number, signal: ServerProcessSignal) => {
+      if (!api || signalingProcessPid) return;
+      setSignalingProcessPid(pid);
+      try {
+        const result = await api.server.signalProcess({ pid, signal });
+        setStatus(result.message ?? `Sent ${signal} to ${pid}`);
+        await refreshProcessDiagnostics();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Process signal failed";
+        logger.log("server.processDiagnostics.signalFailed", { pid, signal, error: message });
+        setStatus(message);
+      } finally {
+        setSignalingProcessPid(null);
+      }
+    },
+    [api, logger, refreshProcessDiagnostics, setStatus, signalingProcessPid],
   );
   const dismissProviderUpdateNotice = useCallback(
     (key: string) => {
@@ -11262,6 +11323,110 @@ export function App({
                               </box>
                             );
                           })}
+                        </SettingsRow>
+                        <SettingsRow
+                          title="Process diagnostics"
+                          description="Inspect live child processes spawned by this server."
+                          status={
+                            <>
+                              <text
+                                content={
+                                  processDiagnostics
+                                    ? `${processDiagnostics.processCount} processes · ${formatMemoryBytes(processDiagnostics.totalRssBytes)} RSS · ${formatCpuPercent(processDiagnostics.totalCpuPercent)} CPU`
+                                    : "No process snapshot loaded."
+                                }
+                                style={{ fg: PALETTE.text }}
+                              />
+                              <text
+                                content={
+                                  processDiagnostics
+                                    ? `${formatCheckedRelativeTime(processDiagnostics.readAt)} · server pid ${processDiagnostics.serverPid}`
+                                    : "Refresh to query the current provider process tree."
+                                }
+                                style={{ fg: PALETTE.subtle }}
+                              />
+                              {processDiagnosticsError ? (
+                                <text
+                                  content={processDiagnosticsError}
+                                  style={{ fg: PALETTE.warning }}
+                                />
+                              ) : null}
+                            </>
+                          }
+                          control={
+                            <ToolbarButton
+                              label={isLoadingProcessDiagnostics ? "Refreshing..." : "Refresh"}
+                              disabled={!api || isLoadingProcessDiagnostics}
+                              onPress={() => {
+                                void refreshProcessDiagnostics();
+                              }}
+                            />
+                          }
+                        >
+                          {processDiagnostics?.processes.length ? (
+                            processDiagnostics.processes.slice(0, 8).map((processEntry) => {
+                              const isSignaling = signalingProcessPid === processEntry.pid;
+                              return (
+                                <box
+                                  key={`process:${processEntry.pid}`}
+                                  style={{
+                                    flexDirection: "row",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    backgroundColor: PALETTE.surfaceAlt,
+                                    paddingLeft: 1,
+                                    paddingRight: 1,
+                                    marginBottom: 1,
+                                  }}
+                                >
+                                  <box
+                                    style={{
+                                      flexDirection: "column",
+                                      flexGrow: 1,
+                                      flexShrink: 1,
+                                      minWidth: 0,
+                                    }}
+                                  >
+                                    <text
+                                      content={`${"  ".repeat(processEntry.depth)}pid ${processEntry.pid} · ${processEntry.status} · ${formatMemoryBytes(processEntry.rssBytes)} · ${formatCpuPercent(processEntry.cpuPercent)}`}
+                                      style={{ fg: PALETTE.text }}
+                                    />
+                                    <text
+                                      content={processEntry.command}
+                                      style={{ fg: PALETTE.subtle }}
+                                    />
+                                  </box>
+                                  <box style={{ flexDirection: "row", alignItems: "center" }}>
+                                    <ToolbarButton
+                                      label="INT"
+                                      disabled={!api || Boolean(signalingProcessPid)}
+                                      onPress={() => {
+                                        void signalProcess(processEntry.pid, "SIGINT");
+                                      }}
+                                    />
+                                    <ToolbarButton
+                                      label={isSignaling ? "..." : "KILL"}
+                                      disabled={!api || Boolean(signalingProcessPid)}
+                                      onPress={() => {
+                                        void signalProcess(processEntry.pid, "SIGKILL");
+                                      }}
+                                    />
+                                  </box>
+                                </box>
+                              );
+                            })
+                          ) : (
+                            <text
+                              content="No live descendant processes in the latest snapshot."
+                              style={{ fg: PALETTE.subtle }}
+                            />
+                          )}
+                          {processDiagnostics && processDiagnostics.processes.length > 8 ? (
+                            <text
+                              content={`Showing 8 of ${processDiagnostics.processes.length} processes.`}
+                              style={{ fg: PALETTE.subtle }}
+                            />
+                          ) : null}
                         </SettingsRow>
                         <SettingsRow
                           title="Keybindings"

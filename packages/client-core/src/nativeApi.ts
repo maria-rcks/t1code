@@ -5,6 +5,7 @@ import {
   ORCHESTRATION_WS_CHANNELS,
   ORCHESTRATION_WS_METHODS,
   type ServerConfigUpdatedPayload,
+  type ServerSignalProcessInput,
   type ServerProviderUpdateInput,
   type ServerRefreshProvidersInput,
   WS_CHANNELS,
@@ -136,6 +137,9 @@ export function createTransportNativeApi(options: NativeApiAdapterOptions): {
       getSettings: () => transport.request(WS_METHODS.serverGetSettings),
       updateSettings: (patch) => transport.request(WS_METHODS.serverUpdateSettings, patch),
       upsertKeybinding: (input) => transport.request(WS_METHODS.serverUpsertKeybinding, input),
+      getProcessDiagnostics: () => transport.request(WS_METHODS.serverGetProcessDiagnostics),
+      signalProcess: (input: ServerSignalProcessInput) =>
+        transport.request(WS_METHODS.serverSignalProcess, input),
     },
     orchestration: {
       getSnapshot: () => transport.request(ORCHESTRATION_WS_METHODS.getSnapshot),

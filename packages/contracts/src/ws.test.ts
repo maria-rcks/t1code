@@ -100,6 +100,32 @@ it.effect("accepts targeted server.updateProvider requests", () =>
   }),
 );
 
+it.effect("accepts server.getProcessDiagnostics requests", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWebSocketRequest({
+      id: "req-processes-1",
+      body: {
+        _tag: WS_METHODS.serverGetProcessDiagnostics,
+      },
+    });
+    assert.strictEqual(parsed.body._tag, WS_METHODS.serverGetProcessDiagnostics);
+  }),
+);
+
+it.effect("accepts server.signalProcess requests", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWebSocketRequest({
+      id: "req-signal-process-1",
+      body: {
+        _tag: WS_METHODS.serverSignalProcess,
+        pid: 123,
+        signal: "SIGINT",
+      },
+    });
+    assert.strictEqual(parsed.body._tag, WS_METHODS.serverSignalProcess);
+  }),
+);
+
 it.effect("accepts typed websocket push envelopes with sequence", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeWsResponse({
