@@ -100,16 +100,47 @@ describe("providerSettings", () => {
       },
       instancePatch: {
         enabled: false,
+        displayName: "Claude Work",
+        accentColor: "#112233",
       },
     });
 
     expect(patch.providerInstances?.[instanceId]).toEqual({
       driver: decodeProviderDriverKind("claudeAgent"),
       enabled: false,
+      displayName: "Claude Work",
+      accentColor: "#112233",
       config: {
         ...DEFAULT_SERVER_SETTINGS.providers.claudeAgent,
         launchArgs: "--chrome",
       },
+    });
+  });
+
+  it("clears default provider envelope metadata when values are empty", () => {
+    const instanceId = decodeProviderInstanceId("codex");
+    const patch = buildDefaultProviderInstanceUpdatePatch({
+      settings: {
+        ...DEFAULT_SERVER_SETTINGS,
+        providerInstances: {
+          [instanceId]: {
+            driver: decodeProviderDriverKind("codex"),
+            displayName: "Codex Work",
+            accentColor: "#112233",
+          },
+        },
+      },
+      provider: "codex",
+      configPatch: {},
+      instancePatch: {
+        displayName: undefined,
+        accentColor: undefined,
+      },
+    });
+
+    expect(patch.providerInstances?.[instanceId]).toEqual({
+      driver: decodeProviderDriverKind("codex"),
+      config: DEFAULT_SERVER_SETTINGS.providers.codex,
     });
   });
 

@@ -35,14 +35,16 @@ export function buildDefaultProviderInstanceUpdatePatch(input: {
   readonly settings: Pick<ServerSettings, "providerInstances" | "providers">;
   readonly provider: ProviderSettingsKey;
   readonly configPatch: Readonly<Record<string, unknown>>;
-  readonly instancePatch?: Pick<ProviderInstanceConfig, "enabled"> | undefined;
+  readonly instancePatch?:
+    | Partial<Pick<ProviderInstanceConfig, "accentColor" | "displayName" | "enabled">>
+    | undefined;
 }): ServerSettingsPatch {
   const driver = providerDriverKindForSettingsKey(input.provider);
   const instanceId = defaultInstanceIdForDriver(driver);
   const existing = input.settings.providerInstances[instanceId];
   const legacyConfig = input.settings.providers[input.provider];
   const defaultLegacyConfig = DEFAULT_SERVER_SETTINGS.providers[input.provider];
-  const nextInstance: ProviderInstanceConfig = {
+  let nextInstance: ProviderInstanceConfig = {
     ...existing,
     driver,
     ...input.instancePatch,
@@ -52,6 +54,22 @@ export function buildDefaultProviderInstanceUpdatePatch(input: {
       ...input.configPatch,
     },
   };
+  if (
+    input.instancePatch &&
+    "displayName" in input.instancePatch &&
+    !input.instancePatch.displayName
+  ) {
+    const { displayName: _displayName, ...rest } = nextInstance;
+    nextInstance = rest as ProviderInstanceConfig;
+  }
+  if (
+    input.instancePatch &&
+    "accentColor" in input.instancePatch &&
+    !input.instancePatch.accentColor
+  ) {
+    const { accentColor: _accentColor, ...rest } = nextInstance;
+    nextInstance = rest as ProviderInstanceConfig;
+  }
 
   return {
     providers: {

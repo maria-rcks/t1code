@@ -39,6 +39,7 @@ import {
   type ProjectEntry,
   type ProviderApprovalDecision,
   type ProviderDriverKind,
+  type ProviderInstanceConfig,
   type ProviderInstanceId,
   type ProviderInteractionMode,
   type ProviderKind,
@@ -146,6 +147,7 @@ import {
   deriveProviderInstanceEntries,
   getProviderInstanceModelOptions,
   legacyProviderKindForDriver,
+  normalizeProviderAccentColor,
   sortProviderInstanceEntries,
 } from "./providerInstances";
 import { resolveUserMessageBubbleWidth } from "./messageLayout";
@@ -662,6 +664,18 @@ function readProviderInstallSettingValue(
   return field in providerSettings
     ? String(providerSettings[field as keyof typeof providerSettings] ?? "")
     : "";
+}
+
+function readDefaultProviderInstanceMetadataValue(
+  settings: ServerSettings,
+  provider: InstallProviderKey,
+  field: "accentColor" | "displayName",
+): string {
+  return (
+    settings.providerInstances[defaultProviderInstanceIdForSettingsKey(provider)]?.[
+      field
+    ]?.trim() ?? ""
+  );
 }
 
 function readProviderInstanceConfigStringArray(
@@ -4085,6 +4099,14 @@ export function App({
     const settings = DEFAULT_SERVER_SETTINGS.providers[provider];
     return field in settings ? String(settings[field as keyof typeof settings] ?? "") : "";
   }
+  function providerInstanceMetadataValue(
+    provider: InstallProviderKey,
+    field: "accentColor" | "displayName",
+  ): string {
+    return serverSettings
+      ? readDefaultProviderInstanceMetadataValue(serverSettings, provider, field)
+      : "";
+  }
   function isProviderInstallSettingsDirty(providerSettings: InstallProviderSettings): boolean {
     return serverSettings
       ? isProviderInstallSettingsDirtyForSettings(serverSettings, providerSettings)
@@ -6649,6 +6671,7 @@ export function App({
   function updateProviderInstallSettings(
     provider: InstallProviderKey,
     patch: Partial<Record<InstallProviderFieldKey, string>>,
+    instancePatch?: Partial<Pick<ProviderInstanceConfig, "accentColor" | "displayName">>,
   ) {
     if (!serverSettings) {
       setStatus("Settings loading");
@@ -6666,6 +6689,7 @@ export function App({
       settings: serverSettings,
       provider,
       configPatch: patch,
+      instancePatch,
     });
     const providerPatch = settingsPatch.providers as NonNullable<ServerSettingsPatch["providers"]>;
     setServerSettings((current) =>
@@ -6681,6 +6705,23 @@ export function App({
         : current,
     );
     updateServerSettings(settingsPatch);
+  }
+
+  function updateProviderInstanceDisplayName(provider: InstallProviderKey, value: string) {
+    const trimmed = value.trim();
+    updateProviderInstallSettings(provider, {}, { displayName: trimmed || undefined });
+  }
+
+  function updateProviderInstanceAccentColor(provider: InstallProviderKey, value: string) {
+    const trimmed = value.trim();
+    updateProviderInstallSettings(
+      provider,
+      {},
+      {
+        accentColor:
+          trimmed.length === 0 ? undefined : (normalizeProviderAccentColor(trimmed) ?? trimmed),
+      },
+    );
   }
 
   function updateProviderInstallEnabled(provider: InstallProviderKey, enabled: boolean) {
@@ -10014,6 +10055,90 @@ export function App({
                                       paddingRight: 1,
                                     }}
                                   >
+                                    <box style={{ flexDirection: "column" }}>
+                                      <text
+                                        content="Display name"
+                                        style={{ fg: PALETTE.text, marginBottom: 1 }}
+                                      />
+                                      <box
+                                        style={{
+                                          backgroundColor: PALETTE.input,
+                                          paddingLeft: 1,
+                                          paddingRight: 1,
+                                          height: 3,
+                                          justifyContent: "center",
+                                          marginBottom: 1,
+                                        }}
+                                      >
+                                        <input
+                                          value={providerInstanceMetadataValue(
+                                            providerSettings.provider,
+                                            "displayName",
+                                          )}
+                                          onInput={(value) =>
+                                            updateProviderInstanceDisplayName(
+                                              providerSettings.provider,
+                                              value,
+                                            )
+                                          }
+                                          placeholder={providerSettings.title}
+                                          cursorColor={PALETTE.cursor}
+                                          style={{
+                                            backgroundColor: PALETTE.input,
+                                            focusedBackgroundColor: PALETTE.input,
+                                            textColor: PALETTE.text,
+                                            focusedTextColor: PALETTE.text,
+                                            placeholderColor: PALETTE.subtle,
+                                          }}
+                                        />
+                                      </box>
+                                      <text
+                                        content="Optional label shown in provider and model pickers."
+                                        style={{ fg: PALETTE.subtle, marginBottom: 1 }}
+                                      />
+                                    </box>
+                                    <box style={{ flexDirection: "column" }}>
+                                      <text
+                                        content="Accent color"
+                                        style={{ fg: PALETTE.text, marginBottom: 1 }}
+                                      />
+                                      <box
+                                        style={{
+                                          backgroundColor: PALETTE.input,
+                                          paddingLeft: 1,
+                                          paddingRight: 1,
+                                          height: 3,
+                                          justifyContent: "center",
+                                          marginBottom: 1,
+                                        }}
+                                      >
+                                        <input
+                                          value={providerInstanceMetadataValue(
+                                            providerSettings.provider,
+                                            "accentColor",
+                                          )}
+                                          onInput={(value) =>
+                                            updateProviderInstanceAccentColor(
+                                              providerSettings.provider,
+                                              value,
+                                            )
+                                          }
+                                          placeholder="#7c3aed"
+                                          cursorColor={PALETTE.cursor}
+                                          style={{
+                                            backgroundColor: PALETTE.input,
+                                            focusedBackgroundColor: PALETTE.input,
+                                            textColor: PALETTE.text,
+                                            focusedTextColor: PALETTE.text,
+                                            placeholderColor: PALETTE.subtle,
+                                          }}
+                                        />
+                                      </box>
+                                      <text
+                                        content="Use a six-digit hex color such as #7c3aed."
+                                        style={{ fg: PALETTE.subtle, marginBottom: 1 }}
+                                      />
+                                    </box>
                                     {providerSettings.fields.map((field) => (
                                       <box
                                         key={`${providerSettings.provider}:${field.key}`}
