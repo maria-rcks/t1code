@@ -2813,6 +2813,36 @@ export function App({
     },
     [api, logger],
   );
+  const updateAssistantStreamingSetting = useCallback(
+    (enableAssistantStreaming: boolean) => {
+      updateAppSettings({ enableAssistantStreaming });
+      setServerSettings((current) =>
+        current
+          ? {
+              ...current,
+              enableAssistantStreaming,
+            }
+          : current,
+      );
+      updateServerSettings({ enableAssistantStreaming });
+    },
+    [updateAppSettings, updateServerSettings],
+  );
+  const updateDefaultThreadEnvModeSetting = useCallback(
+    (defaultThreadEnvMode: ThreadEnvMode) => {
+      updateAppSettings({ defaultThreadEnvMode });
+      setServerSettings((current) =>
+        current
+          ? {
+              ...current,
+              defaultThreadEnvMode,
+            }
+          : current,
+      );
+      updateServerSettings({ defaultThreadEnvMode });
+    },
+    [updateAppSettings, updateServerSettings],
+  );
   const tracksSystemThemeMode = shouldTrackSystemThemeMode(appSettings.theme);
   const usesTerminalPalette = shouldResolveTerminalPalette(tuiThemeId);
   const listensForRendererThemeChanges = shouldListenForRendererThemeChanges(
@@ -3315,11 +3345,15 @@ export function App({
   const activeThreadGitSyncKey = resolveThreadGitSyncKey(activeThread);
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const hasServerThread = activeThread !== null;
+  const assistantStreamingEnabled =
+    serverSettings?.enableAssistantStreaming ?? appSettings.enableAssistantStreaming;
+  const defaultThreadEnvMode =
+    serverSettings?.defaultThreadEnvMode ?? appSettings.defaultThreadEnvMode;
   const effectiveThreadEnvMode = resolveEffectiveThreadEnvMode({
     activeWorktreePath,
     hasServerThread,
     draftThreadEnvMode: activeDraftThread?.envMode,
-    fallbackEnvMode: appSettings.defaultThreadEnvMode,
+    fallbackEnvMode: defaultThreadEnvMode,
   });
   const envLocked = Boolean(
     activeThread &&
@@ -3559,8 +3593,7 @@ export function App({
         ? "Light"
         : "Dark";
   const selectedTuiThemeLabel = TUI_THEME_LABELS[tuiThemeId] ?? TUI_THEME_LABELS.default;
-  const selectedThreadEnvLabel =
-    appSettings.defaultThreadEnvMode === "worktree" ? "New worktree" : "Local";
+  const selectedThreadEnvLabel = defaultThreadEnvMode === "worktree" ? "New worktree" : "Local";
   const composerEnvMenuItems: ComposerEnvMenuItem[] = ENV_MODE_OPTIONS.map((option) => ({
     id: option.value,
     label: option.label,
@@ -3671,9 +3704,9 @@ export function App({
         return (["local", "worktree"] as const).map((option) => ({
           id: option,
           label: option === "worktree" ? "New worktree" : "Local",
-          selected: appSettings.defaultThreadEnvMode === option,
+          selected: defaultThreadEnvMode === option,
           onSelect: () => {
-            updateAppSettings({ defaultThreadEnvMode: option });
+            updateDefaultThreadEnvModeSetting(option);
             setOverlayMenu(null);
           },
         }));
@@ -3699,15 +3732,16 @@ export function App({
         }));
     }
   }, [
-    appSettings.defaultThreadEnvMode,
     appSettings.theme,
     appSettings.timestampFormat,
     currentGitTextGenerationModel,
+    defaultThreadEnvMode,
     gitTextGenerationModelOptions,
     selectedCustomModelProvider,
     settingsSelectKind,
     tuiThemeId,
     updateAppSettings,
+    updateDefaultThreadEnvModeSetting,
   ]);
   const sidebarSortItems = useMemo<SidebarSortMenuItem[]>(
     () => [
@@ -3757,10 +3791,10 @@ export function App({
     ...(appSettings.sidebarThreadSortOrder !== DEFAULT_SIDEBAR_THREAD_SORT_ORDER
       ? ["Thread sort"]
       : []),
-    ...(appSettings.enableAssistantStreaming !== DEFAULT_APP_SETTINGS.enableAssistantStreaming
+    ...(assistantStreamingEnabled !== DEFAULT_SERVER_SETTINGS.enableAssistantStreaming
       ? ["Assistant output"]
       : []),
-    ...(appSettings.defaultThreadEnvMode !== DEFAULT_APP_SETTINGS.defaultThreadEnvMode
+    ...(defaultThreadEnvMode !== DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode
       ? ["New threads"]
       : []),
     ...(appSettings.confirmThreadDelete !== DEFAULT_APP_SETTINGS.confirmThreadDelete
@@ -5729,6 +5763,8 @@ export function App({
   function restoreDefaultSettings() {
     setAppSettings(DEFAULT_APP_SETTINGS);
     updateServerSettings({
+      defaultThreadEnvMode: DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode,
+      enableAssistantStreaming: DEFAULT_SERVER_SETTINGS.enableAssistantStreaming,
       providers: {
         codex: {
           binaryPath: DEFAULT_SERVER_SETTINGS.providers.codex.binaryPath,
@@ -5745,6 +5781,8 @@ export function App({
       current
         ? {
             ...current,
+            defaultThreadEnvMode: DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode,
+            enableAssistantStreaming: DEFAULT_SERVER_SETTINGS.enableAssistantStreaming,
             providers: {
               ...current.providers,
               codex: {
@@ -6064,11 +6102,7 @@ export function App({
     persistComposerDraftForThread(activeThreadId, readComposerValue());
     const existingDraft =
       draftThreadsByProjectId[projectId] ??
-      createDefaultDraftThreadState(
-        projectId,
-        appSettings.defaultThreadEnvMode,
-        currentBranch ?? null,
-      );
+      createDefaultDraftThreadState(projectId, defaultThreadEnvMode, currentBranch ?? null);
     setDraftThreadsByProjectId((current) => ({
       ...current,
       [projectId]: existingDraft,
@@ -6563,7 +6597,7 @@ export function App({
             model: draftModel,
             ...(dispatchModelOptions ? { modelOptions: dispatchModelOptions } : {}),
             ...(providerOptionsForDispatch ? { providerOptions: providerOptionsForDispatch } : {}),
-            assistantDeliveryMode: appSettings.enableAssistantStreaming ? "streaming" : "buffered",
+            assistantDeliveryMode: assistantStreamingEnabled ? "streaming" : "buffered",
             runtimeMode: draftRuntimeMode,
             interactionMode: followUp.interactionMode,
             ...(followUp.interactionMode === "default"
@@ -6720,7 +6754,7 @@ export function App({
           model: draftModel,
           ...(dispatchModelOptions ? { modelOptions: dispatchModelOptions } : {}),
           ...(providerOptionsForDispatch ? { providerOptions: providerOptionsForDispatch } : {}),
-          assistantDeliveryMode: appSettings.enableAssistantStreaming ? "streaming" : "buffered",
+          assistantDeliveryMode: assistantStreamingEnabled ? "streaming" : "buffered",
           runtimeMode: draftRuntimeMode,
           interactionMode: draftInteractionMode,
           ...(inferredSourceProposedPlan ? { sourceProposedPlan: inferredSourceProposedPlan } : {}),
@@ -6837,7 +6871,7 @@ export function App({
   ): DraftThreadState {
     const existing =
       draftThreadsByProjectIdRef.current[projectId] ??
-      createDefaultDraftThreadState(projectId, appSettings.defaultThreadEnvMode);
+      createDefaultDraftThreadState(projectId, defaultThreadEnvMode);
     const next = updater(existing);
     setDraftThreadsByProjectId((current) => ({
       ...current,
@@ -6902,7 +6936,7 @@ export function App({
     setOverlayMenu(null);
     setOverlayAnchor(null);
     if (!activeProjectId) {
-      updateAppSettings({ defaultThreadEnvMode: nextMode });
+      updateDefaultThreadEnvModeSetting(nextMode);
       setStatus(
         nextMode === "worktree" ? "New threads use worktrees" : "New threads use local mode",
       );
@@ -7226,7 +7260,7 @@ export function App({
     setDraftThreadsByProjectId((current) => {
       const existing =
         current[activeProjectId] ??
-        createDefaultDraftThreadState(activeProjectId, appSettings.defaultThreadEnvMode);
+        createDefaultDraftThreadState(activeProjectId, defaultThreadEnvMode);
       return {
         ...current,
         [activeProjectId]: {
@@ -7238,11 +7272,11 @@ export function App({
     });
   }, [
     activeProjectId,
-    appSettings.defaultThreadEnvMode,
     activeThread,
     activeThreadBranch,
     activeWorktreePath,
     currentBranch,
+    defaultThreadEnvMode,
     effectiveThreadEnvMode,
   ]);
 
@@ -8589,27 +8623,24 @@ export function App({
                         <SettingsRow
                           title="Assistant output"
                           description="Show token-by-token output while a response is in progress."
-                          status={appSettings.enableAssistantStreaming ? "Streaming" : "Buffered"}
+                          status={assistantStreamingEnabled ? "Streaming" : "Buffered"}
                           resetAction={
-                            appSettings.enableAssistantStreaming !==
-                            DEFAULT_APP_SETTINGS.enableAssistantStreaming ? (
+                            assistantStreamingEnabled !==
+                            DEFAULT_SERVER_SETTINGS.enableAssistantStreaming ? (
                               <SettingResetButton
                                 onPress={() =>
-                                  updateAppSettings({
-                                    enableAssistantStreaming:
-                                      DEFAULT_APP_SETTINGS.enableAssistantStreaming,
-                                  })
+                                  updateAssistantStreamingSetting(
+                                    DEFAULT_SERVER_SETTINGS.enableAssistantStreaming,
+                                  )
                                 }
                               />
                             ) : null
                           }
                           control={
                             <TogglePill
-                              checked={appSettings.enableAssistantStreaming}
+                              checked={assistantStreamingEnabled}
                               onPress={() =>
-                                updateAppSettings({
-                                  enableAssistantStreaming: !appSettings.enableAssistantStreaming,
-                                })
+                                updateAssistantStreamingSetting(!assistantStreamingEnabled)
                               }
                             />
                           }
@@ -8618,13 +8649,13 @@ export function App({
                           title="New threads"
                           description="Pick the default workspace mode for newly created draft threads."
                           resetAction={
-                            appSettings.defaultThreadEnvMode !==
-                            DEFAULT_APP_SETTINGS.defaultThreadEnvMode ? (
+                            defaultThreadEnvMode !==
+                            DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode ? (
                               <SettingResetButton
                                 onPress={() =>
-                                  updateAppSettings({
-                                    defaultThreadEnvMode: DEFAULT_APP_SETTINGS.defaultThreadEnvMode,
-                                  })
+                                  updateDefaultThreadEnvModeSetting(
+                                    DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode,
+                                  )
                                 }
                               />
                             ) : null
