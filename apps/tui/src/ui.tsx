@@ -483,16 +483,23 @@ type TraitsMenuItem = {
   selected?: boolean;
   onSelect: () => void;
 };
-type InstallBinarySettingsKey = "claudeBinaryPath" | "codexBinaryPath";
+type InstallProviderKey = keyof ServerSettings["providers"];
+type InstallProviderFieldKey =
+  | "apiEndpoint"
+  | "binaryPath"
+  | "homePath"
+  | "serverPassword"
+  | "serverUrl";
+type InstallProviderField = {
+  key: InstallProviderFieldKey;
+  label: string;
+  placeholder: string;
+  description: string;
+};
 type InstallProviderSettings = {
-  provider: ProviderKind;
+  provider: InstallProviderKey;
   title: string;
-  binaryPathKey: InstallBinarySettingsKey;
-  binaryPlaceholder: string;
-  binaryDescription: string;
-  homePathKey?: "codexHomePath";
-  homePlaceholder?: string;
-  homeDescription?: string;
+  fields: readonly InstallProviderField[];
 };
 const PALETTE: TuiPalette = { ...DEFAULT_TUI_THEME.palette };
 let ACTIVE_TUI_THEME = DEFAULT_TUI_THEME;
@@ -534,19 +541,74 @@ const INSTALL_PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
   {
     provider: "codex",
     title: "Codex",
-    binaryPathKey: "codexBinaryPath",
-    binaryPlaceholder: "Codex binary path",
-    binaryDescription: "Leave blank to use codex from your PATH.",
-    homePathKey: "codexHomePath",
-    homePlaceholder: "CODEX_HOME",
-    homeDescription: "Optional custom Codex home and config directory.",
+    fields: [
+      {
+        key: "binaryPath",
+        label: "Binary path",
+        placeholder: "Codex binary path",
+        description: "Leave blank to use codex from your PATH.",
+      },
+      {
+        key: "homePath",
+        label: "CODEX_HOME path",
+        placeholder: "CODEX_HOME",
+        description: "Optional custom Codex home and config directory.",
+      },
+    ],
   },
   {
     provider: "claudeAgent",
     title: "Claude",
-    binaryPathKey: "claudeBinaryPath",
-    binaryPlaceholder: "Claude binary path",
-    binaryDescription: "Leave blank to use claude from your PATH.",
+    fields: [
+      {
+        key: "binaryPath",
+        label: "Binary path",
+        placeholder: "Claude binary path",
+        description: "Leave blank to use claude from your PATH.",
+      },
+    ],
+  },
+  {
+    provider: "cursor",
+    title: "Cursor",
+    fields: [
+      {
+        key: "binaryPath",
+        label: "Binary path",
+        placeholder: "Cursor agent binary path",
+        description: "Leave blank to use agent from your PATH.",
+      },
+      {
+        key: "apiEndpoint",
+        label: "API endpoint",
+        placeholder: "https://...",
+        description: "Optional Cursor API endpoint override.",
+      },
+    ],
+  },
+  {
+    provider: "opencode",
+    title: "OpenCode",
+    fields: [
+      {
+        key: "binaryPath",
+        label: "Binary path",
+        placeholder: "OpenCode binary path",
+        description: "Leave blank to use opencode from your PATH.",
+      },
+      {
+        key: "serverUrl",
+        label: "Server URL",
+        placeholder: "http://127.0.0.1:4096",
+        description: "Leave blank to let T1 Code spawn OpenCode when supported.",
+      },
+      {
+        key: "serverPassword",
+        label: "Server password",
+        placeholder: "Optional",
+        description: "Optional password for an existing OpenCode server.",
+      },
+    ],
   },
 ] as const;
 
@@ -2839,9 +2901,13 @@ export function App({
     Partial<Record<ProviderKind, string | null>>
   >({});
   const [showAllCustomModels, setShowAllCustomModels] = useState(false);
-  const [openInstallProviders, setOpenInstallProviders] = useState<Record<ProviderKind, boolean>>({
+  const [openInstallProviders, setOpenInstallProviders] = useState<
+    Record<InstallProviderKey, boolean>
+  >({
     codex: false,
     claudeAgent: false,
+    cursor: false,
+    opencode: false,
   });
   const [isOpeningKeybindings, setIsOpeningKeybindings] = useState(false);
   const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
@@ -3094,6 +3160,8 @@ export function App({
           setOpenInstallProviders({
             codex: Boolean(prefs.appSettings.codexBinaryPath || prefs.appSettings.codexHomePath),
             claudeAgent: Boolean(prefs.appSettings.claudeBinaryPath),
+            cursor: false,
+            opencode: false,
           });
         }
         const persistedProvider = normalizePersistedProvider(prefs.draftProvider);
@@ -3226,6 +3294,18 @@ export function App({
                 claudeAgent:
                   settings.providers.claudeAgent.binaryPath !==
                   DEFAULT_SERVER_SETTINGS.providers.claudeAgent.binaryPath,
+                cursor:
+                  settings.providers.cursor.binaryPath !==
+                    DEFAULT_SERVER_SETTINGS.providers.cursor.binaryPath ||
+                  settings.providers.cursor.apiEndpoint !==
+                    DEFAULT_SERVER_SETTINGS.providers.cursor.apiEndpoint,
+                opencode:
+                  settings.providers.opencode.binaryPath !==
+                    DEFAULT_SERVER_SETTINGS.providers.opencode.binaryPath ||
+                  settings.providers.opencode.serverUrl !==
+                    DEFAULT_SERVER_SETTINGS.providers.opencode.serverUrl ||
+                  settings.providers.opencode.serverPassword !==
+                    DEFAULT_SERVER_SETTINGS.providers.opencode.serverPassword,
               });
             }
           })
@@ -3766,19 +3846,37 @@ export function App({
       ?.name ?? currentGitTextGenerationModel;
   const totalCustomModels =
     customModelsByProvider.codex.length + customModelsByProvider.claudeAgent.length;
-  const providerInstallValues = {
-    codexBinaryPath: serverSettings?.providers.codex.binaryPath ?? appSettings.codexBinaryPath,
-    codexHomePath: serverSettings?.providers.codex.homePath ?? appSettings.codexHomePath,
-    claudeBinaryPath:
-      serverSettings?.providers.claudeAgent.binaryPath ?? appSettings.claudeBinaryPath,
-  };
-  const isCodexInstallSettingsDirty =
-    providerInstallValues.codexBinaryPath !== DEFAULT_SERVER_SETTINGS.providers.codex.binaryPath ||
-    providerInstallValues.codexHomePath !== DEFAULT_SERVER_SETTINGS.providers.codex.homePath;
-  const isClaudeInstallSettingsDirty =
-    providerInstallValues.claudeBinaryPath !==
-    DEFAULT_SERVER_SETTINGS.providers.claudeAgent.binaryPath;
-  const isInstallSettingsDirty = isCodexInstallSettingsDirty || isClaudeInstallSettingsDirty;
+  function providerInstallValue(
+    provider: InstallProviderKey,
+    field: InstallProviderFieldKey,
+  ): string {
+    if (provider === "codex") {
+      if (field === "binaryPath") {
+        return serverSettings?.providers.codex.binaryPath ?? appSettings.codexBinaryPath;
+      }
+      if (field === "homePath") {
+        return serverSettings?.providers.codex.homePath ?? appSettings.codexHomePath;
+      }
+    }
+    if (provider === "claudeAgent" && field === "binaryPath") {
+      return serverSettings?.providers.claudeAgent.binaryPath ?? appSettings.claudeBinaryPath;
+    }
+    const settings =
+      serverSettings?.providers[provider] ?? DEFAULT_SERVER_SETTINGS.providers[provider];
+    return field in settings ? String(settings[field as keyof typeof settings] ?? "") : "";
+  }
+  function isProviderInstallSettingsDirty(providerSettings: InstallProviderSettings): boolean {
+    return providerSettings.fields.some(
+      (field) =>
+        providerInstallValue(providerSettings.provider, field.key) !==
+        String(
+          DEFAULT_SERVER_SETTINGS.providers[providerSettings.provider][
+            field.key as keyof (typeof DEFAULT_SERVER_SETTINGS.providers)[typeof providerSettings.provider]
+          ] ?? "",
+        ),
+    );
+  }
+  const isInstallSettingsDirty = INSTALL_PROVIDER_SETTINGS.some(isProviderInstallSettingsDirty);
   const savedCustomModelRows = MODEL_PROVIDER_SETTINGS.flatMap((providerSettings) =>
     customModelsByProvider[providerSettings.provider].map((slug) => ({
       key: `${providerSettings.provider}:${slug}`,
@@ -5985,7 +6083,7 @@ export function App({
         : current,
     );
     setTuiThemeId(DEFAULT_TUI_THEME_ID);
-    setOpenInstallProviders({ codex: false, claudeAgent: false });
+    setOpenInstallProviders({ codex: false, claudeAgent: false, cursor: false, opencode: false });
     setSelectedCustomModelProvider("codex");
     setCustomModelInputByProvider({ codex: "", claudeAgent: "" });
     setCustomModelErrorByProvider({});
@@ -6103,34 +6201,16 @@ export function App({
     updateServerSettings({ textGenerationModelSelection });
   }
 
-  function updateCodexInstallSettings(
-    patch: Partial<Pick<ServerSettings["providers"]["codex"], "binaryPath" | "homePath">>,
+  function updateProviderInstallSettings(
+    provider: InstallProviderKey,
+    patch: Partial<Record<InstallProviderFieldKey, string>>,
   ) {
-    updateAppSettings({
-      ...(patch.binaryPath !== undefined ? { codexBinaryPath: patch.binaryPath } : {}),
-      ...(patch.homePath !== undefined ? { codexHomePath: patch.homePath } : {}),
-    });
-    setServerSettings((current) =>
-      current
-        ? {
-            ...current,
-            providers: {
-              ...current.providers,
-              codex: {
-                ...current.providers.codex,
-                ...patch,
-              },
-            },
-          }
-        : current,
-    );
-    updateServerSettings({ providers: { codex: patch } });
-  }
-
-  function updateClaudeInstallSettings(
-    patch: Partial<Pick<ServerSettings["providers"]["claudeAgent"], "binaryPath">>,
-  ) {
-    if (patch.binaryPath !== undefined) {
+    if (provider === "codex") {
+      updateAppSettings({
+        ...(patch.binaryPath !== undefined ? { codexBinaryPath: patch.binaryPath } : {}),
+        ...(patch.homePath !== undefined ? { codexHomePath: patch.homePath } : {}),
+      });
+    } else if (provider === "claudeAgent" && patch.binaryPath !== undefined) {
       updateAppSettings({ claudeBinaryPath: patch.binaryPath });
     }
     setServerSettings((current) =>
@@ -6139,15 +6219,17 @@ export function App({
             ...current,
             providers: {
               ...current.providers,
-              claudeAgent: {
-                ...current.providers.claudeAgent,
+              [provider]: {
+                ...current.providers[provider],
                 ...patch,
               },
-            },
+            } as ServerSettings["providers"],
           }
         : current,
     );
-    updateServerSettings({ providers: { claudeAgent: patch } });
+    updateServerSettings({
+      providers: { [provider]: patch } as NonNullable<ServerSettingsPatch["providers"]>,
+    });
   }
 
   function resetProviderInstallSettings() {
@@ -6171,6 +6253,17 @@ export function App({
                 ...current.providers.claudeAgent,
                 binaryPath: DEFAULT_SERVER_SETTINGS.providers.claudeAgent.binaryPath,
               },
+              cursor: {
+                ...current.providers.cursor,
+                binaryPath: DEFAULT_SERVER_SETTINGS.providers.cursor.binaryPath,
+                apiEndpoint: DEFAULT_SERVER_SETTINGS.providers.cursor.apiEndpoint,
+              },
+              opencode: {
+                ...current.providers.opencode,
+                binaryPath: DEFAULT_SERVER_SETTINGS.providers.opencode.binaryPath,
+                serverUrl: DEFAULT_SERVER_SETTINGS.providers.opencode.serverUrl,
+                serverPassword: DEFAULT_SERVER_SETTINGS.providers.opencode.serverPassword,
+              },
             },
           }
         : current,
@@ -6184,11 +6277,22 @@ export function App({
         claudeAgent: {
           binaryPath: DEFAULT_SERVER_SETTINGS.providers.claudeAgent.binaryPath,
         },
+        cursor: {
+          binaryPath: DEFAULT_SERVER_SETTINGS.providers.cursor.binaryPath,
+          apiEndpoint: DEFAULT_SERVER_SETTINGS.providers.cursor.apiEndpoint,
+        },
+        opencode: {
+          binaryPath: DEFAULT_SERVER_SETTINGS.providers.opencode.binaryPath,
+          serverUrl: DEFAULT_SERVER_SETTINGS.providers.opencode.serverUrl,
+          serverPassword: DEFAULT_SERVER_SETTINGS.providers.opencode.serverPassword,
+        },
       },
     });
     setOpenInstallProviders({
       codex: false,
       claudeAgent: false,
+      cursor: false,
+      opencode: false,
     });
   }
 
@@ -9084,10 +9188,8 @@ export function App({
                         >
                           {INSTALL_PROVIDER_SETTINGS.map((providerSettings) => {
                             const isOpen = openInstallProviders[providerSettings.provider];
-                            const binaryPathValue =
-                              providerSettings.binaryPathKey === "claudeBinaryPath"
-                                ? providerInstallValues.claudeBinaryPath
-                                : providerInstallValues.codexBinaryPath;
+                            const isProviderDirty =
+                              isProviderInstallSettingsDirty(providerSettings);
                             return (
                               <box
                                 key={providerSettings.provider}
@@ -9116,11 +9218,7 @@ export function App({
                                       content={providerSettings.title}
                                       style={{ fg: PALETTE.text, marginRight: 1 }}
                                     />
-                                    {(
-                                      providerSettings.provider === "codex"
-                                        ? isCodexInstallSettingsDirty
-                                        : isClaudeInstallSettingsDirty
-                                    ) ? (
+                                    {isProviderDirty ? (
                                       <text content="Custom" style={{ fg: PALETTE.subtle }} />
                                     ) : null}
                                   </box>
@@ -9144,46 +9242,13 @@ export function App({
                                       paddingRight: 1,
                                     }}
                                   >
-                                    <text
-                                      content={`${providerSettings.title} binary path`}
-                                      style={{ fg: PALETTE.text, marginBottom: 1 }}
-                                    />
-                                    <box
-                                      style={{
-                                        backgroundColor: PALETTE.input,
-                                        paddingLeft: 1,
-                                        paddingRight: 1,
-                                        height: 3,
-                                        justifyContent: "center",
-                                        marginBottom: 1,
-                                      }}
-                                    >
-                                      <input
-                                        value={binaryPathValue}
-                                        onInput={(value) =>
-                                          providerSettings.binaryPathKey === "claudeBinaryPath"
-                                            ? updateClaudeInstallSettings({ binaryPath: value })
-                                            : updateCodexInstallSettings({ binaryPath: value })
-                                        }
-                                        placeholder={providerSettings.binaryPlaceholder}
-                                        cursorColor={PALETTE.cursor}
-                                        style={{
-                                          backgroundColor: PALETTE.input,
-                                          focusedBackgroundColor: PALETTE.input,
-                                          textColor: PALETTE.text,
-                                          focusedTextColor: PALETTE.text,
-                                          placeholderColor: PALETTE.subtle,
-                                        }}
-                                      />
-                                    </box>
-                                    <text
-                                      content={providerSettings.binaryDescription}
-                                      style={{ fg: PALETTE.subtle, marginBottom: 1 }}
-                                    />
-                                    {providerSettings.homePathKey ? (
-                                      <>
+                                    {providerSettings.fields.map((field) => (
+                                      <box
+                                        key={`${providerSettings.provider}:${field.key}`}
+                                        style={{ flexDirection: "column" }}
+                                      >
                                         <text
-                                          content="CODEX_HOME path"
+                                          content={field.label}
                                           style={{ fg: PALETTE.text, marginBottom: 1 }}
                                         />
                                         <box
@@ -9197,13 +9262,19 @@ export function App({
                                           }}
                                         >
                                           <input
-                                            value={providerInstallValues.codexHomePath}
+                                            value={providerInstallValue(
+                                              providerSettings.provider,
+                                              field.key,
+                                            )}
                                             onInput={(value) =>
-                                              updateCodexInstallSettings({ homePath: value })
+                                              updateProviderInstallSettings(
+                                                providerSettings.provider,
+                                                {
+                                                  [field.key]: value,
+                                                },
+                                              )
                                             }
-                                            placeholder={
-                                              providerSettings.homePlaceholder || "CODEX_HOME"
-                                            }
+                                            placeholder={field.placeholder}
                                             cursorColor={PALETTE.cursor}
                                             style={{
                                               backgroundColor: PALETTE.input,
@@ -9215,11 +9286,11 @@ export function App({
                                           />
                                         </box>
                                         <text
-                                          content={providerSettings.homeDescription ?? ""}
+                                          content={field.description}
                                           style={{ fg: PALETTE.subtle, marginBottom: 1 }}
                                         />
-                                      </>
-                                    ) : null}
+                                      </box>
+                                    ))}
                                   </box>
                                 ) : null}
                               </box>
