@@ -355,6 +355,11 @@ removing those fork surfaces unless a replacement has been implemented and wired
   the built-in driver catalog for the ported Codex and Claude drivers, exposing
   the mutable provider-instance registry layer, and deriving live registry
   instances from legacy provider settings plus explicit `providerInstances`.
+- Provider adapter registry facade: partially align with upstream `08e6d4cf` by
+  adding an instance-registry-backed adapter facade with instance lookup,
+  routing metadata, and legacy provider-kind shims while preserving the current
+  singleton `ProviderAdapterRegistryLive` until the full server boot graph is
+  ready to depend on hydrated provider instances.
 
 ## Remaining upstream groups
 
