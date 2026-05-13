@@ -22,8 +22,11 @@ import { Open } from "./open";
 import * as SqlitePersistence from "./persistence/Layers/Sqlite";
 import { makeServerProviderLayer, makeServerRuntimeServicesLayer } from "./serverLayers";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery";
+import { ProviderEventLoggersLive } from "./provider/Layers/ProviderEventLoggers";
 import { ProviderHealthLive } from "./provider/Layers/ProviderHealth";
+import { ProviderInstanceRegistryHydrationLive } from "./provider/Layers/ProviderInstanceRegistryHydration";
 import { Server } from "./wsServer";
+import { ServerSettingsLive } from "./serverSettings";
 import { ServerLoggerLive } from "./serverLogger";
 import { AnalyticsServiceLayerLive } from "./telemetry/Layers/AnalyticsService";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
@@ -293,6 +296,9 @@ const LayerLive = (input: CliInput) =>
   Layer.empty.pipe(
     Layer.provideMerge(makeServerRuntimeServicesLayer()),
     Layer.provideMerge(makeServerProviderLayer()),
+    Layer.provideMerge(ProviderInstanceRegistryHydrationLive),
+    Layer.provideMerge(ProviderEventLoggersLive),
+    Layer.provideMerge(ServerSettingsLive),
     Layer.provideMerge(ProviderHealthLive),
     Layer.provideMerge(SqlitePersistence.layerConfig),
     Layer.provideMerge(ServerLoggerLive),
