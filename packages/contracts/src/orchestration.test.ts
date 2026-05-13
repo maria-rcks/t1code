@@ -215,6 +215,39 @@ it.effect("accepts provider-scoped model options in thread.turn.start", () =>
   }),
 );
 
+it.effect("accepts modelSelection in thread.turn.start", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeThreadTurnStartCommand({
+      type: "thread.turn.start",
+      commandId: "cmd-turn-model-selection",
+      threadId: "thread-1",
+      message: {
+        messageId: "msg-model-selection",
+        role: "user",
+        text: "hello",
+        attachments: [],
+      },
+      provider: "codex",
+      modelSelection: {
+        instanceId: "codex",
+        model: "gpt-5.3-codex",
+        options: [
+          { id: "reasoningEffort", value: "high" },
+          { id: "fastMode", value: true },
+        ],
+      },
+      model: "gpt-5.3-codex",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.modelSelection?.instanceId, "codex");
+    assert.strictEqual(parsed.modelSelection?.model, "gpt-5.3-codex");
+    assert.deepStrictEqual(parsed.modelSelection?.options, [
+      { id: "reasoningEffort", value: "high" },
+      { id: "fastMode", value: true },
+    ]);
+  }),
+);
+
 it.effect("accepts a source proposed plan reference in thread.turn.start", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeThreadTurnStartCommand({
@@ -271,6 +304,24 @@ it.effect("decodes thread.turn-start-requested source proposed plan metadata whe
       threadId: "thread-1",
       planId: "plan-1",
     });
+  }),
+);
+
+it.effect("decodes thread.turn-start-requested modelSelection when present", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeThreadTurnStartRequestedPayload({
+      threadId: "thread-2",
+      messageId: "msg-2",
+      modelSelection: {
+        instanceId: "claudeAgent",
+        model: "claude-sonnet-4-6",
+        options: [{ id: "effort", value: "max" }],
+      },
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.strictEqual(parsed.modelSelection?.instanceId, "claudeAgent");
+    assert.strictEqual(parsed.modelSelection?.model, "claude-sonnet-4-6");
+    assert.deepStrictEqual(parsed.modelSelection?.options, [{ id: "effort", value: "max" }]);
   }),
 );
 

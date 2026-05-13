@@ -9,6 +9,7 @@ import {
   DEFAULT_PROVIDER_INTERACTION_MODE,
   EventId,
   MessageId,
+  ProviderInstanceId,
   ProjectId,
   ThreadId,
   TurnId,
@@ -386,6 +387,14 @@ describe("ProviderCommandReactor", () => {
           attachments: [],
         },
         provider: "codex",
+        modelSelection: {
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          model: "gpt-5.3-codex",
+          options: [
+            { id: "reasoningEffort", value: "high" },
+            { id: "fastMode", value: true },
+          ],
+        },
         model: "gpt-5.3-codex",
         modelOptions: {
           codex: {
@@ -403,6 +412,14 @@ describe("ProviderCommandReactor", () => {
     await waitFor(() => harness.sendTurn.mock.calls.length === 1);
     expect(harness.startSession.mock.calls[0]?.[1]).toMatchObject({
       model: "gpt-5.3-codex",
+      modelSelection: {
+        instanceId: ProviderInstanceId.makeUnsafe("codex"),
+        model: "gpt-5.3-codex",
+        options: [
+          { id: "reasoningEffort", value: "high" },
+          { id: "fastMode", value: true },
+        ],
+      },
       modelOptions: {
         codex: {
           reasoningEffort: "high",
@@ -412,6 +429,14 @@ describe("ProviderCommandReactor", () => {
     });
     expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
       threadId: ThreadId.makeUnsafe("thread-1"),
+      modelSelection: {
+        instanceId: ProviderInstanceId.makeUnsafe("codex"),
+        model: "gpt-5.3-codex",
+        options: [
+          { id: "reasoningEffort", value: "high" },
+          { id: "fastMode", value: true },
+        ],
+      },
       model: "gpt-5.3-codex",
       modelOptions: {
         codex: {

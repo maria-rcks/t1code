@@ -313,6 +313,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           threadId: command.threadId,
           messageId: command.message.messageId,
           ...(command.provider !== undefined ? { provider: command.provider } : {}),
+          ...(command.modelSelection !== undefined
+            ? { modelSelection: command.modelSelection }
+            : {}),
           ...(command.model !== undefined ? { model: command.model } : {}),
           ...(command.modelOptions !== undefined ? { modelOptions: command.modelOptions } : {}),
           ...(command.providerOptions !== undefined

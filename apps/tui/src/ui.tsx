@@ -42,6 +42,7 @@ import {
   type ProviderInteractionMode,
   type ProviderKind,
   type ProviderModelOptions,
+  type ProviderOptionSelection,
   type RuntimeMode,
   type ServerConfig,
   type ServerProvider,
@@ -886,6 +887,34 @@ function getDispatchModelOptions(
   }
   const normalized = normalizeClaudeModelOptions(model, modelOptions?.claudeAgent);
   return normalized ? { claudeAgent: normalized } : undefined;
+}
+
+function modelOptionSelectionsForDispatch(
+  provider: ProviderKind,
+  modelOptions: ProviderModelOptions | null | undefined,
+): ReadonlyArray<ProviderOptionSelection> | undefined {
+  const selections: ProviderOptionSelection[] = [];
+  if (provider === "codex") {
+    const options = modelOptions?.codex;
+    if (options?.reasoningEffort) {
+      selections.push({ id: "reasoningEffort", value: options.reasoningEffort });
+    }
+    if (options?.fastMode === true) {
+      selections.push({ id: "fastMode", value: true });
+    }
+  } else {
+    const options = modelOptions?.claudeAgent;
+    if (options?.thinking !== undefined) {
+      selections.push({ id: "thinking", value: options.thinking });
+    }
+    if (options?.effort) {
+      selections.push({ id: "effort", value: options.effort });
+    }
+    if (options?.fastMode === true) {
+      selections.push({ id: "fastMode", value: true });
+    }
+  }
+  return selections.length > 0 ? selections : undefined;
 }
 
 function resolveModelName(
@@ -6568,6 +6597,11 @@ export function App({
         draftModel,
         draftModelOptions,
       );
+      const dispatchModelSelection = createModelSelection(
+        defaultInstanceIdForDriver(draftProvider as ProviderDriverKind),
+        draftModel,
+        modelOptionSelectionsForDispatch(draftProvider, dispatchModelOptions),
+      );
       const serializedMentionText = composerMentions.map((mention) => `@${mention.path}`).join(" ");
       const promptTextForSend =
         serializedMentionText.length > 0
@@ -6579,6 +6613,7 @@ export function App({
         activeProjectId: activeProjectId ?? null,
         activeThreadId: activeThread?.id ?? null,
         length: promptTextForSend.trim().length,
+        modelSelection: dispatchModelSelection,
         modelOptions: dispatchModelOptions ?? null,
       });
 
@@ -6637,6 +6672,7 @@ export function App({
               attachments: [],
             },
             provider: draftProvider,
+            modelSelection: dispatchModelSelection,
             model: draftModel,
             ...(dispatchModelOptions ? { modelOptions: dispatchModelOptions } : {}),
             ...(providerOptionsForDispatch ? { providerOptions: providerOptionsForDispatch } : {}),
@@ -6794,6 +6830,7 @@ export function App({
             attachments: submissionAttachments,
           },
           provider: draftProvider,
+          modelSelection: dispatchModelSelection,
           model: draftModel,
           ...(dispatchModelOptions ? { modelOptions: dispatchModelOptions } : {}),
           ...(providerOptionsForDispatch ? { providerOptions: providerOptionsForDispatch } : {}),
