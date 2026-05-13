@@ -351,6 +351,10 @@ removing those fork surfaces unless a replacement has been implemented and wired
   instance-bound settings and HOME environments, and wiring snapshot,
   text-generation, capability-probe cache, continuation, and maintenance
   capabilities into one provider instance bundle.
+- Built-in driver hydration: partially align with upstream `08e6d4cf` by adding
+  the built-in driver catalog for the ported Codex and Claude drivers, exposing
+  the mutable provider-instance registry layer, and deriving live registry
+  instances from legacy provider settings plus explicit `providerInstances`.
 
 ## Remaining upstream groups
 

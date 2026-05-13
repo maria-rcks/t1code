@@ -12,7 +12,7 @@ import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
-import { Result } from "effect";
+import { Result, ServiceMap } from "effect";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -22,7 +22,10 @@ import {
   ProviderInstanceRegistry,
   type ProviderInstanceRegistryShape,
 } from "../Services/ProviderInstanceRegistry.ts";
-import { type ProviderInstanceRegistryMutatorShape } from "../Services/ProviderInstanceRegistryMutator.ts";
+import {
+  ProviderInstanceRegistryMutator,
+  type ProviderInstanceRegistryMutatorShape,
+} from "../Services/ProviderInstanceRegistryMutator.ts";
 import { buildUnavailableProviderSnapshot } from "../unavailableProviderSnapshot.ts";
 
 interface LiveEntry {
@@ -294,5 +297,19 @@ export const ProviderInstanceRegistryLayer = <R>(input: {
     ProviderInstanceRegistry,
     makeProviderInstanceRegistry(input).pipe(Effect.map((built) => built.registry)),
   ) as Layer.Layer<ProviderInstanceRegistry, never, R>;
+
+export const ProviderInstanceRegistryMutableLayer = <R>(input: {
+  readonly drivers: ReadonlyArray<AnyProviderDriver<R>>;
+  readonly configMap: ProviderInstanceConfigMap;
+}): Layer.Layer<ProviderInstanceRegistry | ProviderInstanceRegistryMutator, never, R> =>
+  Layer.effectServices(
+    makeProviderInstanceRegistry(input).pipe(
+      Effect.map(({ registry, mutator }) =>
+        ServiceMap.make(ProviderInstanceRegistry, registry).pipe(
+          ServiceMap.add(ProviderInstanceRegistryMutator, mutator),
+        ),
+      ),
+    ),
+  ) as Layer.Layer<ProviderInstanceRegistry | ProviderInstanceRegistryMutator, never, R>;
 
 export { defaultInstanceIdForDriver };
