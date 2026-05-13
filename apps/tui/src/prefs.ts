@@ -1,6 +1,7 @@
 import type { AppSettings } from "@t3tools/client-core";
 import {
   type ProjectEntry,
+  type ProviderInstanceId,
   type ProviderKind,
   type ProviderModelOptions,
   type RuntimeMode,
@@ -51,6 +52,7 @@ export interface TuiPrefs {
   readonly composerDraftsByThreadId?: Readonly<Record<string, PersistedComposerDraft>>;
   readonly mainView?: "thread" | "settings" | "keybindings";
   readonly draftProvider?: ProviderKind;
+  readonly draftProviderInstanceId?: ProviderInstanceId;
   readonly draftModel?: string;
   readonly draftModelOptions?: ProviderModelOptions;
   readonly draftRuntimeMode?: RuntimeMode;

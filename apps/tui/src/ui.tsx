@@ -39,6 +39,7 @@ import {
   type ProjectEntry,
   type ProviderApprovalDecision,
   type ProviderDriverKind,
+  type ProviderInstanceId,
   type ProviderInteractionMode,
   type ProviderKind,
   type ProviderModelOptions,
@@ -137,7 +138,12 @@ import { saveClipboardImageToFile } from "./clipboardImage";
 import { copyTextToClipboard } from "./clipboardText";
 import { KEYBINDING_GUIDE_SECTIONS, isCtrlC, shouldClearComposerOnCtrlC } from "./keyboardBehavior";
 import { createT1Logger } from "./log";
-import { getProviderInstanceModelOptions } from "./providerInstances";
+import {
+  deriveProviderInstanceEntries,
+  getProviderInstanceModelOptions,
+  legacyProviderKindForDriver,
+  sortProviderInstanceEntries,
+} from "./providerInstances";
 import { resolveUserMessageBubbleWidth } from "./messageLayout";
 import {
   isDiffLikeCodeBlockFiletype,
@@ -1952,6 +1958,8 @@ function isAvailableModelProviderOption(
 
 const AVAILABLE_MODEL_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter(isAvailableModelProviderOption);
 const EMPTY_PROVIDER_SNAPSHOTS: ReadonlyArray<ServerProvider> = [];
+const DEFAULT_CODEX_INSTANCE_ID = defaultInstanceIdForDriver("codex" as ProviderDriverKind);
+const DEFAULT_CLAUDE_INSTANCE_ID = defaultInstanceIdForDriver("claudeAgent" as ProviderDriverKind);
 const COMING_SOON_MODEL_PROVIDER_OPTIONS = [
   ...PROVIDER_OPTIONS.filter((option) => !option.available).map((option) => ({
     id: option.value,
@@ -1960,6 +1968,25 @@ const COMING_SOON_MODEL_PROVIDER_OPTIONS = [
   { id: "opencode", label: "OpenCode" },
   { id: "gemini", label: "Gemini" },
 ] as const;
+
+type ModelMenuInstanceEntry = {
+  readonly instanceId: ProviderInstanceId;
+  readonly driverKind: ProviderDriverKind;
+  readonly provider: ProviderKind;
+  readonly displayName: string;
+  readonly accentColor?: string;
+  readonly isDefault: boolean;
+};
+
+const FALLBACK_MODEL_MENU_INSTANCE_ENTRIES: ReadonlyArray<ModelMenuInstanceEntry> =
+  AVAILABLE_MODEL_PROVIDER_OPTIONS.map((option) => ({
+    instanceId:
+      option.value === "claudeAgent" ? DEFAULT_CLAUDE_INSTANCE_ID : DEFAULT_CODEX_INSTANCE_ID,
+    driverKind: option.value as ProviderDriverKind,
+    provider: option.value,
+    displayName: option.label,
+    isDefault: true,
+  }));
 
 function countDistinctSections(items: readonly TraitsMenuItem[]): number {
   let count = 0;
@@ -2024,6 +2051,14 @@ function estimateComposerTextareaHeight(input: {
 
 function normalizePersistedProvider(value: string | undefined): ProviderKind | null {
   return value === "codex" || value === "claudeAgent" ? value : null;
+}
+
+function normalizePersistedProviderInstanceId(
+  value: string | undefined,
+): ProviderInstanceId | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? (value as ProviderInstanceId)
+    : null;
 }
 
 function normalizePersistedRuntimeMode(value: string | undefined): RuntimeMode | null {
@@ -2723,6 +2758,8 @@ export function App({
     Readonly<Record<string, ComposerDraftState>>
   >({});
   const [draftProvider, setDraftProvider] = useState<ProviderKind>("codex");
+  const [draftProviderInstanceId, setDraftProviderInstanceId] =
+    useState<ProviderInstanceId>(DEFAULT_CODEX_INSTANCE_ID);
   const [draftModel, setDraftModel] = useState(DEFAULT_MODEL_BY_PROVIDER.codex);
   const [draftModelOptions, setDraftModelOptions] = useState<ProviderModelOptions | undefined>();
   const [draftRuntimeMode, setDraftRuntimeMode] = useState<RuntimeMode>("full-access");
@@ -2747,7 +2784,8 @@ export function App({
   const [renameThreadDialog, setRenameThreadDialog] = useState<RenameThreadDialogState | null>(
     null,
   );
-  const [modelMenuProvider, setModelMenuProvider] = useState<ProviderKind>("codex");
+  const [modelMenuInstanceId, setModelMenuInstanceId] =
+    useState<ProviderInstanceId>(DEFAULT_CODEX_INSTANCE_ID);
   const [modelSubmenuOpen, setModelSubmenuOpen] = useState(false);
   const [modelMenuIndex, setModelMenuIndex] = useState(0);
   const [gitMenuIndex, setGitMenuIndex] = useState(0);
@@ -2875,10 +2913,7 @@ export function App({
   );
   const updateGitTextGenerationModel = useCallback(
     (model: string) => {
-      const textGenerationModelSelection = createModelSelection(
-        defaultInstanceIdForDriver("codex" as ProviderDriverKind),
-        model,
-      );
+      const textGenerationModelSelection = createModelSelection(DEFAULT_CODEX_INSTANCE_ID, model);
       updateAppSettings({ textGenerationModel: model });
       setServerSettings((current) =>
         current
@@ -3064,6 +3099,18 @@ export function App({
         const persistedProvider = normalizePersistedProvider(prefs.draftProvider);
         const nextProvider = persistedProvider ?? "codex";
         setDraftProvider(nextProvider);
+        setDraftProviderInstanceId(
+          normalizePersistedProviderInstanceId(prefs.draftProviderInstanceId) ??
+            (nextProvider === "claudeAgent"
+              ? DEFAULT_CLAUDE_INSTANCE_ID
+              : DEFAULT_CODEX_INSTANCE_ID),
+        );
+        setModelMenuInstanceId(
+          normalizePersistedProviderInstanceId(prefs.draftProviderInstanceId) ??
+            (nextProvider === "claudeAgent"
+              ? DEFAULT_CLAUDE_INSTANCE_ID
+              : DEFAULT_CODEX_INSTANCE_ID),
+        );
         setDraftModel(resolvePersistedModel(nextProvider, prefs.draftModel));
         setDraftModelOptions(prefs.draftModelOptions);
         setDraftRuntimeMode(normalizePersistedRuntimeMode(prefs.draftRuntimeMode) ?? "full-access");
@@ -3272,6 +3319,7 @@ export function App({
     const prefs = {
       mainView,
       draftProvider,
+      draftProviderInstanceId,
       draftModel,
       draftRuntimeMode,
       draftInteractionMode,
@@ -3301,6 +3349,7 @@ export function App({
     draftModel,
     draftModelOptions,
     draftProvider,
+    draftProviderInstanceId,
     draftRuntimeMode,
     draftThreadsByProjectId,
     locallyUnreadThreadIds,
@@ -3511,47 +3560,66 @@ export function App({
     ],
   );
   const providerSnapshots = serverConfig?.providerInstances ?? EMPTY_PROVIDER_SNAPSHOTS;
-  const providerModelOptionsByProvider = useMemo(
-    () => ({
-      codex: getProviderInstanceModelOptions(
-        providerSnapshots,
-        defaultInstanceIdForDriver("codex" as ProviderDriverKind),
-        getAppModelOptions(
-          "codex",
-          customModelsByProvider.codex,
-          draftProvider === "codex" ? draftModel : undefined,
-        ),
-      ),
-      claudeAgent: getProviderInstanceModelOptions(
-        providerSnapshots,
-        defaultInstanceIdForDriver("claudeAgent" as ProviderDriverKind),
-        getAppModelOptions(
-          "claudeAgent",
-          customModelsByProvider.claudeAgent,
-          draftProvider === "claudeAgent" ? draftModel : undefined,
-        ),
-      ),
-    }),
-    [
-      customModelsByProvider.claudeAgent,
-      customModelsByProvider.codex,
-      draftModel,
-      draftProvider,
-      providerSnapshots,
-    ],
+  const modelMenuEntries = useMemo<ReadonlyArray<ModelMenuInstanceEntry>>(() => {
+    const entries = sortProviderInstanceEntries(deriveProviderInstanceEntries(providerSnapshots))
+      .map((entry) => {
+        const provider = legacyProviderKindForDriver(entry.driverKind);
+        if (!provider || !entry.enabled || !entry.isAvailable) return null;
+        if (entry.accentColor) {
+          return {
+            instanceId: entry.instanceId,
+            driverKind: entry.driverKind,
+            provider,
+            displayName: entry.displayName,
+            accentColor: entry.accentColor,
+            isDefault: entry.isDefault,
+          };
+        }
+        return {
+          instanceId: entry.instanceId,
+          driverKind: entry.driverKind,
+          provider,
+          displayName: entry.displayName,
+          isDefault: entry.isDefault,
+        };
+      })
+      .filter((entry): entry is ModelMenuInstanceEntry => entry !== null);
+    return entries.length > 0 ? entries : FALLBACK_MODEL_MENU_INSTANCE_ENTRIES;
+  }, [providerSnapshots]);
+  const modelMenuEntryByInstanceId = useMemo(
+    () => new Map(modelMenuEntries.map((entry) => [entry.instanceId, entry])),
+    [modelMenuEntries],
   );
-  const modelOptions = providerModelOptionsByProvider[modelMenuProvider];
-  const draftProviderModelOptions = providerModelOptionsByProvider[draftProvider];
-  const providerOptionLabelByProvider = useMemo(
-    () =>
-      new Map(
-        (serverConfig?.providerInstances ?? []).map((provider) => [
-          provider.instanceId,
-          provider.displayName?.trim() || provider.instanceId,
-        ]),
-      ),
-    [serverConfig?.providerInstances],
-  );
+  const providerModelOptionsByInstance = useMemo(() => {
+    const optionsByInstance = new Map<
+      ProviderInstanceId,
+      ReadonlyArray<{ readonly slug: string; readonly name: string; readonly isCustom: boolean }>
+    >();
+    for (const entry of modelMenuEntries) {
+      optionsByInstance.set(
+        entry.instanceId,
+        getProviderInstanceModelOptions(
+          providerSnapshots,
+          entry.instanceId,
+          getAppModelOptions(
+            entry.provider,
+            customModelsByProvider[entry.provider],
+            entry.instanceId === draftProviderInstanceId ? draftModel : undefined,
+          ),
+        ),
+      );
+    }
+    return optionsByInstance;
+  }, [
+    customModelsByProvider,
+    draftModel,
+    draftProviderInstanceId,
+    modelMenuEntries,
+    providerSnapshots,
+  ]);
+  const modelOptions = providerModelOptionsByInstance.get(modelMenuInstanceId) ?? [];
+  const draftProviderModelOptions =
+    providerModelOptionsByInstance.get(draftProviderInstanceId) ?? [];
   const providerOptionsForDispatch = useMemo(
     () => getProviderStartOptions(appSettings),
     [appSettings],
@@ -3561,8 +3629,7 @@ export function App({
     appSettings.textGenerationModel ??
     DEFAULT_GIT_TEXT_GENERATION_MODEL;
   const currentGitTextGenerationInstanceId =
-    serverSettings?.textGenerationModelSelection.instanceId ??
-    defaultInstanceIdForDriver("codex" as ProviderDriverKind);
+    serverSettings?.textGenerationModelSelection.instanceId ?? DEFAULT_CODEX_INSTANCE_ID;
   const gitTextGenerationModelOptions = useMemo(
     () => getAppModelOptions("codex", customModelsByProvider.codex, currentGitTextGenerationModel),
     [customModelsByProvider.codex, currentGitTextGenerationModel],
@@ -4035,15 +4102,64 @@ export function App({
   useEffect(() => {
     if (!activeThread) return;
     const nextProvider = activeThread.session?.providerName;
+    const sessionInstance =
+      typeof nextProvider === "string"
+        ? modelMenuEntryByInstanceId.get(nextProvider as ProviderInstanceId)
+        : undefined;
     const resolvedProvider =
-      nextProvider === "codex" || nextProvider === "claudeAgent" ? nextProvider : draftProvider;
+      sessionInstance?.provider ??
+      (nextProvider === "codex" || nextProvider === "claudeAgent" ? nextProvider : draftProvider);
+    const resolvedInstanceId =
+      sessionInstance?.instanceId ??
+      (nextProvider === "codex" || nextProvider === "claudeAgent"
+        ? resolvedProvider === "claudeAgent"
+          ? DEFAULT_CLAUDE_INSTANCE_ID
+          : DEFAULT_CODEX_INSTANCE_ID
+        : draftProviderInstanceId);
     if (resolvedProvider !== draftProvider) {
       setDraftProvider(resolvedProvider);
+    }
+    if (resolvedInstanceId !== draftProviderInstanceId) {
+      setDraftProviderInstanceId(resolvedInstanceId);
     }
     setDraftModel(resolvePersistedModel(resolvedProvider, activeThread.model));
     setDraftRuntimeMode(activeThread.runtimeMode);
     setDraftInteractionMode(activeThread.interactionMode);
-  }, [activeThread, draftProvider]);
+  }, [activeThread, draftProvider, draftProviderInstanceId, modelMenuEntryByInstanceId]);
+
+  useEffect(() => {
+    if (providerSnapshots.length === 0) return;
+    const selected = modelMenuEntryByInstanceId.get(draftProviderInstanceId);
+    if (selected) {
+      if (selected.provider !== draftProvider) {
+        setDraftProvider(selected.provider);
+      }
+      return;
+    }
+    const fallback =
+      modelMenuEntries.find((entry) => entry.provider === draftProvider) ?? modelMenuEntries[0];
+    if (!fallback) return;
+    setDraftProvider(fallback.provider);
+    setDraftProviderInstanceId(fallback.instanceId);
+    setDraftModel((current) => resolvePersistedModel(fallback.provider, current));
+  }, [
+    draftProvider,
+    draftProviderInstanceId,
+    modelMenuEntries,
+    modelMenuEntryByInstanceId,
+    providerSnapshots.length,
+  ]);
+
+  useEffect(() => {
+    if (providerSnapshots.length === 0) return;
+    if (modelMenuEntryByInstanceId.has(modelMenuInstanceId)) return;
+    setModelMenuInstanceId(draftProviderInstanceId);
+  }, [
+    draftProviderInstanceId,
+    modelMenuEntryByInstanceId,
+    modelMenuInstanceId,
+    providerSnapshots.length,
+  ]);
 
   useEffect(() => {
     if (!activeProjectId) return;
@@ -5407,19 +5523,30 @@ export function App({
       }
     }
     if (overlayMenu === "model") {
-      const availableProviders = AVAILABLE_MODEL_PROVIDER_OPTIONS.map((option) => option.value);
+      const currentInstanceIndex = Math.max(
+        modelMenuEntries.findIndex((entry) => entry.instanceId === modelMenuInstanceId),
+        0,
+      );
       if (key.name === "left" || key.name === "right") {
-        const nextProvider = modelMenuProvider === "codex" ? "claudeAgent" : "codex";
-        focusModelProvider(nextProvider);
-        logger.log("overlay.modelProviderChanged", { provider: nextProvider });
+        const delta = key.name === "left" ? -1 : 1;
+        const nextEntry =
+          modelMenuEntries[
+            (currentInstanceIndex + delta + modelMenuEntries.length) % modelMenuEntries.length
+          ];
+        if (nextEntry) {
+          focusModelProvider(nextEntry.instanceId);
+          logger.log("overlay.modelProviderChanged", {
+            provider: nextEntry.provider,
+            instanceId: nextEntry.instanceId,
+          });
+        }
         return;
       }
       if (isNavUp) {
         if (!modelSubmenuOpen) {
-          const currentIndex = Math.max(availableProviders.indexOf(modelMenuProvider), 0);
-          const nextProvider = availableProviders[Math.max(0, currentIndex - 1)];
-          if (nextProvider) {
-            focusModelProvider(nextProvider, false);
+          const nextEntry = modelMenuEntries[Math.max(0, currentInstanceIndex - 1)];
+          if (nextEntry) {
+            focusModelProvider(nextEntry.instanceId, false);
           }
           return;
         }
@@ -5428,11 +5555,10 @@ export function App({
       }
       if (isNavDown) {
         if (!modelSubmenuOpen) {
-          const currentIndex = Math.max(availableProviders.indexOf(modelMenuProvider), 0);
-          const nextProvider =
-            availableProviders[Math.min(availableProviders.length - 1, currentIndex + 1)];
-          if (nextProvider) {
-            focusModelProvider(nextProvider, false);
+          const nextEntry =
+            modelMenuEntries[Math.min(modelMenuEntries.length - 1, currentInstanceIndex + 1)];
+          if (nextEntry) {
+            focusModelProvider(nextEntry.instanceId, false);
           }
           return;
         }
@@ -5451,7 +5577,7 @@ export function App({
         }
         const selected = modelOptions[modelMenuIndex];
         if (selected) {
-          applyDraftProviderModel(modelMenuProvider, selected.slug);
+          applyDraftProviderModel(modelMenuInstanceId, selected.slug);
         }
         return;
       }
@@ -6439,7 +6565,10 @@ export function App({
           setStatus("Use /provider codex or /provider claude");
           return true;
         }
-        applyDraftProviderModel(nextProvider, resolvePersistedModel(nextProvider, draftModel));
+        const nextInstance =
+          modelMenuEntries.find((entry) => entry.provider === nextProvider)?.instanceId ??
+          (nextProvider === "claudeAgent" ? DEFAULT_CLAUDE_INSTANCE_ID : DEFAULT_CODEX_INSTANCE_ID);
+        applyDraftProviderModel(nextInstance, resolvePersistedModel(nextProvider, draftModel));
         return true;
       }
       case "runtime": {
@@ -6598,7 +6727,7 @@ export function App({
         draftModelOptions,
       );
       const dispatchModelSelection = createModelSelection(
-        defaultInstanceIdForDriver(draftProvider as ProviderDriverKind),
+        draftProviderInstanceId,
         draftModel,
         modelOptionSelectionsForDispatch(draftProvider, dispatchModelOptions),
       );
@@ -6900,22 +7029,32 @@ export function App({
     }
   }
 
-  function applyDraftProviderModel(nextProvider: ProviderKind, nextModel: string) {
-    logger.log("controls.providerModelChanged", { provider: nextProvider, model: nextModel });
+  function applyDraftProviderModel(nextInstanceId: ProviderInstanceId, nextModel: string) {
+    const nextEntry = modelMenuEntryByInstanceId.get(nextInstanceId);
+    if (!nextEntry) return;
+    const nextProvider = nextEntry.provider;
+    logger.log("controls.providerModelChanged", {
+      provider: nextProvider,
+      instanceId: nextEntry.instanceId,
+      model: nextModel,
+    });
     setDraftProvider(nextProvider);
+    setDraftProviderInstanceId(nextEntry.instanceId);
     setDraftModel(nextModel);
     setOverlayMenu(null);
     setFocusArea("composer");
     setStatus("model");
   }
 
-  function focusModelProvider(nextProvider: ProviderKind, openSubmenu: boolean = true) {
-    const nextOptions = providerModelOptionsByProvider[nextProvider];
-    setModelMenuProvider(nextProvider);
+  function focusModelProvider(nextInstanceId: ProviderInstanceId, openSubmenu: boolean = true) {
+    const nextOptions = providerModelOptionsByInstance.get(nextInstanceId) ?? [];
+    setModelMenuInstanceId(nextInstanceId);
     setModelSubmenuOpen(openSubmenu);
     setModelMenuIndex(
       Math.max(
-        nextOptions.findIndex((option) => option.slug === draftModel),
+        nextInstanceId === draftProviderInstanceId
+          ? nextOptions.findIndex((option) => option.slug === draftModel)
+          : 0,
         0,
       ),
     );
@@ -7052,7 +7191,7 @@ export function App({
       const next = current === "model" ? null : "model";
       if (next === "model") {
         setOverlayAnchor({ x: event?.x ?? null, y: event?.y ?? null });
-        focusModelProvider(draftProvider, false);
+        focusModelProvider(draftProviderInstanceId, false);
       } else {
         setOverlayAnchor(null);
         setModelSubmenuOpen(false);
@@ -7060,6 +7199,7 @@ export function App({
       logger.log(next ? "overlay.open" : "overlay.close", {
         menu: "model",
         provider: draftProvider,
+        instanceId: draftProviderInstanceId,
       });
       return next;
     });
@@ -7852,7 +7992,7 @@ export function App({
   const modelMenuHeight = Math.min(Math.max(modelOptions.length, 1), 6);
   const modelProvidersHeight =
     2 +
-    AVAILABLE_MODEL_PROVIDER_OPTIONS.length +
+    modelMenuEntries.length +
     (COMING_SOON_MODEL_PROVIDER_OPTIONS.length > 0
       ? 1 + COMING_SOON_MODEL_PROVIDER_OPTIONS.length
       : 0);
@@ -10429,19 +10569,15 @@ export function App({
               flexDirection: "column",
             }}
           >
-            {AVAILABLE_MODEL_PROVIDER_OPTIONS.map((option) => (
+            {modelMenuEntries.map((entry) => (
               <PopupRow
-                key={`provider:${option.value}`}
-                icon={providerPickerIcon(option.value)}
-                iconColor={providerColor(option.value)}
-                label={
-                  providerOptionLabelByProvider.get(
-                    defaultInstanceIdForDriver(option.value as ProviderDriverKind),
-                  ) ?? option.label
-                }
-                active={modelMenuProvider === option.value}
-                onHover={() => focusModelProvider(option.value)}
-                onPress={() => focusModelProvider(option.value)}
+                key={`provider:${entry.instanceId}`}
+                icon={providerPickerIcon(entry.provider)}
+                iconColor={entry.accentColor ?? providerColor(entry.provider)}
+                label={entry.displayName}
+                active={modelMenuInstanceId === entry.instanceId}
+                onHover={() => focusModelProvider(entry.instanceId)}
+                onPress={() => focusModelProvider(entry.instanceId)}
               />
             ))}
             {COMING_SOON_MODEL_PROVIDER_OPTIONS.length > 0 ? (
@@ -10463,14 +10599,16 @@ export function App({
             <box style={{ flexGrow: 1, flexDirection: "column", paddingLeft: 1 }}>
               {modelOptions.slice(0, modelMenuHeight).map((option, index) => (
                 <PopupRow
-                  key={`${modelMenuProvider}:${option.slug}`}
+                  key={`${modelMenuInstanceId}:${option.slug}`}
                   icon={
-                    option.slug === draftModel && modelMenuProvider === draftProvider ? "󰄬" : " "
+                    option.slug === draftModel && modelMenuInstanceId === draftProviderInstanceId
+                      ? "󰄬"
+                      : " "
                   }
                   label={option.name}
                   active={index === modelMenuIndex}
                   onHover={() => setModelMenuIndex(index)}
-                  onPress={() => applyDraftProviderModel(modelMenuProvider, option.slug)}
+                  onPress={() => applyDraftProviderModel(modelMenuInstanceId, option.slug)}
                 />
               ))}
             </box>

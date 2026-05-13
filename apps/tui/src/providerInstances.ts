@@ -1,6 +1,7 @@
 import {
   defaultInstanceIdForDriver,
   type ProviderDriverKind,
+  type ProviderKind,
   type ProviderInstanceId,
   type ServerProvider,
   type ServerProviderModel,
@@ -46,6 +47,14 @@ function driverKindLabel(driverKind: ProviderDriverKind): string {
   if (driverKind === "codex") return "Codex";
   if (driverKind === "claudeAgent") return "Claude";
   return formatProviderDriverKindLabel(driverKind);
+}
+
+export function legacyProviderKindForDriver(
+  driverKind: ProviderDriverKind,
+): ProviderKind | undefined {
+  if (driverKind === "codex") return "codex";
+  if (driverKind === "claudeAgent") return "claudeAgent";
+  return undefined;
 }
 
 export function normalizeProviderAccentColor(value: string | undefined): string | undefined {

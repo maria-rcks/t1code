@@ -10,6 +10,7 @@ import {
   deriveProviderInstanceEntries,
   getProviderInstanceModelOptions,
   getProviderInstanceModels,
+  legacyProviderKindForDriver,
   normalizeProviderAccentColor,
   resolveSelectableProviderInstance,
   sortProviderInstanceEntries,
@@ -168,5 +169,13 @@ describe("providerInstances", () => {
     expect(normalizeProviderAccentColor(" #A0b1C2 ")).toBe("#A0b1C2");
     expect(normalizeProviderAccentColor("#fff")).toBeUndefined();
     expect(normalizeProviderAccentColor("blue")).toBeUndefined();
+  });
+
+  it("maps only legacy TUI picker drivers back to provider kinds", () => {
+    expect(legacyProviderKindForDriver(decodeProviderDriverKind("codex"))).toBe("codex");
+    expect(legacyProviderKindForDriver(decodeProviderDriverKind("claudeAgent"))).toBe(
+      "claudeAgent",
+    );
+    expect(legacyProviderKindForDriver(decodeProviderDriverKind("cursor"))).toBeUndefined();
   });
 });
