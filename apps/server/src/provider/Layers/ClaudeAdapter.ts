@@ -13,6 +13,7 @@ import {
   type PermissionMode,
   type PermissionResult,
   type PermissionUpdate,
+  type ModelUsage,
   type SDKMessage,
   type SDKResultMessage,
   type SettingSource,
@@ -31,6 +32,7 @@ import {
   type ProviderRuntimeTurnStatus,
   type ProviderSendTurnInput,
   type ProviderSession,
+  type ThreadTokenUsageSnapshot,
   type ProviderUserInputAnswers,
   type RuntimeContentStreamKind,
   RuntimeItemId,
@@ -163,6 +165,8 @@ interface ClaudeSessionContext {
   }>;
   readonly inFlightTools: Map<number, ToolInFlight>;
   turnState: ClaudeTurnState | undefined;
+  lastKnownContextWindow: number | undefined;
+  lastKnownTokenUsage: ThreadTokenUsageSnapshot | undefined;
   lastAssistantUuid: string | undefined;
   lastThreadStartedId: string | undefined;
   stopped: boolean;
@@ -273,6 +277,79 @@ function isInterruptedResult(result: SDKResultMessage): boolean {
       errors.includes("interrupted by user") ||
       errors.includes("aborted"))
   );
+}
+
+function maxClaudeContextWindowFromModelUsage(
+  modelUsage: Record<string, ModelUsage> | undefined,
+): number | undefined {
+  if (!modelUsage) {
+    return undefined;
+  }
+
+  let maxContextWindow: number | undefined;
+  for (const value of Object.values(modelUsage)) {
+    const contextWindow = value.contextWindow;
+    maxContextWindow = Math.max(maxContextWindow ?? 0, contextWindow);
+  }
+
+  return maxContextWindow;
+}
+
+function normalizeClaudeTokenUsage(
+  value: unknown,
+  contextWindow?: number,
+): ThreadTokenUsageSnapshot | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const usage = value as Record<string, unknown>;
+  const inputTokens =
+    (typeof usage.input_tokens === "number" && Number.isFinite(usage.input_tokens)
+      ? usage.input_tokens
+      : 0) +
+    (typeof usage.cache_creation_input_tokens === "number" &&
+    Number.isFinite(usage.cache_creation_input_tokens)
+      ? usage.cache_creation_input_tokens
+      : 0) +
+    (typeof usage.cache_read_input_tokens === "number" &&
+    Number.isFinite(usage.cache_read_input_tokens)
+      ? usage.cache_read_input_tokens
+      : 0);
+  const outputTokens =
+    typeof usage.output_tokens === "number" && Number.isFinite(usage.output_tokens)
+      ? usage.output_tokens
+      : 0;
+  const derivedTotalProcessedTokens = inputTokens + outputTokens;
+  const totalProcessedTokens =
+    (typeof usage.total_tokens === "number" && Number.isFinite(usage.total_tokens)
+      ? usage.total_tokens
+      : undefined) ?? (derivedTotalProcessedTokens > 0 ? derivedTotalProcessedTokens : undefined);
+  if (totalProcessedTokens === undefined || totalProcessedTokens <= 0) {
+    return undefined;
+  }
+
+  const maxTokens =
+    typeof contextWindow === "number" && Number.isFinite(contextWindow) && contextWindow > 0
+      ? contextWindow
+      : undefined;
+  const usedTokens =
+    maxTokens !== undefined ? Math.min(totalProcessedTokens, maxTokens) : totalProcessedTokens;
+
+  return {
+    usedTokens,
+    lastUsedTokens: usedTokens,
+    ...(totalProcessedTokens > usedTokens ? { totalProcessedTokens } : {}),
+    ...(inputTokens > 0 ? { inputTokens } : {}),
+    ...(outputTokens > 0 ? { outputTokens } : {}),
+    ...(maxTokens !== undefined ? { maxTokens } : {}),
+    ...(typeof usage.tool_uses === "number" && Number.isFinite(usage.tool_uses)
+      ? { toolUses: usage.tool_uses }
+      : {}),
+    ...(typeof usage.duration_ms === "number" && Number.isFinite(usage.duration_ms)
+      ? { durationMs: usage.duration_ms }
+      : {}),
+  };
 }
 
 function asRuntimeItemId(value: string): RuntimeItemId {
@@ -1316,8 +1393,50 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     result?: SDKResultMessage,
   ): Effect.Effect<void> =>
     Effect.gen(function* () {
+      const resultContextWindow = maxClaudeContextWindowFromModelUsage(result?.modelUsage);
+      if (resultContextWindow !== undefined) {
+        context.lastKnownContextWindow = resultContextWindow;
+      }
+
+      const accumulatedSnapshot = normalizeClaudeTokenUsage(
+        result?.usage,
+        resultContextWindow ?? context.lastKnownContextWindow,
+      );
+      const accumulatedTotalProcessedTokens =
+        accumulatedSnapshot?.totalProcessedTokens ?? accumulatedSnapshot?.usedTokens;
+      const lastGoodUsage = context.lastKnownTokenUsage;
+      const maxTokens = resultContextWindow ?? context.lastKnownContextWindow;
+      const usageSnapshot: ThreadTokenUsageSnapshot | undefined = lastGoodUsage
+        ? {
+            ...lastGoodUsage,
+            ...(typeof maxTokens === "number" && Number.isFinite(maxTokens) && maxTokens > 0
+              ? { maxTokens }
+              : {}),
+            ...(typeof accumulatedTotalProcessedTokens === "number" &&
+            Number.isFinite(accumulatedTotalProcessedTokens) &&
+            accumulatedTotalProcessedTokens > lastGoodUsage.usedTokens
+              ? { totalProcessedTokens: accumulatedTotalProcessedTokens }
+              : {}),
+          }
+        : accumulatedSnapshot;
+
       const turnState = context.turnState;
       if (!turnState) {
+        if (usageSnapshot) {
+          const usageStamp = yield* makeEventStamp();
+          yield* offerRuntimeEvent({
+            type: "thread.token-usage.updated",
+            eventId: usageStamp.eventId,
+            provider: PROVIDER,
+            createdAt: usageStamp.createdAt,
+            threadId: context.session.threadId,
+            payload: {
+              usage: usageSnapshot,
+            },
+            providerRefs: {},
+          });
+        }
+
         const stamp = yield* makeEventStamp();
         yield* offerRuntimeEvent({
           type: "turn.completed",
@@ -1384,6 +1503,22 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         id: turnState.turnId,
         items: [...turnState.items],
       });
+
+      if (usageSnapshot) {
+        const usageStamp = yield* makeEventStamp();
+        yield* offerRuntimeEvent({
+          type: "thread.token-usage.updated",
+          eventId: usageStamp.eventId,
+          provider: PROVIDER,
+          createdAt: usageStamp.createdAt,
+          threadId: context.session.threadId,
+          turnId: turnState.turnId,
+          payload: {
+            usage: usageSnapshot,
+          },
+          providerRefs: nativeProviderRefs(context),
+        });
+      }
 
       const stamp = yield* makeEventStamp();
       yield* offerRuntimeEvent({
@@ -1954,6 +2089,25 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           });
           return;
         case "task_progress":
+          if (message.usage) {
+            const normalizedUsage = normalizeClaudeTokenUsage(
+              message.usage,
+              context.lastKnownContextWindow,
+            );
+            if (normalizedUsage) {
+              context.lastKnownTokenUsage = normalizedUsage;
+              const usageStamp = yield* makeEventStamp();
+              yield* offerRuntimeEvent({
+                ...base,
+                eventId: usageStamp.eventId,
+                createdAt: usageStamp.createdAt,
+                type: "thread.token-usage.updated",
+                payload: {
+                  usage: normalizedUsage,
+                },
+              });
+            }
+          }
           yield* offerRuntimeEvent({
             ...base,
             type: "task.progress",
@@ -1967,6 +2121,25 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           });
           return;
         case "task_notification":
+          if (message.usage) {
+            const normalizedUsage = normalizeClaudeTokenUsage(
+              message.usage,
+              context.lastKnownContextWindow,
+            );
+            if (normalizedUsage) {
+              context.lastKnownTokenUsage = normalizedUsage;
+              const usageStamp = yield* makeEventStamp();
+              yield* offerRuntimeEvent({
+                ...base,
+                eventId: usageStamp.eventId,
+                createdAt: usageStamp.createdAt,
+                type: "thread.token-usage.updated",
+                payload: {
+                  usage: normalizedUsage,
+                },
+              });
+            }
+          }
           yield* offerRuntimeEvent({
             ...base,
             type: "task.completed",
@@ -2660,6 +2833,8 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         turns: [],
         inFlightTools,
         turnState: undefined,
+        lastKnownContextWindow: undefined,
+        lastKnownTokenUsage: undefined,
         lastAssistantUuid: resumeState?.resumeSessionAt,
         lastThreadStartedId: undefined,
         stopped: false,
