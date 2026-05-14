@@ -1,10 +1,12 @@
 import {
   MODEL_PICKER_JUMP_KEYBINDING_COMMANDS,
+  THREAD_JUMP_KEYBINDING_COMMANDS,
   type KeybindingCommand,
   type KeybindingShortcut,
   type KeybindingWhenNode,
   type ModelPickerJumpKeybindingCommand,
   type ResolvedKeybindingsConfig,
+  type ThreadJumpKeybindingCommand,
 } from "@t3tools/contracts";
 
 export interface TuiShortcutEventLike {
@@ -116,4 +118,15 @@ export function modelPickerJumpIndexFromCommand(command: string): number | null 
     command as ModelPickerJumpKeybindingCommand,
   );
   return index === -1 ? null : index;
+}
+
+export function threadJumpIndexFromCommand(command: string): number | null {
+  const index = THREAD_JUMP_KEYBINDING_COMMANDS.indexOf(command as ThreadJumpKeybindingCommand);
+  return index === -1 ? null : index;
+}
+
+export function threadTraversalDirectionFromCommand(command: string): "previous" | "next" | null {
+  if (command === "thread.previous") return "previous";
+  if (command === "thread.next") return "next";
+  return null;
 }

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { type KeybindingShortcut, type ResolvedKeybindingsConfig } from "@t3tools/contracts";
-import { modelPickerJumpIndexFromCommand, resolveTuiShortcutCommand } from "./keybindings";
+import {
+  modelPickerJumpIndexFromCommand,
+  resolveTuiShortcutCommand,
+  threadJumpIndexFromCommand,
+  threadTraversalDirectionFromCommand,
+} from "./keybindings";
 
 function modShortcut(
   key: string,
@@ -79,5 +84,19 @@ describe("modelPickerJumpIndexFromCommand", () => {
     expect(modelPickerJumpIndexFromCommand("modelPicker.jump.1")).toBe(0);
     expect(modelPickerJumpIndexFromCommand("modelPicker.jump.9")).toBe(8);
     expect(modelPickerJumpIndexFromCommand("thread.jump.1")).toBeNull();
+  });
+});
+
+describe("thread command helpers", () => {
+  it("maps thread jump commands to zero-based indexes", () => {
+    expect(threadJumpIndexFromCommand("thread.jump.1")).toBe(0);
+    expect(threadJumpIndexFromCommand("thread.jump.9")).toBe(8);
+    expect(threadJumpIndexFromCommand("modelPicker.jump.1")).toBeNull();
+  });
+
+  it("maps thread traversal commands to directions", () => {
+    expect(threadTraversalDirectionFromCommand("thread.previous")).toBe("previous");
+    expect(threadTraversalDirectionFromCommand("thread.next")).toBe("next");
+    expect(threadTraversalDirectionFromCommand("thread.jump.1")).toBeNull();
   });
 });

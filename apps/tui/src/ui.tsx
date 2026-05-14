@@ -155,7 +155,12 @@ import {
 import { saveClipboardImageToFile } from "./clipboardImage";
 import { copyTextToClipboard } from "./clipboardText";
 import { KEYBINDING_GUIDE_SECTIONS, isCtrlC, shouldClearComposerOnCtrlC } from "./keyboardBehavior";
-import { modelPickerJumpIndexFromCommand, resolveTuiShortcutCommand } from "./keybindings";
+import {
+  modelPickerJumpIndexFromCommand,
+  resolveTuiShortcutCommand,
+  threadJumpIndexFromCommand,
+  threadTraversalDirectionFromCommand,
+} from "./keybindings";
 import { createT1Logger } from "./log";
 import {
   deriveProviderInstanceEntries,
@@ -6512,6 +6517,36 @@ export function App({
       key.preventDefault();
       toggleModelMenu();
       return;
+    }
+    if (!hasDismissibleLayer && mainView === "thread") {
+      const threadJumpIndex = threadJumpIndexFromCommand(shortcutCommand ?? "");
+      if (threadJumpIndex !== null) {
+        const targetThread = threads[threadJumpIndex];
+        if (targetThread) {
+          key.preventDefault();
+          clearSelection();
+          setSelectionAnchorThreadId(targetThread.id);
+          selectThread(targetThread.projectId, targetThread.id);
+        }
+        return;
+      }
+
+      const threadTraversalDirection = threadTraversalDirectionFromCommand(shortcutCommand ?? "");
+      if (threadTraversalDirection) {
+        if (threads.length === 0) return;
+        key.preventDefault();
+        const fallbackIndex = threadTraversalDirection === "next" ? -1 : threads.length;
+        const currentIndex = threadSelectedIndex >= 0 ? threadSelectedIndex : fallbackIndex;
+        const delta = threadTraversalDirection === "next" ? 1 : -1;
+        const nextIndex = Math.min(threads.length - 1, Math.max(0, currentIndex + delta));
+        const targetThread = threads[nextIndex];
+        if (targetThread) {
+          clearSelection();
+          setSelectionAnchorThreadId(targetThread.id);
+          selectThread(targetThread.projectId, targetThread.id);
+        }
+        return;
+      }
     }
     if (overlayMenu === "model") {
       const modelPickerJumpIndex = modelPickerJumpIndexFromCommand(shortcutCommand ?? "");
