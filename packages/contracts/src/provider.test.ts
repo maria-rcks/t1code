@@ -74,6 +74,24 @@ describe("ProviderSessionStartInput", () => {
     expect(parsed.providerOptions?.claudeAgent?.maxThinkingTokens).toBe(12_000);
     expect(parsed.runtimeMode).toBe("full-access");
   });
+
+  it("accepts driver-kind providers during the instance migration", () => {
+    const parsed = decodeProviderSessionStartInput({
+      threadId: "thread-1",
+      provider: "cursor",
+      providerInstanceId: "cursor",
+      cwd: "/tmp/workspace",
+      modelSelection: {
+        instanceId: "cursor",
+        model: "auto",
+      },
+      runtimeMode: "full-access",
+    });
+
+    expect(parsed.provider).toBe("cursor");
+    expect(parsed.providerInstanceId).toBe("cursor");
+    expect(parsed.modelSelection?.instanceId).toBe("cursor");
+  });
 });
 
 describe("ProviderSendTurnInput", () => {

@@ -411,7 +411,9 @@ const make = Effect.gen(function* () {
     const sessionModelSwitch =
       activeSession === undefined
         ? "in-session"
-        : (yield* providerService.getCapabilities(activeSession.provider)).sessionModelSwitch;
+        : activeSession.provider === "codex" || activeSession.provider === "claudeAgent"
+          ? (yield* providerService.getCapabilities(activeSession.provider)).sessionModelSwitch
+          : "unsupported";
     const modelForTurn = sessionModelSwitch === "unsupported" ? activeSession?.model : input.model;
 
     yield* providerService.sendTurn({

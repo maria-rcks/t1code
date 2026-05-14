@@ -18,6 +18,7 @@ import {
   ProviderSendTurnInput,
   ProviderSessionStartInput,
   ProviderStopSessionInput,
+  type ProviderKind,
   type ProviderRuntimeEvent,
   type ProviderSession,
 } from "@t3tools/contracts";
@@ -143,6 +144,18 @@ function readPersistedCwd(
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function decodeRoutableProvider(
+  provider: string,
+  operation: string,
+): Effect.Effect<ProviderKind, ProviderValidationError> {
+  if (provider === "codex" || provider === "claudeAgent") {
+    return Effect.succeed(provider);
+  }
+  return Effect.fail(
+    toValidationError(operation, `Provider '${provider}' is not supported by this server build.`),
+  );
+}
+
 const makeProviderService = (options?: ProviderServiceLiveOptions) =>
   Effect.gen(function* () {
     const analytics = yield* Effect.service(AnalyticsService);
@@ -178,13 +191,19 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
         readonly lastRuntimeEventAt?: string;
       },
     ) =>
-      directory.upsert({
-        threadId,
-        provider: session.provider,
-        runtimeMode: session.runtimeMode,
-        status: toRuntimeStatus(session),
-        ...(session.resumeCursor !== undefined ? { resumeCursor: session.resumeCursor } : {}),
-        runtimePayload: toRuntimePayloadFromSession(session, extra),
+      Effect.gen(function* () {
+        const provider = yield* decodeRoutableProvider(
+          session.provider,
+          "ProviderService.upsertSessionBinding",
+        );
+        yield* directory.upsert({
+          threadId,
+          provider,
+          runtimeMode: session.runtimeMode,
+          status: toRuntimeStatus(session),
+          ...(session.resumeCursor !== undefined ? { resumeCursor: session.resumeCursor } : {}),
+          runtimePayload: toRuntimePayloadFromSession(session, extra),
+        });
       });
 
     const providers = yield* registry.listProviders();
@@ -308,20 +327,23 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           threadId,
           provider: parsed.provider ?? "codex",
         };
+        const provider = yield* decodeRoutableProvider(
+          input.provider,
+          "ProviderService.startSession",
+        );
         const persistedBinding = Option.getOrUndefined(yield* directory.getBinding(threadId));
         const effectiveResumeCursor =
           input.resumeCursor ??
-          (persistedBinding?.provider === input.provider
-            ? persistedBinding.resumeCursor
-            : undefined);
+          (persistedBinding?.provider === provider ? persistedBinding.resumeCursor : undefined);
         const effectiveCwd =
           input.cwd ??
-          (persistedBinding?.provider === input.provider
+          (persistedBinding?.provider === provider
             ? readPersistedCwd(persistedBinding.runtimePayload)
             : undefined);
-        const adapter = yield* registry.getByProvider(input.provider);
+        const adapter = yield* registry.getByProvider(provider);
         const session = yield* adapter.startSession({
           ...input,
+          provider,
           ...(effectiveCwd !== undefined ? { cwd: effectiveCwd } : {}),
           ...(effectiveResumeCursor !== undefined ? { resumeCursor: effectiveResumeCursor } : {}),
         });
