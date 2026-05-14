@@ -19,6 +19,12 @@ export const SLASH_COMMAND_DEFINITIONS: readonly SlashCommandDefinition[] = [
     template: "/project add ",
   },
   {
+    command: "clone",
+    usage: "/clone owner/repo [path]",
+    description: "Clone a hosted repository and add it as a project",
+    template: "/clone ",
+  },
+  {
     command: "thread",
     usage: "/thread new [title]",
     description: "Create a new thread in the active project",

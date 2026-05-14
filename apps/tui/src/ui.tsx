@@ -57,6 +57,7 @@ import {
   type ServerSettingsPatch,
   type ResolvedKeybindingsConfig,
   type ServerTraceDiagnosticsResult,
+  type SourceControlCloneRepositoryInput,
   type SourceControlCloneProtocol,
   type SourceControlDiscoveryResult,
   type SourceControlProviderKind,
@@ -1653,6 +1654,70 @@ function parsePublishCommandArgs(args: string): ParsedPublishCommandArgs | null 
     visibility,
     protocol,
     remoteName,
+  };
+}
+
+function isRemoteUrlLike(source: string): boolean {
+  return (
+    /^[a-z][a-z0-9+.-]*:\/\//i.test(source) ||
+    /^[^@\s]+@[^:\s]+:[^\s]+$/i.test(source) ||
+    source.startsWith("git@")
+  );
+}
+
+function cloneDirectoryNameFromSource(source: string): string {
+  const trimmed = source
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\.git$/i, "");
+  const segments = trimmed.split(/[/:]/);
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    const segment = segments[index];
+    if (segment) {
+      return segment;
+    }
+  }
+  return "repository";
+}
+
+function parseCloneCommandArgs(
+  args: string,
+  defaultDestinationParent: string,
+): SourceControlCloneRepositoryInput | null {
+  const tokens = args.trim().split(/\s+/).filter(Boolean);
+  const source = tokens[0]?.trim() ?? "";
+  if (!source) {
+    return null;
+  }
+
+  let protocol: SourceControlCloneProtocol | undefined;
+  let destinationPath: string | null = null;
+  for (const token of tokens.slice(1)) {
+    const normalized = token.toLowerCase();
+    if (normalized === "ssh" || normalized === "https" || normalized === "auto") {
+      protocol = normalized;
+    } else if (!destinationPath) {
+      destinationPath = token;
+    }
+  }
+
+  const cloneInput: SourceControlCloneRepositoryInput = {
+    destinationPath:
+      destinationPath ?? path.join(defaultDestinationParent, cloneDirectoryNameFromSource(source)),
+    ...(protocol ? { protocol } : {}),
+  };
+
+  if (isRemoteUrlLike(source)) {
+    return {
+      ...cloneInput,
+      remoteUrl: source,
+    };
+  }
+
+  return {
+    ...cloneInput,
+    provider: "github",
+    repository: source,
   };
 }
 
@@ -8081,6 +8146,10 @@ export function App({
         await createProject(match[1]);
         return true;
       }
+      case "clone": {
+        await cloneRepositoryFromCommand(args);
+        return true;
+      }
       case "thread": {
         const match = /^new(?:\s+(.+))?$/i.exec(args);
         if (!match) {
@@ -9229,6 +9298,40 @@ export function App({
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Publish failed.");
       await refreshGitState();
+    } finally {
+      setGitActionBusy(false);
+      setGitActionStatus(null);
+    }
+  }
+
+  async function cloneRepositoryFromCommand(args: string) {
+    if (!api) {
+      setStatus("Server API unavailable.");
+      return;
+    }
+    if (gitActionBusy) {
+      setStatus("Wait for the current Git action to finish.");
+      return;
+    }
+
+    const defaultCloneParent = activeProjectCwd ? path.dirname(activeProjectCwd) : process.cwd();
+    const cloneInput = parseCloneCommandArgs(args, defaultCloneParent);
+    if (!cloneInput) {
+      resetComposerTextarea("/clone ");
+      setFocusArea("composer");
+      setStatus("Use /clone owner/repo [path] or /clone <url> [path]");
+      return;
+    }
+
+    setGitActionBusy(true);
+    setGitActionStatus("Cloning repository...");
+    try {
+      const result = await api.sourceControl.cloneRepository(cloneInput);
+      await createProject(result.cwd);
+      setStatus(`Cloned ${result.repository?.nameWithOwner ?? result.remoteUrl}`);
+      await refreshGitState();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Clone failed.");
     } finally {
       setGitActionBusy(false);
       setGitActionStatus(null);
