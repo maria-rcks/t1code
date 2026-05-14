@@ -31,6 +31,7 @@ import {
   type ServerProvider,
   type ServerProviderStatus,
   type SourceControlDiscoveryResult,
+  type SourceControlRepositoryInfo,
   type KeybindingsConfig,
   type ResolvedKeybindingsConfig,
   type WsPushChannel,
@@ -71,6 +72,10 @@ import {
   SourceControlDiscovery,
   type SourceControlDiscoveryShape,
 } from "./sourceControl/SourceControlDiscovery.ts";
+import {
+  SourceControlRepositoryService,
+  type SourceControlRepositoryServiceShape,
+} from "./sourceControl/SourceControlRepositoryService.ts";
 import { Open, type OpenShape } from "./open";
 import { GitManager, type GitManagerShape } from "./git/Services/GitManager.ts";
 import type { GitCoreShape } from "./git/Services/GitCore.ts";
@@ -152,6 +157,16 @@ const defaultSourceControlDiscovery: SourceControlDiscoveryShape = {
       ],
       sourceControlProviders: [],
     }),
+};
+
+const defaultSourceControlRepositoryService: SourceControlRepositoryServiceShape = {
+  lookupRepository: () =>
+    Effect.succeed({
+      provider: "github",
+      nameWithOwner: "owner/repo",
+      url: "https://github.com/owner/repo",
+      sshUrl: "git@github.com:owner/repo.git",
+    } satisfies SourceControlRepositoryInfo),
 };
 
 const defaultProviderStatuses: ReadonlyArray<ServerProviderStatus> = [
@@ -582,6 +597,7 @@ describe("WebSocket Server", () => {
       processDiagnostics?: ProcessDiagnosticsShape;
       traceDiagnostics?: TraceDiagnosticsShape;
       sourceControlDiscovery?: SourceControlDiscoveryShape;
+      sourceControlRepositoryService?: SourceControlRepositoryServiceShape;
       providerHealth?: ProviderHealthShape;
       open?: OpenShape;
       gitManager?: GitManagerShape;
@@ -615,6 +631,10 @@ describe("WebSocket Server", () => {
     const sourceControlDiscoveryLayer = Layer.succeed(
       SourceControlDiscovery,
       options.sourceControlDiscovery ?? defaultSourceControlDiscovery,
+    );
+    const sourceControlRepositoryServiceLayer = Layer.succeed(
+      SourceControlRepositoryService,
+      options.sourceControlRepositoryService ?? defaultSourceControlRepositoryService,
     );
     const serverConfigLayer = Layer.succeed(ServerConfig, {
       mode: "web",
@@ -665,6 +685,7 @@ describe("WebSocket Server", () => {
       Layer.provideMerge(traceDiagnosticsLayer),
       Layer.provideMerge(processDiagnosticsLayer),
       Layer.provideMerge(sourceControlDiscoveryLayer),
+      Layer.provideMerge(sourceControlRepositoryServiceLayer),
       Layer.provideMerge(ProviderEventLoggersLive),
       Layer.provideMerge(ServerSettingsLive),
       Layer.provideMerge(openLayer),
@@ -1394,6 +1415,47 @@ describe("WebSocket Server", () => {
         ],
       }),
     );
+  });
+
+  it("looks up source control repositories over websocket", async () => {
+    const lookupRepository = vi.fn<SourceControlRepositoryServiceShape["lookupRepository"]>(
+      (input) =>
+        Effect.succeed({
+          provider: input.provider,
+          nameWithOwner: "octocat/hello-world",
+          url: "https://github.com/octocat/hello-world",
+          sshUrl: "git@github.com:octocat/hello-world.git",
+        }),
+    );
+    server = await createTestServer({
+      cwd: "/my/workspace",
+      sourceControlRepositoryService: {
+        lookupRepository,
+      },
+    });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.sourceControlLookupRepository, {
+      provider: "github",
+      repository: "octocat/hello-world",
+      cwd: "/tmp/project",
+    });
+    expect(response.error).toBeUndefined();
+    expect(lookupRepository).toHaveBeenCalledWith({
+      provider: "github",
+      repository: "octocat/hello-world",
+      cwd: "/tmp/project",
+    });
+    expect(response.result).toEqual({
+      provider: "github",
+      nameWithOwner: "octocat/hello-world",
+      url: "https://github.com/octocat/hello-world",
+      sshUrl: "git@github.com:octocat/hello-world.git",
+    });
   });
 
   it("signals process descendants over websocket", async () => {

@@ -150,6 +150,24 @@ it.effect("accepts server.discoverSourceControl requests", () =>
   }),
 );
 
+it.effect("accepts sourceControl.lookupRepository requests", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWebSocketRequest({
+      id: "req-source-control-lookup-1",
+      body: {
+        _tag: WS_METHODS.sourceControlLookupRepository,
+        provider: "github",
+        repository: "owner/repo",
+        cwd: "/workspace",
+      },
+    });
+    assert.strictEqual(parsed.body._tag, WS_METHODS.sourceControlLookupRepository);
+    if (parsed.body._tag === WS_METHODS.sourceControlLookupRepository) {
+      assert.strictEqual(parsed.body.repository, "owner/repo");
+    }
+  }),
+);
+
 it.effect("accepts typed websocket push envelopes with sequence", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeWsResponse({

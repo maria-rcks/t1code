@@ -8,6 +8,7 @@ import {
   type ServerSignalProcessInput,
   type ServerProviderUpdateInput,
   type ServerRefreshProvidersInput,
+  type SourceControlRepositoryLookupInput,
   WS_CHANNELS,
   WS_METHODS,
   type WsWelcomePayload,
@@ -127,6 +128,10 @@ export function createTransportNativeApi(options: NativeApiAdapterOptions): {
         }
         return null;
       },
+    },
+    sourceControl: {
+      lookupRepository: (input: SourceControlRepositoryLookupInput) =>
+        transport.request(WS_METHODS.sourceControlLookupRepository, input),
     },
     server: {
       getConfig: () => transport.request(WS_METHODS.serverGetConfig),

@@ -29,6 +29,8 @@ import { layer as ProviderMaintenanceRunnerLive } from "./provider/providerMaint
 import { layer as ProcessDiagnosticsLive } from "./diagnostics/ProcessDiagnostics";
 import { layer as TraceDiagnosticsLive } from "./diagnostics/TraceDiagnostics";
 import { layer as SourceControlDiscoveryLive } from "./sourceControl/SourceControlDiscovery";
+import { SourceControlRepositoryServiceLive } from "./sourceControl/SourceControlRepositoryService";
+import { GitHubCliLive } from "./git/Layers/GitHubCli";
 import { Server } from "./wsServer";
 import { ServerSettingsLive } from "./serverSettings";
 import { ServerLoggerLive } from "./serverLogger";
@@ -306,6 +308,7 @@ const LayerLive = (input: CliInput) =>
     Layer.provideMerge(TraceDiagnosticsLive),
     Layer.provideMerge(ProcessDiagnosticsLive),
     Layer.provideMerge(SourceControlDiscoveryLive),
+    Layer.provideMerge(SourceControlRepositoryServiceLive.pipe(Layer.provideMerge(GitHubCliLive))),
     Layer.provideMerge(ProviderEventLoggersLive),
     Layer.provideMerge(ServerSettingsLive),
     Layer.provideMerge(ProviderHealthLive),

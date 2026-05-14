@@ -36,7 +36,11 @@ import type {
   ServerTraceDiagnosticsResult,
 } from "./server";
 import type { ServerSettings, ServerSettingsPatch } from "./settings";
-import type { SourceControlDiscoveryResult } from "./sourceControl";
+import type {
+  SourceControlDiscoveryResult,
+  SourceControlRepositoryInfo,
+  SourceControlRepositoryLookupInput,
+} from "./sourceControl";
 import type {
   TerminalClearInput,
   TerminalCloseInput,
@@ -168,6 +172,11 @@ export interface NativeApi {
       items: readonly ContextMenuItem<T>[],
       position?: { x: number; y: number },
     ) => Promise<T | null>;
+  };
+  sourceControl: {
+    lookupRepository: (
+      input: SourceControlRepositoryLookupInput,
+    ) => Promise<SourceControlRepositoryInfo>;
   };
   server: {
     getConfig: () => Promise<ServerConfig>;

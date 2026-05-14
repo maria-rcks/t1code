@@ -10,6 +10,21 @@ export const SourceControlProviderKind = Schema.Literals([
 ]);
 export type SourceControlProviderKind = typeof SourceControlProviderKind.Type;
 
+export const SourceControlRepositoryInfo = Schema.Struct({
+  provider: SourceControlProviderKind,
+  nameWithOwner: TrimmedNonEmptyString,
+  url: TrimmedNonEmptyString,
+  sshUrl: TrimmedNonEmptyString,
+});
+export type SourceControlRepositoryInfo = typeof SourceControlRepositoryInfo.Type;
+
+export const SourceControlRepositoryLookupInput = Schema.Struct({
+  provider: SourceControlProviderKind,
+  repository: TrimmedNonEmptyString,
+  cwd: Schema.optional(TrimmedNonEmptyString),
+});
+export type SourceControlRepositoryLookupInput = typeof SourceControlRepositoryLookupInput.Type;
+
 export const VcsDriverKind = Schema.Literals(["git", "unknown"]);
 export type VcsDriverKind = typeof VcsDriverKind.Type;
 
@@ -59,3 +74,17 @@ export const SourceControlDiscoveryResult = Schema.Struct({
   sourceControlProviders: Schema.Array(SourceControlProviderDiscoveryItem),
 });
 export type SourceControlDiscoveryResult = typeof SourceControlDiscoveryResult.Type;
+
+export class SourceControlRepositoryError extends Schema.TaggedErrorClass<SourceControlRepositoryError>()(
+  "SourceControlRepositoryError",
+  {
+    provider: SourceControlProviderKind,
+    operation: Schema.String,
+    detail: Schema.String,
+    cause: Schema.optional(Schema.Defect),
+  },
+) {
+  override get message(): string {
+    return `Source control repository operation ${this.operation} failed for ${this.provider}: ${this.detail}`;
+  }
+}
