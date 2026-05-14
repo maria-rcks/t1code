@@ -182,12 +182,16 @@ import {
 import { openExternalUrl } from "./openExternal";
 import { type TuiPrefs, readPrefs, writePrefs } from "./prefs";
 import {
+  INSTALL_PROVIDER_SETTINGS,
   buildDeleteProviderInstancePatch,
   buildDefaultProviderInstanceUpdatePatch,
   buildDuplicateDefaultProviderInstancePatch,
   buildProviderInstanceUpdatePatch,
   buildResetDefaultProviderInstancesPatch,
   defaultProviderInstanceIdForSettingsKey,
+  type InstallProviderFieldKey,
+  type InstallProviderSettings,
+  type ProviderSettingsKey,
 } from "./providerSettings";
 import {
   normalizeRendererThemeMode,
@@ -540,26 +544,7 @@ type TraitsMenuItem = {
   selected?: boolean;
   onSelect: () => void;
 };
-type InstallProviderKey = keyof ServerSettings["providers"];
-type InstallProviderFieldKey =
-  | "apiEndpoint"
-  | "binaryPath"
-  | "homePath"
-  | "launchArgs"
-  | "serverPassword"
-  | "serverUrl"
-  | "shadowHomePath";
-type InstallProviderField = {
-  key: InstallProviderFieldKey;
-  label: string;
-  placeholder: string;
-  description: string;
-};
-type InstallProviderSettings = {
-  provider: InstallProviderKey;
-  title: string;
-  fields: readonly InstallProviderField[];
-};
+type InstallProviderKey = ProviderSettingsKey;
 const PALETTE: TuiPalette = { ...DEFAULT_TUI_THEME.palette };
 let ACTIVE_TUI_THEME = DEFAULT_TUI_THEME;
 
@@ -596,98 +581,6 @@ const TIMESTAMP_FORMAT_LABELS: Record<TimestampFormat, string> = {
   "12-hour": "12-hour",
   "24-hour": "24-hour",
 };
-const INSTALL_PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
-  {
-    provider: "codex",
-    title: "Codex",
-    fields: [
-      {
-        key: "binaryPath",
-        label: "Binary path",
-        placeholder: "Codex binary path",
-        description: "Leave blank to use codex from your PATH.",
-      },
-      {
-        key: "homePath",
-        label: "CODEX_HOME path",
-        placeholder: "~/.codex",
-        description: "Custom Codex home and config directory.",
-      },
-      {
-        key: "shadowHomePath",
-        label: "Shadow home path",
-        placeholder: "~/.codex-t1/personal",
-        description: "Account-specific Codex home for separate auth while sharing state.",
-      },
-    ],
-  },
-  {
-    provider: "claudeAgent",
-    title: "Claude",
-    fields: [
-      {
-        key: "binaryPath",
-        label: "Binary path",
-        placeholder: "Claude binary path",
-        description: "Leave blank to use claude from your PATH.",
-      },
-      {
-        key: "homePath",
-        label: "Claude HOME path",
-        placeholder: "~",
-        description: "Custom HOME used when running this Claude instance.",
-      },
-      {
-        key: "launchArgs",
-        label: "Launch arguments",
-        placeholder: "e.g. --chrome",
-        description: "Additional CLI arguments passed on session start.",
-      },
-    ],
-  },
-  {
-    provider: "cursor",
-    title: "Cursor",
-    fields: [
-      {
-        key: "binaryPath",
-        label: "Binary path",
-        placeholder: "Cursor agent binary path",
-        description: "Leave blank to use agent from your PATH.",
-      },
-      {
-        key: "apiEndpoint",
-        label: "API endpoint",
-        placeholder: "https://...",
-        description: "Optional Cursor API endpoint override.",
-      },
-    ],
-  },
-  {
-    provider: "opencode",
-    title: "OpenCode",
-    fields: [
-      {
-        key: "binaryPath",
-        label: "Binary path",
-        placeholder: "OpenCode binary path",
-        description: "Leave blank to use opencode from your PATH.",
-      },
-      {
-        key: "serverUrl",
-        label: "Server URL",
-        placeholder: "http://127.0.0.1:4096",
-        description: "Leave blank to let T1 Code spawn OpenCode when supported.",
-      },
-      {
-        key: "serverPassword",
-        label: "Server password",
-        placeholder: "Optional",
-        description: "Optional password for an existing OpenCode server.",
-      },
-    ],
-  },
-] as const;
 
 function readProviderInstallSettingValue(
   settings: ServerSettings,

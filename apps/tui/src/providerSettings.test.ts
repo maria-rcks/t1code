@@ -7,6 +7,7 @@ import {
 } from "@t3tools/contracts";
 import { Schema } from "effect";
 import {
+  INSTALL_PROVIDER_SETTINGS,
   buildDeleteProviderInstancePatch,
   buildDefaultProviderInstanceUpdatePatch,
   buildDuplicateDefaultProviderInstancePatch,
@@ -24,6 +25,37 @@ describe("providerSettings", () => {
     expect(providerDriverKindForSettingsKey("codex")).toBe("codex");
     expect(providerDriverKindForSettingsKey("opencode")).toBe("opencode");
     expect(defaultProviderInstanceIdForSettingsKey("cursor")).toBe("cursor");
+  });
+
+  it("derives provider install fields from contract schema annotations", () => {
+    expect(
+      INSTALL_PROVIDER_SETTINGS.map((settings) => ({
+        provider: settings.provider,
+        fields: settings.fields.map((field) => field.key),
+      })),
+    ).toEqual([
+      {
+        provider: "codex",
+        fields: ["binaryPath", "homePath", "shadowHomePath"],
+      },
+      {
+        provider: "claudeAgent",
+        fields: ["binaryPath", "homePath", "launchArgs"],
+      },
+      {
+        provider: "cursor",
+        fields: ["binaryPath", "apiEndpoint"],
+      },
+      {
+        provider: "opencode",
+        fields: ["binaryPath", "serverUrl", "serverPassword"],
+      },
+    ]);
+    expect(INSTALL_PROVIDER_SETTINGS[3]?.fields[2]).toMatchObject({
+      key: "serverPassword",
+      label: "Server password",
+      placeholder: "Optional",
+    });
   });
 
   it("promotes default provider edits into providerInstances and resets legacy settings", () => {

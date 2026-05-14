@@ -1,8 +1,13 @@
 import {
+  ClaudeSettings,
+  CodexSettings,
+  CursorSettings,
   DEFAULT_SERVER_SETTINGS,
+  OpenCodeSettings,
   ProviderDriverKind,
   ProviderInstanceId,
   defaultInstanceIdForDriver,
+  type ProviderSettingsFormAnnotation,
   type ProviderInstanceConfig,
   type ServerSettings,
   type ServerSettingsPatch,
@@ -10,6 +15,46 @@ import {
 import { Schema } from "effect";
 
 export type ProviderSettingsKey = keyof ServerSettings["providers"];
+type ProviderSettingsSchemaAnnotations = {
+  readonly title?: unknown;
+  readonly description?: unknown;
+  readonly providerSettingsForm?: ProviderSettingsFormAnnotation | undefined;
+  readonly providerSettingsFormSchema?:
+    | {
+        readonly order?: readonly string[] | undefined;
+      }
+    | undefined;
+};
+type AnnotatedProviderSchema = {
+  readonly ast: {
+    readonly context?:
+      | {
+          readonly annotations?: ProviderSettingsSchemaAnnotations | undefined;
+        }
+      | undefined;
+    readonly annotations?: ProviderSettingsSchemaAnnotations | undefined;
+  };
+};
+type ProviderSettingsSchema = {
+  readonly fields: Readonly<Record<string, AnnotatedProviderSchema>>;
+} & AnnotatedProviderSchema;
+type ProviderSettingsDefinition = {
+  readonly provider: ProviderSettingsKey;
+  readonly title: string;
+  readonly schema: ProviderSettingsSchema;
+};
+export type InstallProviderFieldKey = string;
+export type InstallProviderField = {
+  readonly key: InstallProviderFieldKey;
+  readonly label: string;
+  readonly placeholder: string;
+  readonly description: string;
+};
+export type InstallProviderSettings = {
+  readonly provider: ProviderSettingsKey;
+  readonly title: string;
+  readonly fields: readonly InstallProviderField[];
+};
 type DefaultProviderInstancePatch = {
   readonly accentColor?: ProviderInstanceConfig["accentColor"] | undefined;
   readonly displayName?: ProviderInstanceConfig["displayName"] | undefined;
@@ -20,6 +65,96 @@ type ProviderInstancePatch = DefaultProviderInstancePatch;
 
 const decodeProviderDriverKind = Schema.decodeUnknownSync(ProviderDriverKind);
 const decodeProviderInstanceId = Schema.decodeUnknownSync(ProviderInstanceId);
+
+const PROVIDER_SETTINGS_DEFINITIONS: readonly ProviderSettingsDefinition[] = [
+  {
+    provider: "codex",
+    title: "Codex",
+    schema: CodexSettings,
+  },
+  {
+    provider: "claudeAgent",
+    title: "Claude",
+    schema: ClaudeSettings,
+  },
+  {
+    provider: "cursor",
+    title: "Cursor",
+    schema: CursorSettings,
+  },
+  {
+    provider: "opencode",
+    title: "OpenCode",
+    schema: OpenCodeSettings,
+  },
+] as const;
+
+function titleizeFieldKey(key: string): string {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[-_]+/g, " ")
+    .replace(/^./, (char) => char.toUpperCase());
+}
+
+function readFieldAnnotations(fieldSchema: AnnotatedProviderSchema) {
+  return fieldSchema.ast.context?.annotations ?? fieldSchema.ast.annotations;
+}
+
+function readFieldAnnotationString(
+  fieldSchema: AnnotatedProviderSchema,
+  key: "title" | "description",
+): string | undefined {
+  const annotations = readFieldAnnotations(fieldSchema);
+  const value = annotations?.[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function readProviderSettingsFormAnnotation(
+  fieldSchema: AnnotatedProviderSchema,
+): ProviderSettingsFormAnnotation {
+  return readFieldAnnotations(fieldSchema)?.providerSettingsForm ?? {};
+}
+
+function readProviderSettingsFieldOrder(schema: ProviderSettingsSchema): readonly string[] {
+  return schema.ast.context?.annotations?.providerSettingsFormSchema?.order ?? [];
+}
+
+function deriveInstallProviderFields(
+  schema: ProviderSettingsSchema,
+): readonly InstallProviderField[] {
+  const orderedKeys = new Map(
+    readProviderSettingsFieldOrder(schema).map((key, index) => [key, index] as const),
+  );
+  const orderFallbackOffset = orderedKeys.size;
+
+  return Object.keys(schema.fields)
+    .map((key, index) => ({ key, index }))
+    .toSorted(
+      (left, right) =>
+        (orderedKeys.get(left.key) ?? orderFallbackOffset + left.index) -
+        (orderedKeys.get(right.key) ?? orderFallbackOffset + right.index),
+    )
+    .flatMap(({ key }) => {
+      const fieldSchema = schema.fields[key]!;
+      const formAnnotation = readProviderSettingsFormAnnotation(fieldSchema);
+      if (formAnnotation.hidden) return [];
+      return [
+        {
+          key,
+          label: readFieldAnnotationString(fieldSchema, "title") ?? titleizeFieldKey(key),
+          placeholder: formAnnotation.placeholder ?? "",
+          description: readFieldAnnotationString(fieldSchema, "description") ?? "",
+        },
+      ];
+    });
+}
+
+export const INSTALL_PROVIDER_SETTINGS: readonly InstallProviderSettings[] =
+  PROVIDER_SETTINGS_DEFINITIONS.map((definition) => ({
+    provider: definition.provider,
+    title: definition.title,
+    fields: deriveInstallProviderFields(definition.schema),
+  }));
 
 export function providerDriverKindForSettingsKey(
   provider: ProviderSettingsKey,
