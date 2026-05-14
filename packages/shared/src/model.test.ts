@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_MODEL,
   DEFAULT_MODEL_BY_PROVIDER,
+  DEFAULT_GIT_TEXT_GENERATION_MODEL,
   DEFAULT_REASONING_EFFORT_BY_PROVIDER,
   MODEL_OPTIONS,
   MODEL_OPTIONS_BY_PROVIDER,
@@ -17,7 +18,9 @@ import {
   createModelSelection,
   buildProviderOptionSelectionsFromDescriptors,
   getEffectiveClaudeCodeEffort,
+  getDefaultGitTextGenerationModelForDriver,
   getDefaultModel,
+  getDefaultModelForDriver,
   getDefaultReasoningEffort,
   getModelSelectionOptionDescriptors,
   getModelSelectionBooleanOptionValue,
@@ -80,6 +83,34 @@ describe("normalizeModelSlug", () => {
     expect(normalizeModelSlug("sonnet", "claudeAgent")).toBe("claude-sonnet-4-6");
     expect(normalizeModelSlug("opus-4.6", "claudeAgent")).toBe("claude-opus-4-6");
     expect(normalizeModelSlug("claude-haiku-4-5-20251001", "claudeAgent")).toBe("claude-haiku-4-5");
+  });
+
+  it("uses open-provider driver aliases without constraining custom slugs", () => {
+    expect(normalizeModelSlug("composer", "cursor" as ProviderDriverKind)).toBe("composer-2");
+    expect(normalizeModelSlug("opus-4.6-thinking", "cursor" as ProviderDriverKind)).toBe(
+      "claude-opus-4-6",
+    );
+    expect(normalizeModelSlug("openai/gpt-5", "opencode" as ProviderDriverKind)).toBe(
+      "openai/gpt-5",
+    );
+  });
+});
+
+describe("driver model defaults", () => {
+  it("returns provider defaults for built-in drivers", () => {
+    expect(getDefaultModelForDriver("codex")).toBe(DEFAULT_MODEL_BY_PROVIDER.codex);
+    expect(getDefaultModelForDriver("claudeAgent")).toBe(DEFAULT_MODEL_BY_PROVIDER.claudeAgent);
+    expect(getDefaultGitTextGenerationModelForDriver("codex")).toBe(
+      DEFAULT_GIT_TEXT_GENERATION_MODEL,
+    );
+  });
+
+  it("returns open-provider defaults for known external drivers", () => {
+    expect(getDefaultModelForDriver("cursor" as ProviderDriverKind)).toBe("auto");
+    expect(getDefaultModelForDriver("opencode" as ProviderDriverKind)).toBe("openai/gpt-5");
+    expect(getDefaultGitTextGenerationModelForDriver("cursor" as ProviderDriverKind)).toBe(
+      "composer-2",
+    );
   });
 });
 

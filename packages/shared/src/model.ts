@@ -2,6 +2,7 @@ import {
   CLAUDE_CODE_EFFORT_OPTIONS,
   CODEX_REASONING_EFFORT_OPTIONS,
   DEFAULT_MODEL_BY_PROVIDER,
+  DEFAULT_GIT_TEXT_GENERATION_MODEL,
   DEFAULT_REASONING_EFFORT_BY_PROVIDER,
   MODEL_OPTIONS_BY_PROVIDER,
   MODEL_SLUG_ALIASES_BY_PROVIDER,
@@ -29,6 +30,50 @@ const MODEL_SLUG_SET_BY_PROVIDER: Record<ProviderKind, ReadonlySet<ModelSlug>> =
 const CLAUDE_OPUS_4_6_MODEL = "claude-opus-4-6";
 const CLAUDE_SONNET_4_6_MODEL = "claude-sonnet-4-6";
 const CLAUDE_HAIKU_4_5_MODEL = "claude-haiku-4-5";
+const CODEX_DRIVER_KIND = "codex" as ProviderDriverKind;
+const CLAUDE_DRIVER_KIND = "claudeAgent" as ProviderDriverKind;
+const CURSOR_DRIVER_KIND = "cursor" as ProviderDriverKind;
+const OPENCODE_DRIVER_KIND = "opencode" as ProviderDriverKind;
+
+export const DEFAULT_MODEL_BY_DRIVER: Partial<Record<ProviderDriverKind, string>> = {
+  [CODEX_DRIVER_KIND]: DEFAULT_MODEL_BY_PROVIDER.codex,
+  [CLAUDE_DRIVER_KIND]: DEFAULT_MODEL_BY_PROVIDER.claudeAgent,
+  [CURSOR_DRIVER_KIND]: "auto",
+  [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
+};
+
+export const DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_DRIVER: Partial<
+  Record<ProviderDriverKind, string>
+> = {
+  [CODEX_DRIVER_KIND]: DEFAULT_GIT_TEXT_GENERATION_MODEL,
+  [CLAUDE_DRIVER_KIND]: "claude-haiku-4-5",
+  [CURSOR_DRIVER_KIND]: "composer-2",
+  [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
+};
+
+export const PROVIDER_DISPLAY_NAMES_BY_DRIVER: Partial<Record<ProviderDriverKind, string>> = {
+  [CODEX_DRIVER_KIND]: "Codex",
+  [CLAUDE_DRIVER_KIND]: "Claude",
+  [CURSOR_DRIVER_KIND]: "Cursor",
+  [OPENCODE_DRIVER_KIND]: "OpenCode",
+};
+
+const MODEL_SLUG_ALIASES_BY_OPEN_DRIVER: Partial<
+  Record<ProviderDriverKind, Record<string, string>>
+> = {
+  [CURSOR_DRIVER_KIND]: {
+    composer: "composer-2",
+    "composer-1.5": "composer-1.5",
+    "composer-1": "composer-1.5",
+    "opus-4.6-thinking": "claude-opus-4-6",
+    "opus-4.6": "claude-opus-4-6",
+    "sonnet-4.6-thinking": "claude-sonnet-4-6",
+    "sonnet-4.6": "claude-sonnet-4-6",
+    "opus-4.5-thinking": "claude-opus-4-5",
+    "opus-4.5": "claude-opus-4-5",
+  },
+  [OPENCODE_DRIVER_KIND]: {},
+};
 
 export interface SelectableModelOption {
   slug: string;
@@ -252,6 +297,21 @@ export function getDefaultModel(provider: ProviderKind = "codex"): ModelSlug {
   return DEFAULT_MODEL_BY_PROVIDER[provider];
 }
 
+export function getDefaultModelForDriver(
+  provider: ProviderDriverKind | ProviderKind = "codex",
+): string {
+  return DEFAULT_MODEL_BY_DRIVER[provider as ProviderDriverKind] ?? DEFAULT_MODEL_BY_PROVIDER.codex;
+}
+
+export function getDefaultGitTextGenerationModelForDriver(
+  provider: ProviderDriverKind | ProviderKind = "codex",
+): string {
+  return (
+    DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_DRIVER[provider as ProviderDriverKind] ??
+    DEFAULT_GIT_TEXT_GENERATION_MODEL
+  );
+}
+
 export function supportsClaudeFastMode(model: string | null | undefined): boolean {
   return normalizeModelSlug(model, "claudeAgent") === CLAUDE_OPUS_4_6_MODEL;
 }
@@ -296,14 +356,14 @@ export function normalizeModelSlug(
     return null;
   }
 
-  const aliases = (MODEL_SLUG_ALIASES_BY_PROVIDER[provider as ProviderKind] ?? {}) as Record<
-    string,
-    ModelSlug
-  >;
+  const aliases = {
+    ...((MODEL_SLUG_ALIASES_BY_PROVIDER[provider as ProviderKind] ?? {}) as Record<string, string>),
+    ...MODEL_SLUG_ALIASES_BY_OPEN_DRIVER[provider as ProviderDriverKind],
+  };
   const aliased = Object.prototype.hasOwnProperty.call(aliases, trimmed)
     ? aliases[trimmed]
     : undefined;
-  return typeof aliased === "string" ? aliased : (trimmed as ModelSlug);
+  return typeof aliased === "string" ? (aliased as ModelSlug) : (trimmed as ModelSlug);
 }
 
 export function resolveSelectableModel(
