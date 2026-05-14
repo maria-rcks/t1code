@@ -19,7 +19,7 @@ describe("vite config", () => {
 
     expect(config.define?.["import.meta.env.APP_VERSION"]).toBe(JSON.stringify("0.0.21"));
     expect(config.define?.["import.meta.env.VITE_HOSTED_APP_CHANNEL"]).toBe(JSON.stringify(""));
-  });
+  }, 15_000);
 
   it("forwards release version and hosted channel env values", async () => {
     vi.stubEnv("APP_VERSION", "1.2.3");

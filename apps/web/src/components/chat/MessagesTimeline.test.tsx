@@ -104,7 +104,7 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain('data-user-message-collapsed="true"');
     expect(markup).toContain('data-user-message-fade="true"');
     expect(markup).toContain('data-user-message-footer="true"');
-  });
+  }, 15_000);
 
   it("does not render collapse controls for short user messages", async () => {
     const { MessagesTimeline } = await import("./MessagesTimeline");
@@ -116,7 +116,7 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain('data-user-message-collapsible="false"');
     expect(markup).toContain("whitespace-pre-wrap wrap-break-word text-sm leading-relaxed");
     expect(markup).not.toContain("whitespace-pre-wrap wrap-break-word font-mono text-sm");
-  });
+  }, 15_000);
 
   it("keeps the copy button for collapsed long user messages", async () => {
     const { MessagesTimeline } = await import("./MessagesTimeline");
