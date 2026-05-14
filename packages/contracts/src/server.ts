@@ -170,6 +170,16 @@ export type ServerProviderStatus = typeof ServerProviderStatus.Type;
 
 const ServerProviderStatuses = Schema.Array(ServerProviderStatus);
 
+export const ServerObservability = Schema.Struct({
+  logsDirectoryPath: TrimmedNonEmptyString,
+  localTracingEnabled: Schema.Boolean,
+  otlpTracesUrl: Schema.optionalKey(TrimmedNonEmptyString),
+  otlpTracesEnabled: Schema.Boolean,
+  otlpMetricsUrl: Schema.optionalKey(TrimmedNonEmptyString),
+  otlpMetricsEnabled: Schema.Boolean,
+});
+export type ServerObservability = typeof ServerObservability.Type;
+
 export const ServerConfig = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   keybindingsConfigPath: TrimmedNonEmptyString,
@@ -178,6 +188,7 @@ export const ServerConfig = Schema.Struct({
   providers: ServerProviderStatuses,
   providerInstances: Schema.optionalKey(ServerProviders),
   availableEditors: Schema.Array(EditorId),
+  observability: ServerObservability,
 });
 export type ServerConfig = typeof ServerConfig.Type;
 

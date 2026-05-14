@@ -953,7 +953,10 @@ describe("WebSocket Server", () => {
 
   it("responds to server.getConfig", async () => {
     const baseDir = makeTempDir("t3code-state-get-config-");
-    const { keybindingsConfigPath: keybindingsPath } = deriveServerPathsSync(baseDir, undefined);
+    const { keybindingsConfigPath: keybindingsPath, logsDir } = deriveServerPathsSync(
+      baseDir,
+      undefined,
+    );
     ensureParentDir(keybindingsPath);
     fs.writeFileSync(keybindingsPath, "[]", "utf8");
 
@@ -974,6 +977,12 @@ describe("WebSocket Server", () => {
       providers: defaultProviderStatuses,
       providerInstances: expect.any(Array),
       availableEditors: expect.any(Array),
+      observability: {
+        logsDirectoryPath: logsDir,
+        localTracingEnabled: true,
+        otlpTracesEnabled: false,
+        otlpMetricsEnabled: false,
+      },
     });
     expect(
       (response.result as { providerInstances: ReadonlyArray<ServerProvider> }).providerInstances,

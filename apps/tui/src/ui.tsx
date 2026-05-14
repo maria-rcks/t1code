@@ -1069,6 +1069,41 @@ function formatDurationMs(value: number): string {
   return `${minutes.toFixed(minutes >= 10 ? 0 : 1)}m`;
 }
 
+function collapseOtelSignalsUrl(input: { tracesUrl: string; metricsUrl: string }): string | null {
+  const tracesSuffix = "/traces";
+  const metricsSuffix = "/metrics";
+  if (!input.tracesUrl.endsWith(tracesSuffix) || !input.metricsUrl.endsWith(metricsSuffix)) {
+    return null;
+  }
+
+  const tracesBase = input.tracesUrl.slice(0, -tracesSuffix.length);
+  const metricsBase = input.metricsUrl.slice(0, -metricsSuffix.length);
+  return tracesBase === metricsBase ? `${tracesBase}/{traces,metrics}` : null;
+}
+
+function formatDiagnosticsDescription(input: {
+  localTracingEnabled: boolean;
+  otlpTracesEnabled: boolean;
+  otlpTracesUrl?: string | undefined;
+  otlpMetricsEnabled: boolean;
+  otlpMetricsUrl?: string | undefined;
+}): string {
+  const mode = input.localTracingEnabled ? "Local trace file" : "Terminal logs only";
+  const tracesUrl = input.otlpTracesEnabled ? input.otlpTracesUrl : undefined;
+  const metricsUrl = input.otlpMetricsEnabled ? input.otlpMetricsUrl : undefined;
+
+  if (tracesUrl && metricsUrl) {
+    const collapsedUrl = collapseOtelSignalsUrl({ tracesUrl, metricsUrl });
+    return collapsedUrl
+      ? `${mode}. Exporting OTEL to ${collapsedUrl}.`
+      : `${mode}. Exporting OTEL traces to ${tracesUrl} and metrics to ${metricsUrl}.`;
+  }
+
+  if (tracesUrl) return `${mode}. Exporting OTEL traces to ${tracesUrl}.`;
+  if (metricsUrl) return `${mode}. Exporting OTEL metrics to ${metricsUrl}.`;
+  return `${mode}.`;
+}
+
 function isProviderUpdateActive(provider: ServerProvider | null | undefined): boolean {
   const status = provider?.updateState?.status;
   return status === "queued" || status === "running";
@@ -3525,6 +3560,24 @@ export function App({
     },
     [updateAppSettings, updateServerSettings],
   );
+  const updateObservabilitySettings = useCallback(
+    (observability: ServerSettingsPatch["observability"]) => {
+      if (!observability) return;
+      setServerSettings((current) =>
+        current
+          ? {
+              ...current,
+              observability: {
+                ...current.observability,
+                ...observability,
+              },
+            }
+          : current,
+      );
+      updateServerSettings({ observability });
+    },
+    [updateServerSettings],
+  );
   const updateAddProjectBaseDirectorySetting = useCallback(
     (addProjectBaseDirectory: string) => {
       setServerSettings((current) =>
@@ -4760,6 +4813,13 @@ export function App({
     ...(hasModelPreferenceSettings ? ["Model preferences"] : []),
     ...(totalCustomModels > 0 ? ["Custom models"] : []),
     ...(isInstallSettingsDirty ? ["Provider installs"] : []),
+    ...(serverSettings &&
+    (serverSettings.observability.otlpTracesUrl !==
+      DEFAULT_SERVER_SETTINGS.observability.otlpTracesUrl ||
+      serverSettings.observability.otlpMetricsUrl !==
+        DEFAULT_SERVER_SETTINGS.observability.otlpMetricsUrl)
+      ? ["Observability"]
+      : []),
   ];
   const headerTitleMaxLength = Math.max(
     12,
@@ -11354,6 +11414,95 @@ export function App({
                               </box>
                             );
                           })}
+                        </SettingsRow>
+                        <SettingsRow
+                          title="Observability"
+                          description={formatDiagnosticsDescription({
+                            localTracingEnabled:
+                              serverConfig?.observability.localTracingEnabled ?? true,
+                            otlpTracesEnabled: Boolean(
+                              serverSettings?.observability.otlpTracesUrl.trim(),
+                            ),
+                            otlpTracesUrl:
+                              serverSettings?.observability.otlpTracesUrl.trim() || undefined,
+                            otlpMetricsEnabled: Boolean(
+                              serverSettings?.observability.otlpMetricsUrl.trim(),
+                            ),
+                            otlpMetricsUrl:
+                              serverSettings?.observability.otlpMetricsUrl.trim() || undefined,
+                          })}
+                          status={
+                            <>
+                              <text
+                                content={
+                                  serverConfig?.observability.logsDirectoryPath ??
+                                  "Resolving logs directory..."
+                                }
+                                style={{ fg: PALETTE.text }}
+                              />
+                              <text
+                                content="Local diagnostics scan this directory."
+                                style={{ fg: PALETTE.subtle }}
+                              />
+                            </>
+                          }
+                        >
+                          <box style={{ flexDirection: "column" }}>
+                            <text content="OTEL traces URL" style={{ fg: PALETTE.text }} />
+                            <box
+                              style={{
+                                backgroundColor: PALETTE.input,
+                                paddingLeft: 1,
+                                paddingRight: 1,
+                                height: 3,
+                                justifyContent: "center",
+                                marginBottom: 1,
+                              }}
+                            >
+                              <input
+                                value={serverSettings?.observability.otlpTracesUrl ?? ""}
+                                onInput={(value) =>
+                                  updateObservabilitySettings({ otlpTracesUrl: value })
+                                }
+                                placeholder="http://localhost:4318/v1/traces"
+                                cursorColor={PALETTE.cursor}
+                                style={{
+                                  backgroundColor: PALETTE.input,
+                                  focusedBackgroundColor: PALETTE.input,
+                                  textColor: PALETTE.text,
+                                  focusedTextColor: PALETTE.text,
+                                  placeholderColor: PALETTE.subtle,
+                                }}
+                              />
+                            </box>
+                            <text content="OTEL metrics URL" style={{ fg: PALETTE.text }} />
+                            <box
+                              style={{
+                                backgroundColor: PALETTE.input,
+                                paddingLeft: 1,
+                                paddingRight: 1,
+                                height: 3,
+                                justifyContent: "center",
+                                marginBottom: 1,
+                              }}
+                            >
+                              <input
+                                value={serverSettings?.observability.otlpMetricsUrl ?? ""}
+                                onInput={(value) =>
+                                  updateObservabilitySettings({ otlpMetricsUrl: value })
+                                }
+                                placeholder="http://localhost:4318/v1/metrics"
+                                cursorColor={PALETTE.cursor}
+                                style={{
+                                  backgroundColor: PALETTE.input,
+                                  focusedBackgroundColor: PALETTE.input,
+                                  textColor: PALETTE.text,
+                                  focusedTextColor: PALETTE.text,
+                                  placeholderColor: PALETTE.subtle,
+                                }}
+                              />
+                            </box>
+                          </box>
                         </SettingsRow>
                         <SettingsRow
                           title="Process diagnostics"

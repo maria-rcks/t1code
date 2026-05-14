@@ -976,6 +976,9 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.serverGetConfig:
         const keybindingsConfig = yield* keybindingsManager.loadConfigState;
         const providerInstances = yield* getProviderInstances;
+        const settings = yield* serverSettings.getSettings;
+        const otlpTracesUrl = settings.observability.otlpTracesUrl.trim() || undefined;
+        const otlpMetricsUrl = settings.observability.otlpMetricsUrl.trim() || undefined;
         return {
           cwd,
           keybindingsConfigPath,
@@ -984,6 +987,14 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           providers: providerStatuses,
           providerInstances,
           availableEditors,
+          observability: {
+            logsDirectoryPath: serverConfig.logsDir,
+            localTracingEnabled: true,
+            ...(otlpTracesUrl ? { otlpTracesUrl } : {}),
+            otlpTracesEnabled: Boolean(otlpTracesUrl),
+            ...(otlpMetricsUrl ? { otlpMetricsUrl } : {}),
+            otlpMetricsEnabled: Boolean(otlpMetricsUrl),
+          },
         };
 
       case WS_METHODS.serverRefreshProviders: {
