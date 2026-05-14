@@ -1,4 +1,10 @@
-import { type ProviderKind, type ThreadId } from "@t3tools/contracts";
+import {
+  defaultInstanceIdForDriver,
+  type ProviderDriverKind,
+  type ProviderKind,
+  type ProviderInstanceId,
+  type ThreadId,
+} from "@t3tools/contracts";
 import { Effect, Layer, Option } from "effect";
 
 import { ProviderSessionRuntimeRepository } from "../../persistence/Services/ProviderSessionRuntime.ts";
@@ -33,6 +39,10 @@ function decodeProviderKind(
   );
 }
 
+function defaultProviderInstanceId(provider: ProviderKind): ProviderInstanceId {
+  return defaultInstanceIdForDriver(provider as ProviderDriverKind);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -65,6 +75,8 @@ const makeProviderSessionDirectory = Effect.gen(function* () {
                 Option.some({
                   threadId: value.threadId,
                   provider,
+                  providerInstanceId:
+                    value.providerInstanceId ?? defaultProviderInstanceId(provider),
                   adapterKey: value.adapterKey,
                   runtimeMode: value.runtimeMode,
                   status: value.status,
@@ -94,10 +106,16 @@ const makeProviderSessionDirectory = Effect.gen(function* () {
     const now = new Date().toISOString();
     const providerChanged =
       existingRuntime !== undefined && existingRuntime.providerName !== binding.provider;
+    const providerInstanceId =
+      binding.providerInstanceId ??
+      (!providerChanged && existingRuntime?.providerInstanceId
+        ? existingRuntime.providerInstanceId
+        : defaultProviderInstanceId(binding.provider));
     yield* repository
       .upsert({
         threadId: resolvedThreadId,
         providerName: binding.provider,
+        providerInstanceId,
         adapterKey:
           binding.adapterKey ??
           (providerChanged ? binding.provider : (existingRuntime?.adapterKey ?? binding.provider)),

@@ -13,6 +13,7 @@ import {
   TurnId,
 } from "./baseSchemas";
 import { ProviderKind } from "./orchestration";
+import { ProviderInstanceId } from "./providerInstance";
 
 const TrimmedNonEmptyStringSchema = TrimmedNonEmptyString;
 const UnknownRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
@@ -243,6 +244,7 @@ const RuntimeErrorType = Schema.Literal("runtime.error");
 const ProviderRuntimeEventBase = Schema.Struct({
   eventId: EventId,
   provider: ProviderKind,
+  providerInstanceId: Schema.optional(ProviderInstanceId),
   threadId: ThreadId,
   createdAt: IsoDateTime,
   turnId: Schema.optional(TurnId),
