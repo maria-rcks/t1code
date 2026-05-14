@@ -74,6 +74,7 @@ import {
   getAppModelOptions,
   getCustomModelsForProvider,
   getProviderStartOptions,
+  rankModelPickerItems,
   MAX_CUSTOM_MODEL_LENGTH,
   MODEL_PROVIDER_SETTINGS,
   normalizeAppSettings,
@@ -2408,6 +2409,22 @@ type ModelMenuInstanceEntry = {
   readonly accentColor?: string;
   readonly isDefault: boolean;
 };
+type ModelMenuOption = {
+  readonly slug: string;
+  readonly name: string;
+  readonly isCustom: boolean;
+};
+type ModelSearchMenuItem = {
+  readonly instanceId: ProviderInstanceId;
+  readonly provider: ProviderKind;
+  readonly driverKind: ProviderDriverKind;
+  readonly providerDisplayName: string;
+  readonly accentColor?: string | undefined;
+  readonly option: ModelMenuOption;
+  readonly name: string;
+  readonly slug: string;
+  readonly isFavorite: boolean;
+};
 
 const FALLBACK_MODEL_MENU_INSTANCE_ENTRIES: ReadonlyArray<ModelMenuInstanceEntry> =
   AVAILABLE_MODEL_PROVIDER_OPTIONS.map((option) => ({
@@ -3285,6 +3302,7 @@ export function App({
     useState<ProviderInstanceId>(DEFAULT_CODEX_INSTANCE_ID);
   const [modelSubmenuOpen, setModelSubmenuOpen] = useState(false);
   const [modelMenuIndex, setModelMenuIndex] = useState(0);
+  const [modelSearchQuery, setModelSearchQuery] = useState("");
   const [gitMenuIndex, setGitMenuIndex] = useState(0);
   const [composerEnvMenuIndex, setComposerEnvMenuIndex] = useState(0);
   const [composerBranchMenuIndex, setComposerBranchMenuIndex] = useState(0);
@@ -4374,6 +4392,34 @@ export function App({
     return optionsByInstance;
   }, [appSettings, modelMenuEntries, rawProviderModelOptionsByInstance]);
   const modelOptions = providerModelOptionsByInstance.get(modelMenuInstanceId) ?? [];
+  const modelSearchItems = useMemo<ReadonlyArray<ModelSearchMenuItem>>(() => {
+    const favoriteKeys = new Set(
+      appSettings.favorites.map((favorite) => `${favorite.provider}:${favorite.model}`),
+    );
+    const items: ModelSearchMenuItem[] = [];
+    for (const entry of modelMenuEntries) {
+      for (const option of providerModelOptionsByInstance.get(entry.instanceId) ?? []) {
+        items.push({
+          instanceId: entry.instanceId,
+          provider: entry.provider,
+          driverKind: entry.driverKind,
+          providerDisplayName: entry.displayName,
+          ...(entry.accentColor ? { accentColor: entry.accentColor } : {}),
+          option,
+          name: option.name,
+          slug: option.slug,
+          isFavorite: favoriteKeys.has(`${entry.instanceId}:${option.slug}`),
+        });
+      }
+    }
+    return items;
+  }, [appSettings.favorites, modelMenuEntries, providerModelOptionsByInstance]);
+  const modelSearchResults = useMemo(
+    () => rankModelPickerItems(modelSearchItems, modelSearchQuery).slice(0, 20),
+    [modelSearchItems, modelSearchQuery],
+  );
+  const isModelSearchActive = modelSearchQuery.trim().length > 0;
+  const visibleModelSearchResults = isModelSearchActive ? modelSearchResults : [];
   const draftProviderModelOptions =
     providerModelOptionsByInstance.get(draftProviderInstanceId) ?? [];
   const providerOptionsForDispatch = useMemo(
@@ -6442,11 +6488,34 @@ export function App({
       }
     }
     if (overlayMenu === "model") {
+      const printableSequence =
+        !key.ctrl && !key.meta && !key.super && key.sequence && key.sequence.length === 1
+          ? key.sequence
+          : "";
+      if (printableSequence && key.name !== "return" && key.name !== "enter") {
+        setModelSearchQuery((current) => `${current}${printableSequence}`);
+        setModelSubmenuOpen(true);
+        setModelMenuIndex(0);
+        return;
+      }
+      if (key.name === "backspace" || key.name === "delete") {
+        setModelSearchQuery((current) => current.slice(0, -1));
+        setModelMenuIndex(0);
+        return;
+      }
+      if (key.ctrl && key.name === "u") {
+        setModelSearchQuery("");
+        setModelMenuIndex(0);
+        return;
+      }
       const currentInstanceIndex = Math.max(
         modelMenuEntries.findIndex((entry) => entry.instanceId === modelMenuInstanceId),
         0,
       );
       if (key.name === "left" || key.name === "right") {
+        if (isModelSearchActive) {
+          return;
+        }
         const delta = key.name === "left" ? -1 : 1;
         const nextEntry =
           modelMenuEntries[
@@ -6462,7 +6531,7 @@ export function App({
         return;
       }
       if (isNavUp) {
-        if (!modelSubmenuOpen) {
+        if (!modelSubmenuOpen && !isModelSearchActive) {
           const nextEntry = modelMenuEntries[Math.max(0, currentInstanceIndex - 1)];
           if (nextEntry) {
             focusModelProvider(nextEntry.instanceId, false);
@@ -6473,7 +6542,7 @@ export function App({
         return;
       }
       if (isNavDown) {
-        if (!modelSubmenuOpen) {
+        if (!modelSubmenuOpen && !isModelSearchActive) {
           const nextEntry =
             modelMenuEntries[Math.min(modelMenuEntries.length - 1, currentInstanceIndex + 1)];
           if (nextEntry) {
@@ -6481,7 +6550,10 @@ export function App({
           }
           return;
         }
-        setModelMenuIndex((current) => Math.min(modelOptions.length - 1, current + 1));
+        const visibleModelCount = isModelSearchActive
+          ? visibleModelSearchResults.length
+          : modelOptions.length;
+        setModelMenuIndex((current) => Math.min(Math.max(visibleModelCount - 1, 0), current + 1));
         return;
       }
       if (
@@ -6490,12 +6562,19 @@ export function App({
         key.name === "kpenter" ||
         key.name === "linefeed"
       ) {
-        if (!modelSubmenuOpen) {
+        if (!modelSubmenuOpen && !isModelSearchActive) {
           setModelSubmenuOpen(true);
           return;
         }
+        const selectedSearchResult = isModelSearchActive
+          ? visibleModelSearchResults[modelMenuIndex]
+          : null;
+        if (selectedSearchResult) {
+          applyDraftProviderModel(selectedSearchResult.instanceId, selectedSearchResult.slug);
+          return;
+        }
         const selected = modelOptions[modelMenuIndex];
-        if (selected) {
+        if (!isModelSearchActive && selected) {
           applyDraftProviderModel(modelMenuInstanceId, selected.slug);
         }
         return;
@@ -8372,6 +8451,7 @@ export function App({
 
   function focusModelProvider(nextInstanceId: ProviderInstanceId, openSubmenu: boolean = true) {
     const nextOptions = providerModelOptionsByInstance.get(nextInstanceId) ?? [];
+    setModelSearchQuery("");
     setModelMenuInstanceId(nextInstanceId);
     setModelSubmenuOpen(openSubmenu);
     setModelMenuIndex(
@@ -8519,6 +8599,7 @@ export function App({
       } else {
         setOverlayAnchor(null);
         setModelSubmenuOpen(false);
+        setModelSearchQuery("");
       }
       logger.log(next ? "overlay.open" : "overlay.close", {
         menu: "model",
@@ -9313,7 +9394,10 @@ export function App({
     }
   }, [focusArea, logger, overlayMenu]);
 
-  const modelMenuHeight = Math.min(Math.max(modelOptions.length, 1), 6);
+  const modelVisibleOptionCount = isModelSearchActive
+    ? visibleModelSearchResults.length
+    : modelOptions.length;
+  const modelMenuHeight = Math.min(Math.max(modelVisibleOptionCount, 1), 8);
   const modelProvidersHeight =
     2 +
     modelMenuEntries.length +
@@ -9321,11 +9405,14 @@ export function App({
       ? 1 + COMING_SOON_MODEL_PROVIDER_OPTIONS.length
       : 0);
   const modelPopupHeight = modelSubmenuOpen
-    ? Math.max(modelMenuHeight + 2, modelProvidersHeight) + 2
+    ? Math.max(modelMenuHeight + 3, modelProvidersHeight) + 2
     : modelProvidersHeight + 2;
   const modelPopupWidth = modelSubmenuOpen
     ? MODEL_POPUP_WIDTH
     : MODEL_POPUP_PROVIDER_COLUMN_WIDTH + 2;
+  useEffect(() => {
+    setModelMenuIndex((current) => Math.min(current, Math.max(modelVisibleOptionCount - 1, 0)));
+  }, [modelVisibleOptionCount]);
   const settingsSelectMenuHeight = Math.min(Math.max(settingsSelectItems.length, 1), 6);
   const settingsSelectPopupHeight = 3 + settingsSelectMenuHeight;
   const composerEnvPopupWidth = Math.max(
@@ -13271,7 +13358,11 @@ export function App({
                 iconColor={entry.accentColor ?? providerColor(entry.provider)}
                 label={entry.displayName}
                 active={modelMenuInstanceId === entry.instanceId}
-                onHover={() => focusModelProvider(entry.instanceId)}
+                onHover={() => {
+                  if (!isModelSearchActive) {
+                    focusModelProvider(entry.instanceId);
+                  }
+                }}
                 onPress={() => focusModelProvider(entry.instanceId)}
               />
             ))}
@@ -13292,20 +13383,51 @@ export function App({
           </box>
           {modelSubmenuOpen ? (
             <box style={{ flexGrow: 1, flexDirection: "column", paddingLeft: 1 }}>
-              {modelOptions.slice(0, modelMenuHeight).map((option, index) => (
-                <PopupRow
-                  key={`${modelMenuInstanceId}:${option.slug}`}
-                  icon={
-                    option.slug === draftModel && modelMenuInstanceId === draftProviderInstanceId
-                      ? "󰄬"
-                      : " "
-                  }
-                  label={option.name}
-                  active={index === modelMenuIndex}
-                  onHover={() => setModelMenuIndex(index)}
-                  onPress={() => applyDraftProviderModel(modelMenuInstanceId, option.slug)}
-                />
-              ))}
+              <text
+                content={isModelSearchActive ? `Search: ${modelSearchQuery}` : "Type to search"}
+                style={{ fg: isModelSearchActive ? PALETTE.text : PALETTE.subtle, marginBottom: 1 }}
+              />
+              {isModelSearchActive ? (
+                visibleModelSearchResults.length > 0 ? (
+                  visibleModelSearchResults
+                    .slice(0, modelMenuHeight)
+                    .map((item, index) => (
+                      <PopupRow
+                        key={`model-search:${item.instanceId}:${item.slug}`}
+                        icon={
+                          item.slug === draftModel && item.instanceId === draftProviderInstanceId
+                            ? "󰄬"
+                            : providerPickerIcon(item.provider)
+                        }
+                        iconColor={item.accentColor ?? providerColor(item.provider)}
+                        label={`${item.option.name} · ${item.providerDisplayName}`}
+                        active={index === modelMenuIndex}
+                        onHover={() => setModelMenuIndex(index)}
+                        onPress={() => applyDraftProviderModel(item.instanceId, item.slug)}
+                      />
+                    ))
+                ) : (
+                  <text content="No matching models." style={{ fg: PALETTE.muted }} />
+                )
+              ) : (
+                modelOptions
+                  .slice(0, modelMenuHeight)
+                  .map((option, index) => (
+                    <PopupRow
+                      key={`${modelMenuInstanceId}:${option.slug}`}
+                      icon={
+                        option.slug === draftModel &&
+                        modelMenuInstanceId === draftProviderInstanceId
+                          ? "󰄬"
+                          : " "
+                      }
+                      label={option.name}
+                      active={index === modelMenuIndex}
+                      onHover={() => setModelMenuIndex(index)}
+                      onPress={() => applyDraftProviderModel(modelMenuInstanceId, option.slug)}
+                    />
+                  ))
+              )}
             </box>
           ) : null}
         </box>

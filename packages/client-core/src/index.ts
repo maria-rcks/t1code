@@ -1,6 +1,7 @@
 export * from "./appSettings";
 export * from "./ids";
 export * from "./gitQuickAction";
+export * from "./modelPickerSearch";
 export * from "./nativeApi";
 export * from "./pendingUserInput";
 export * from "./proposedPlan";
