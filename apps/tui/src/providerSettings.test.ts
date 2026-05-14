@@ -13,6 +13,7 @@ import {
   buildDuplicateDefaultProviderInstancePatch,
   buildProviderInstanceUpdatePatch,
   buildResetDefaultProviderInstancesPatch,
+  buildResetProviderCustomModelsPatch,
   defaultProviderInstanceIdForSettingsKey,
   providerDriverKindForSettingsKey,
 } from "./providerSettings";
@@ -212,6 +213,45 @@ describe("providerSettings", () => {
     expect(patch.providerInstances?.[customId]).toEqual({
       driver: decodeProviderDriverKind("codex"),
       config: { binaryPath: "/opt/personal-codex" },
+    });
+  });
+
+  it("resets custom models for every schema-backed provider", () => {
+    const codexId = decodeProviderInstanceId("codex");
+    const cursorId = decodeProviderInstanceId("cursor");
+    const opencodeId = decodeProviderInstanceId("opencode");
+    const patch = buildResetProviderCustomModelsPatch({
+      settings: {
+        ...DEFAULT_SERVER_SETTINGS,
+        providerInstances: {
+          [codexId]: {
+            driver: decodeProviderDriverKind("codex"),
+            config: { customModels: ["gpt-custom"], binaryPath: "/opt/codex" },
+          },
+          [cursorId]: {
+            driver: decodeProviderDriverKind("cursor"),
+            config: { customModels: ["cursor-custom"], binaryPath: "/opt/cursor" },
+          },
+          [opencodeId]: {
+            driver: decodeProviderDriverKind("opencode"),
+            config: { customModels: ["openrouter/custom"], serverUrl: "http://127.0.0.1:4096" },
+          },
+        },
+      },
+      providers: INSTALL_PROVIDER_SETTINGS.map((settings) => settings.provider),
+    });
+
+    expect(patch.providerInstances?.[codexId]?.config).toMatchObject({
+      customModels: [],
+      binaryPath: "/opt/codex",
+    });
+    expect(patch.providerInstances?.[cursorId]?.config).toMatchObject({
+      customModels: [],
+      binaryPath: "/opt/cursor",
+    });
+    expect(patch.providerInstances?.[opencodeId]?.config).toMatchObject({
+      customModels: [],
+      serverUrl: "http://127.0.0.1:4096",
     });
   });
 

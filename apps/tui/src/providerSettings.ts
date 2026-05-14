@@ -256,6 +256,36 @@ export function buildResetDefaultProviderInstancesPatch(input: {
   return { providers, providerInstances };
 }
 
+export function buildResetProviderCustomModelsPatch(input: {
+  readonly settings: Pick<ServerSettings, "providerInstances" | "providers">;
+  readonly providers: ReadonlyArray<ProviderSettingsKey>;
+}): ServerSettingsPatch {
+  const currentProviders: ServerSettings["providers"] = { ...input.settings.providers };
+  let providerInstances = input.settings.providerInstances;
+  const providers: NonNullable<ServerSettingsPatch["providers"]> = {};
+
+  for (const provider of input.providers) {
+    const defaultConfig = DEFAULT_SERVER_SETTINGS.providers[provider];
+    if (!("customModels" in defaultConfig)) {
+      continue;
+    }
+    const settingsPatch = buildDefaultProviderInstanceUpdatePatch({
+      settings: {
+        providers: currentProviders,
+        providerInstances,
+      },
+      provider,
+      configPatch: { customModels: defaultConfig.customModels },
+    });
+    const providerPatch = settingsPatch.providers as NonNullable<ServerSettingsPatch["providers"]>;
+    Object.assign(providers, providerPatch);
+    Object.assign(currentProviders, providerPatch);
+    providerInstances = settingsPatch.providerInstances ?? providerInstances;
+  }
+
+  return { providers, providerInstances };
+}
+
 function nextProviderInstanceId(
   providerInstances: Pick<ServerSettings, "providerInstances">["providerInstances"],
   provider: ProviderSettingsKey,

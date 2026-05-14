@@ -188,6 +188,7 @@ import {
   buildDuplicateDefaultProviderInstancePatch,
   buildProviderInstanceUpdatePatch,
   buildResetDefaultProviderInstancesPatch,
+  buildResetProviderCustomModelsPatch,
   defaultProviderInstanceIdForSettingsKey,
   type InstallProviderFieldKey,
   type InstallProviderSettings,
@@ -7347,37 +7348,11 @@ export function App({
       setStatus("Settings loading");
       return;
     }
-    const codexPatch = buildDefaultProviderInstanceUpdatePatch({
+    const settingsPatch = buildResetProviderCustomModelsPatch({
       settings: serverSettings,
-      provider: "codex",
-      configPatch: { customModels: DEFAULT_SERVER_SETTINGS.providers.codex.customModels },
+      providers: INSTALL_PROVIDER_SETTINGS.map((settings) => settings.provider),
     });
-    const settingsAfterCodex = {
-      ...serverSettings,
-      providers: {
-        ...serverSettings.providers,
-        ...(codexPatch.providers as NonNullable<ServerSettingsPatch["providers"]>),
-      } as ServerSettings["providers"],
-      providerInstances: codexPatch.providerInstances ?? serverSettings.providerInstances,
-    };
-    const claudePatch = buildDefaultProviderInstanceUpdatePatch({
-      settings: settingsAfterCodex,
-      provider: "claudeAgent",
-      configPatch: {
-        customModels: DEFAULT_SERVER_SETTINGS.providers.claudeAgent.customModels,
-      },
-    });
-    const providerPatch = {
-      ...(codexPatch.providers as NonNullable<ServerSettingsPatch["providers"]>),
-      ...(claudePatch.providers as NonNullable<ServerSettingsPatch["providers"]>),
-    } as NonNullable<ServerSettingsPatch["providers"]>;
-    const providerInstancesPatch = claudePatch.providerInstances as NonNullable<
-      ServerSettingsPatch["providerInstances"]
-    >;
-    const settingsPatch: ServerSettingsPatch = {
-      providers: providerPatch,
-      providerInstances: providerInstancesPatch,
-    };
+    const providerPatch = settingsPatch.providers as NonNullable<ServerSettingsPatch["providers"]>;
     setServerSettings((current) =>
       current
         ? {
