@@ -15,6 +15,7 @@ import {
   SourceControlRepositoryService,
   SourceControlRepositoryServiceLive,
 } from "./SourceControlRepositoryService";
+import { BitbucketApi, type BitbucketApiShape } from "./BitbucketApi";
 
 const tempDirs: string[] = [];
 
@@ -61,6 +62,7 @@ const serverConfigLayer = Layer.succeed(ServerConfig, {
 
 function makeLayer(input: {
   azureDevOpsCli?: Partial<AzureDevOpsCliShape>;
+  bitbucketApi?: Partial<BitbucketApiShape>;
   gitHubCli: Pick<GitHubCliShape, "getRepositoryCloneUrls"> & Partial<GitHubCliShape>;
   gitLabCli?: Partial<GitLabCliShape>;
   gitCore?: Pick<GitCoreShape, "execute"> & Partial<GitCoreShape>;
@@ -81,6 +83,17 @@ function makeLayer(input: {
           input.azureDevOpsCli?.createRepository ??
           (() => Effect.die("AzureDevOpsCli.createRepository should not be called in this test")),
       } as AzureDevOpsCliShape),
+    ),
+    Layer.provideMerge(
+      Layer.succeed(BitbucketApi, {
+        getRepositoryCloneUrls:
+          input.bitbucketApi?.getRepositoryCloneUrls ??
+          (() =>
+            Effect.die("BitbucketApi.getRepositoryCloneUrls should not be called in this test")),
+        createRepository:
+          input.bitbucketApi?.createRepository ??
+          (() => Effect.die("BitbucketApi.createRepository should not be called in this test")),
+      } as BitbucketApiShape),
     ),
     Layer.provideMerge(
       Layer.succeed(GitHubCli, {
@@ -224,6 +237,43 @@ describe("SourceControlRepositoryService", () => {
     });
   });
 
+  it("looks up Bitbucket repository clone URLs", async () => {
+    const getRepositoryCloneUrls = vi.fn<BitbucketApiShape["getRepositoryCloneUrls"]>((input) =>
+      Effect.succeed({
+        nameWithOwner: input.repository,
+        url: `https://bitbucket.org/${input.repository}.git`,
+        sshUrl: `git@bitbucket.org:${input.repository}.git`,
+      }),
+    );
+    const layer = makeLayer({
+      bitbucketApi: { getRepositoryCloneUrls },
+      gitHubCli: {
+        getRepositoryCloneUrls: () => Effect.die("GitHubCli should not be called"),
+      },
+    });
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* SourceControlRepositoryService;
+        return yield* service.lookupRepository({
+          provider: "bitbucket",
+          repository: "workspace/repo",
+        });
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(getRepositoryCloneUrls).toHaveBeenCalledWith({
+      cwd: "/workspace",
+      repository: "workspace/repo",
+    });
+    expect(result).toEqual({
+      provider: "bitbucket",
+      nameWithOwner: "workspace/repo",
+      url: "https://bitbucket.org/workspace/repo.git",
+      sshUrl: "git@bitbucket.org:workspace/repo.git",
+    });
+  });
+
   it("rejects unsupported repository providers", async () => {
     const layer = makeLayer({
       gitHubCli: {
@@ -235,7 +285,7 @@ describe("SourceControlRepositoryService", () => {
       Effect.gen(function* () {
         const service = yield* SourceControlRepositoryService;
         return yield* service.lookupRepository({
-          provider: "bitbucket",
+          provider: "unknown",
           repository: "group/project",
         });
       }).pipe(Effect.provide(layer)),
@@ -449,6 +499,62 @@ describe("SourceControlRepositoryService", () => {
       nameWithOwner: "project/repo",
       url: "https://dev.azure.com/acme/project/_git/repo",
       sshUrl: "git@ssh.dev.azure.com:v3/acme/project/repo",
+    });
+  });
+
+  it("resolves Bitbucket clone URLs before cloning provider repositories", async () => {
+    const parentDir = makeTempDir("t3code-source-control-clone-bitbucket-");
+    const destinationPath = path.join(parentDir, "repo");
+    const execute = vi.fn<GitCoreShape["execute"]>(() =>
+      Effect.succeed({
+        code: 0,
+        stdout: "",
+        stderr: "",
+      }),
+    );
+    const getRepositoryCloneUrls = vi.fn<BitbucketApiShape["getRepositoryCloneUrls"]>((input) =>
+      Effect.succeed({
+        nameWithOwner: input.repository,
+        url: `https://bitbucket.org/${input.repository}.git`,
+        sshUrl: `git@bitbucket.org:${input.repository}.git`,
+      }),
+    );
+    const layer = makeLayer({
+      bitbucketApi: { getRepositoryCloneUrls },
+      gitHubCli: {
+        getRepositoryCloneUrls: () => Effect.die("GitHubCli should not be called"),
+      },
+      gitCore: { execute },
+    });
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* SourceControlRepositoryService;
+        return yield* service.cloneRepository({
+          provider: "bitbucket",
+          repository: "workspace/repo",
+          destinationPath,
+          protocol: "https",
+        });
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(getRepositoryCloneUrls).toHaveBeenCalledWith({
+      cwd: parentDir,
+      repository: "workspace/repo",
+    });
+    expect(execute).toHaveBeenCalledWith({
+      operation: "SourceControlRepositoryService.cloneRepository",
+      cwd: parentDir,
+      args: ["clone", "https://bitbucket.org/workspace/repo.git", "repo"],
+      timeoutMs: 120_000,
+      maxOutputBytes: 256 * 1024,
+    });
+    expect(result.repository).toEqual({
+      provider: "bitbucket",
+      nameWithOwner: "workspace/repo",
+      url: "https://bitbucket.org/workspace/repo.git",
+      sshUrl: "git@bitbucket.org:workspace/repo.git",
     });
   });
 
@@ -802,6 +908,87 @@ describe("SourceControlRepositoryService", () => {
       remoteUrl: "git@ssh.dev.azure.com:v3/acme/project/repo",
       branch: "feature/azure",
       upstreamBranch: "origin/feature/azure",
+      status: "pushed",
+    });
+  });
+
+  it("publishes Bitbucket repositories", async () => {
+    const execute = vi.fn<GitCoreShape["execute"]>((input) =>
+      Effect.succeed({
+        code: 0,
+        stdout: input.args.includes("push") ? "pushed" : "",
+        stderr: "",
+      }),
+    );
+    const ensureRemote = vi.fn<GitCoreShape["ensureRemote"]>(() => Effect.succeed("origin"));
+    const statusDetails = vi.fn<GitCoreShape["statusDetails"]>(() =>
+      Effect.succeed({
+        branch: "feature/bitbucket",
+        hasWorkingTreeChanges: false,
+        workingTree: {
+          files: [],
+          insertions: 0,
+          deletions: 0,
+        },
+        hasUpstream: false,
+        aheadCount: 1,
+        behindCount: 0,
+        upstreamRef: null,
+      }),
+    );
+    const createRepository = vi.fn<BitbucketApiShape["createRepository"]>(() =>
+      Effect.succeed({
+        nameWithOwner: "workspace/repo",
+        url: "https://bitbucket.org/workspace/repo.git",
+        sshUrl: "git@bitbucket.org:workspace/repo.git",
+      }),
+    );
+    const layer = makeLayer({
+      bitbucketApi: { createRepository },
+      gitHubCli: {
+        getRepositoryCloneUrls: () => Effect.die("GitHubCli should not be called"),
+      },
+      gitCore: {
+        execute,
+        ensureRemote,
+        statusDetails,
+      },
+    });
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* SourceControlRepositoryService;
+        return yield* service.publishRepository({
+          cwd: "/workspace",
+          provider: "bitbucket",
+          repository: "workspace/repo",
+          visibility: "private",
+          protocol: "ssh",
+        });
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(createRepository).toHaveBeenCalledWith({
+      cwd: "/workspace",
+      repository: "workspace/repo",
+      visibility: "private",
+    });
+    expect(ensureRemote).toHaveBeenCalledWith({
+      cwd: "/workspace",
+      preferredName: "origin",
+      url: "git@bitbucket.org:workspace/repo.git",
+    });
+    expect(result).toEqual({
+      repository: {
+        provider: "bitbucket",
+        nameWithOwner: "workspace/repo",
+        url: "https://bitbucket.org/workspace/repo.git",
+        sshUrl: "git@bitbucket.org:workspace/repo.git",
+      },
+      remoteName: "origin",
+      remoteUrl: "git@bitbucket.org:workspace/repo.git",
+      branch: "feature/bitbucket",
+      upstreamBranch: "origin/feature/bitbucket",
       status: "pushed",
     });
   });

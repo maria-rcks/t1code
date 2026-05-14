@@ -1682,6 +1682,9 @@ function normalizeSourceControlCommandProvider(value: string): SourceControlProv
     case "azure-devops":
     case "az":
       return "azure-devops";
+    case "bitbucket":
+    case "bb":
+      return "bitbucket";
     default:
       return null;
   }

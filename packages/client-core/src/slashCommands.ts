@@ -20,7 +20,7 @@ export const SLASH_COMMAND_DEFINITIONS: readonly SlashCommandDefinition[] = [
   },
   {
     command: "clone",
-    usage: "/clone owner/repo [path] [provider=github|gitlab|azure-devops]",
+    usage: "/clone owner/repo [path] [provider=github|gitlab|azure-devops|bitbucket]",
     description: "Clone a hosted repository and add it as a project",
     template: "/clone ",
   },
@@ -56,7 +56,7 @@ export const SLASH_COMMAND_DEFINITIONS: readonly SlashCommandDefinition[] = [
   },
   {
     command: "publish",
-    usage: "/publish owner/repo [provider=github|gitlab|azure-devops]",
+    usage: "/publish owner/repo [provider=github|gitlab|azure-devops|bitbucket]",
     description: "Create a hosted repository and push the current Git repo",
     template: "/publish ",
   },

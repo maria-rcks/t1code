@@ -29,6 +29,7 @@ import { layer as ProviderMaintenanceRunnerLive } from "./provider/providerMaint
 import { layer as ProcessDiagnosticsLive } from "./diagnostics/ProcessDiagnostics";
 import { layer as TraceDiagnosticsLive } from "./diagnostics/TraceDiagnostics";
 import { layer as SourceControlDiscoveryLive } from "./sourceControl/SourceControlDiscovery";
+import { BitbucketApiLive } from "./sourceControl/BitbucketApi";
 import { SourceControlRepositoryServiceLive } from "./sourceControl/SourceControlRepositoryService";
 import { AzureDevOpsCliLive } from "./git/Layers/AzureDevOpsCli";
 import { GitCoreLive } from "./git/Layers/GitCore";
@@ -314,6 +315,7 @@ const LayerLive = (input: CliInput) =>
     Layer.provideMerge(
       SourceControlRepositoryServiceLive.pipe(
         Layer.provideMerge(AzureDevOpsCliLive),
+        Layer.provideMerge(BitbucketApiLive),
         Layer.provideMerge(GitCoreLive),
         Layer.provideMerge(GitHubCliLive),
         Layer.provideMerge(GitLabCliLive),
