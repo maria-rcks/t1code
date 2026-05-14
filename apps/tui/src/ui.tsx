@@ -57,7 +57,10 @@ import {
   type ServerSettingsPatch,
   type ResolvedKeybindingsConfig,
   type ServerTraceDiagnosticsResult,
+  type SourceControlCloneProtocol,
   type SourceControlDiscoveryResult,
+  type SourceControlProviderKind,
+  type SourceControlRepositoryVisibility,
 } from "@t3tools/contracts";
 import {
   DEFAULT_APP_SETTINGS,
@@ -388,7 +391,7 @@ type TuiGitMenuItem = {
   readonly label: string;
   readonly icon: string;
   readonly disabled: boolean;
-  readonly kind: "action" | "pull" | "open_pr";
+  readonly kind: "action" | "pull" | "open_pr" | "publish_prompt";
   readonly action?: GitStackedAction;
 };
 type ComposerEnvMenuItem = {
@@ -1609,6 +1612,48 @@ function dedupeRemoteBranchesWithLocalMatches(
     );
     return !localBranchCandidates.some((candidate) => localBranchNames.has(candidate));
   });
+}
+
+type ParsedPublishCommandArgs = {
+  readonly repository: string;
+  readonly provider: SourceControlProviderKind;
+  readonly visibility: SourceControlRepositoryVisibility;
+  readonly protocol: SourceControlCloneProtocol;
+  readonly remoteName: string;
+};
+
+function parsePublishCommandArgs(args: string): ParsedPublishCommandArgs | null {
+  const tokens = args.trim().split(/\s+/).filter(Boolean);
+  const repository = tokens[0]?.trim() ?? "";
+  if (!repository || !repository.includes("/")) {
+    return null;
+  }
+
+  let visibility: SourceControlRepositoryVisibility = "private";
+  let protocol: SourceControlCloneProtocol = "ssh";
+  let remoteName = "origin";
+
+  for (const token of tokens.slice(1)) {
+    const normalized = token.toLowerCase();
+    if (normalized === "private" || normalized === "public") {
+      visibility = normalized;
+    } else if (normalized === "ssh" || normalized === "https" || normalized === "auto") {
+      protocol = normalized;
+    } else if (normalized.startsWith("remote=")) {
+      const nextRemoteName = token.slice("remote=".length).trim();
+      if (nextRemoteName) {
+        remoteName = nextRemoteName;
+      }
+    }
+  }
+
+  return {
+    provider: "github",
+    repository,
+    visibility,
+    protocol,
+    remoteName,
+  };
 }
 
 function resolveBranchSelectionTarget(input: {
@@ -4497,11 +4542,26 @@ export function App({
     () => resolveQuickAction(gitStatusForActions, gitActionBusy, isDefaultBranch, hasOriginRemote),
     [gitActionBusy, gitStatusForActions, hasOriginRemote, isDefaultBranch],
   );
+  const publishAccount = useMemo(
+    () =>
+      sourceControlDiscovery?.sourceControlProviders.find((item) => item.kind === "github")?.auth
+        .account ?? null,
+    [sourceControlDiscovery],
+  );
   const gitMenuItems = useMemo<TuiGitMenuItem[]>(() => {
     if (!gitCwd || !isGitRepo) {
       return [];
     }
     const items: TuiGitMenuItem[] = [];
+    if (!hasOriginRemote) {
+      items.push({
+        id: "publish",
+        label: "Publish repository...",
+        icon: "󰊢",
+        disabled: gitActionBusy,
+        kind: "publish_prompt",
+      });
+    }
     if (gitQuickAction.kind === "run_pull") {
       items.push({
         id: "pull",
@@ -8076,6 +8136,10 @@ export function App({
         openDiffView();
         return true;
       }
+      case "publish": {
+        await publishRepositoryFromCommand(args);
+        return true;
+      }
       case "implement-plan": {
         if (!latestProposedPlan) {
           setStatus("No plan ready");
@@ -9126,8 +9190,57 @@ export function App({
     }
   }
 
+  function prefillPublishCommand() {
+    closeOverlayMenu();
+    resetComposerTextarea(`/publish ${publishAccount ? `${publishAccount}/` : ""}`);
+    setFocusArea("composer");
+    setStatus("Enter owner/repo, then optionally public, https, or remote=<name>");
+  }
+
+  async function publishRepositoryFromCommand(args: string) {
+    if (!api || !gitCwd || !isGitRepo) {
+      setStatus("Open a Git project before publishing.");
+      return;
+    }
+    if (gitActionBusy) {
+      setStatus("Wait for the current Git action to finish.");
+      return;
+    }
+
+    const parsedArgs = parsePublishCommandArgs(args);
+    if (!parsedArgs) {
+      prefillPublishCommand();
+      return;
+    }
+
+    setGitActionBusy(true);
+    setGitActionStatus("Publishing repository...");
+    try {
+      const result = await api.sourceControl.publishRepository({
+        cwd: gitCwd,
+        ...parsedArgs,
+      });
+      const status =
+        result.status === "pushed"
+          ? `Published ${result.repository.nameWithOwner} on ${result.branch}`
+          : `Created ${result.repository.nameWithOwner}; remote ${result.remoteName} added`;
+      setStatus(status);
+      await refreshGitState();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Publish failed.");
+      await refreshGitState();
+    } finally {
+      setGitActionBusy(false);
+      setGitActionStatus(null);
+    }
+  }
+
   async function activateGitMenuItem(item: TuiGitMenuItem | undefined) {
     if (!item || item.disabled) {
+      return;
+    }
+    if (item.kind === "publish_prompt") {
+      prefillPublishCommand();
       return;
     }
     if (item.kind === "pull") {

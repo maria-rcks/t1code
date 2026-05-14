@@ -29,5 +29,9 @@ describe("slashCommands", () => {
       command: "project",
       args: "add ~/repo",
     });
+    expect(parseSlashCommandInput("/publish t3tools/t1code public")).toEqual({
+      command: "publish",
+      args: "t3tools/t1code public",
+    });
   });
 });

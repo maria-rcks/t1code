@@ -49,6 +49,12 @@ export const SLASH_COMMAND_DEFINITIONS: readonly SlashCommandDefinition[] = [
     template: "/diff",
   },
   {
+    command: "publish",
+    usage: "/publish owner/repo [private|public]",
+    description: "Create a hosted repository and push the current Git repo",
+    template: "/publish ",
+  },
+  {
     command: "implement-plan",
     usage: "/implement-plan",
     description: "Load the latest proposed plan into the composer",
