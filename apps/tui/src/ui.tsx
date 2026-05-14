@@ -11965,8 +11965,8 @@ export function App({
                               <text
                                 content={
                                   sourceControlDiscovery
-                                    ? "Provider auth is checked through local CLI status commands."
-                                    : "Refresh to probe git, gh, glab, and az on the server PATH."
+                                    ? "Provider auth is checked through local CLI status commands and server env."
+                                    : "Refresh to probe git, gh, glab, az, and Bitbucket env auth."
                                 }
                                 style={{ fg: PALETTE.subtle }}
                               />

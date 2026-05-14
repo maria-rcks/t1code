@@ -34,6 +34,13 @@ interface ProviderCliDiscoverySpec extends CliDiscoverySpecBase {
   readonly parseAuth: (input: SourceControlAuthProbeInput) => SourceControlProviderAuth;
 }
 
+interface ProviderEnvDiscoverySpec {
+  readonly kind: SourceControlProviderKind;
+  readonly label: string;
+  readonly installHint: string;
+  readonly parseAuth: (env: NodeJS.ProcessEnv) => SourceControlProviderAuth;
+}
+
 export interface SourceControlDiscoveryShape {
   readonly discover: (input?: {
     readonly cwd?: string;
@@ -90,6 +97,16 @@ const PROVIDER_SPECS: ReadonlyArray<ProviderCliDiscoverySpec> = [
     authArgs: ["account", "show", "--query", "user.name", "--output", "tsv"],
     installHint: "Install Azure CLI, install the Azure DevOps extension, and run `az login`.",
     parseAuth: parseAzureAuth,
+  },
+];
+
+const API_PROVIDER_SPECS: ReadonlyArray<ProviderEnvDiscoverySpec> = [
+  {
+    kind: "bitbucket",
+    label: "Bitbucket",
+    installHint:
+      "Set T3CODE_BITBUCKET_EMAIL and T3CODE_BITBUCKET_API_TOKEN, or T3CODE_BITBUCKET_ACCESS_TOKEN.",
+    parseAuth: parseBitbucketAuth,
   },
 ];
 
@@ -220,6 +237,36 @@ export function parseAzureAuth(input: SourceControlAuthProbeInput): SourceContro
   });
 }
 
+export function parseBitbucketAuth(env: NodeJS.ProcessEnv): SourceControlProviderAuth {
+  const accessToken = normalizeText(env.T3CODE_BITBUCKET_ACCESS_TOKEN);
+  const email = normalizeText(env.T3CODE_BITBUCKET_EMAIL);
+  const apiToken = normalizeText(env.T3CODE_BITBUCKET_API_TOKEN);
+
+  if (accessToken) {
+    return auth({
+      status: "unknown",
+      host: "bitbucket.org",
+      detail: "Bitbucket access token is configured.",
+    });
+  }
+
+  if (email && apiToken) {
+    return auth({
+      status: "unknown",
+      account: email,
+      host: "bitbucket.org",
+      detail: "Bitbucket API token is configured.",
+    });
+  }
+
+  return auth({
+    status: "unauthenticated",
+    host: "bitbucket.org",
+    detail:
+      "Set T3CODE_BITBUCKET_EMAIL and T3CODE_BITBUCKET_API_TOKEN, or T3CODE_BITBUCKET_ACCESS_TOKEN.",
+  });
+}
+
 function probeVersion(input: {
   readonly executable: string;
   readonly args: ReadonlyArray<string>;
@@ -339,6 +386,21 @@ function discoverProvider(input: {
   );
 }
 
+function discoverApiProvider(input: {
+  readonly spec: ProviderEnvDiscoverySpec;
+  readonly env: NodeJS.ProcessEnv;
+}): Effect.Effect<SourceControlProviderDiscoveryItem> {
+  return Effect.succeed({
+    kind: input.spec.kind,
+    label: input.spec.label,
+    status: "available" as const,
+    version: null,
+    installHint: input.spec.installHint,
+    detail: "Configured through server environment variables.",
+    auth: input.spec.parseAuth(input.env),
+  });
+}
+
 export const layer = Layer.succeed(SourceControlDiscovery, {
   discover: (input) => {
     const cwd = input?.cwd ?? process.cwd();
@@ -347,7 +409,10 @@ export const layer = Layer.succeed(SourceControlDiscovery, {
         concurrency: "unbounded",
       }),
       sourceControlProviders: Effect.all(
-        PROVIDER_SPECS.map((spec) => discoverProvider({ spec, cwd })),
+        [
+          ...PROVIDER_SPECS.map((spec) => discoverProvider({ spec, cwd })),
+          ...API_PROVIDER_SPECS.map((spec) => discoverApiProvider({ spec, env: process.env })),
+        ],
         { concurrency: "unbounded" },
       ),
     });

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { parseAzureAuth, parseGitHubAuth, parseGitLabAuth } from "./SourceControlDiscovery";
+import {
+  parseAzureAuth,
+  parseBitbucketAuth,
+  parseGitHubAuth,
+  parseGitLabAuth,
+} from "./SourceControlDiscovery";
 
 describe("SourceControlDiscovery", () => {
   it("parses GitHub CLI authenticated status without leaking token lines", () => {
@@ -49,6 +54,30 @@ describe("SourceControlDiscovery", () => {
       account: "maria@example.com",
       host: "dev.azure.com",
       detail: "Azure CLI account is active.",
+    });
+  });
+
+  it("parses Bitbucket API token configuration", () => {
+    expect(
+      parseBitbucketAuth({
+        T3CODE_BITBUCKET_EMAIL: "maria@example.com",
+        T3CODE_BITBUCKET_API_TOKEN: "secret",
+      }),
+    ).toEqual({
+      status: "unknown",
+      account: "maria@example.com",
+      host: "bitbucket.org",
+      detail: "Bitbucket API token is configured.",
+    });
+  });
+
+  it("reports Bitbucket as unauthenticated without credentials", () => {
+    expect(parseBitbucketAuth({})).toEqual({
+      status: "unauthenticated",
+      account: null,
+      host: "bitbucket.org",
+      detail:
+        "Set T3CODE_BITBUCKET_EMAIL and T3CODE_BITBUCKET_API_TOKEN, or T3CODE_BITBUCKET_ACCESS_TOKEN.",
     });
   });
 });
