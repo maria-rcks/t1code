@@ -61,6 +61,7 @@ import { ProviderInstanceRegistry } from "./provider/Services/ProviderInstanceRe
 import { ProviderMaintenanceRunner } from "./provider/providerMaintenanceRunner.ts";
 import { ProcessDiagnostics } from "./diagnostics/ProcessDiagnostics.ts";
 import { TraceDiagnostics } from "./diagnostics/TraceDiagnostics.ts";
+import { SourceControlDiscovery } from "./sourceControl/SourceControlDiscovery.ts";
 import { redactServerSettingsForClient, ServerSettingsService } from "./serverSettings";
 import { CheckpointDiffQuery } from "./checkpointing/Services/CheckpointDiffQuery";
 import { clamp } from "effect/Number";
@@ -225,6 +226,7 @@ export type ServerCoreRuntimeServices =
   | ProviderMaintenanceRunner
   | ProcessDiagnostics
   | TraceDiagnostics
+  | SourceControlDiscovery
   | ServerSettingsService;
 
 export type ServerRuntimeServices =
@@ -275,6 +277,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const providerMaintenanceRunner = yield* ProviderMaintenanceRunner;
   const processDiagnostics = yield* ProcessDiagnostics;
   const traceDiagnostics = yield* TraceDiagnostics;
+  const sourceControlDiscovery = yield* SourceControlDiscovery;
   const serverSettings = yield* ServerSettingsService;
   const git = yield* GitCore;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -1021,6 +1024,9 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         const body = stripRequestTag(request.body);
         return yield* processDiagnostics.signal(body);
       }
+
+      case WS_METHODS.serverDiscoverSourceControl:
+        return yield* sourceControlDiscovery.discover({ cwd });
 
       case WS_METHODS.serverGetSettings:
         return yield* serverSettings.getSettings.pipe(Effect.map(redactServerSettingsForClient));

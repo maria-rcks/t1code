@@ -30,6 +30,7 @@ import {
   type ServerSettings,
   type ServerProvider,
   type ServerProviderStatus,
+  type SourceControlDiscoveryResult,
   type KeybindingsConfig,
   type ResolvedKeybindingsConfig,
   type WsPushChannel,
@@ -66,6 +67,10 @@ import {
   type ProcessDiagnosticsShape,
 } from "./diagnostics/ProcessDiagnostics.ts";
 import { TraceDiagnostics, type TraceDiagnosticsShape } from "./diagnostics/TraceDiagnostics.ts";
+import {
+  SourceControlDiscovery,
+  type SourceControlDiscoveryShape,
+} from "./sourceControl/SourceControlDiscovery.ts";
 import { Open, type OpenShape } from "./open";
 import { GitManager, type GitManagerShape } from "./git/Services/GitManager.ts";
 import type { GitCoreShape } from "./git/Services/GitCore.ts";
@@ -127,6 +132,25 @@ const defaultTraceDiagnostics: TraceDiagnosticsShape = {
       latestWarningAndErrorLogs: [],
       partialFailure: null,
       error: null,
+    }),
+};
+
+const defaultSourceControlDiscovery: SourceControlDiscoveryShape = {
+  discover: () =>
+    Effect.succeed({
+      versionControlSystems: [
+        {
+          kind: "git",
+          implemented: true,
+          label: "Git",
+          executable: "git",
+          status: "available",
+          version: "git version 2.50.0",
+          installHint: "Install Git and make sure `git` is available on PATH.",
+          detail: null,
+        },
+      ],
+      sourceControlProviders: [],
     }),
 };
 
@@ -557,6 +581,7 @@ describe("WebSocket Server", () => {
       providerMaintenanceRunner?: ProviderMaintenanceRunnerShape;
       processDiagnostics?: ProcessDiagnosticsShape;
       traceDiagnostics?: TraceDiagnosticsShape;
+      sourceControlDiscovery?: SourceControlDiscoveryShape;
       providerHealth?: ProviderHealthShape;
       open?: OpenShape;
       gitManager?: GitManagerShape;
@@ -586,6 +611,10 @@ describe("WebSocket Server", () => {
     const traceDiagnosticsLayer = Layer.succeed(
       TraceDiagnostics,
       options.traceDiagnostics ?? defaultTraceDiagnostics,
+    );
+    const sourceControlDiscoveryLayer = Layer.succeed(
+      SourceControlDiscovery,
+      options.sourceControlDiscovery ?? defaultSourceControlDiscovery,
     );
     const serverConfigLayer = Layer.succeed(ServerConfig, {
       mode: "web",
@@ -635,6 +664,7 @@ describe("WebSocket Server", () => {
       Layer.provideMerge(providerMaintenanceLayer),
       Layer.provideMerge(traceDiagnosticsLayer),
       Layer.provideMerge(processDiagnosticsLayer),
+      Layer.provideMerge(sourceControlDiscoveryLayer),
       Layer.provideMerge(ProviderEventLoggersLive),
       Layer.provideMerge(ServerSettingsLive),
       Layer.provideMerge(openLayer),
@@ -1302,6 +1332,66 @@ describe("WebSocket Server", () => {
         recordCount: 2,
         failureCount: 1,
         slowSpanCount: 1,
+      }),
+    );
+  });
+
+  it("discovers source control tools over websocket", async () => {
+    const discover = vi.fn<SourceControlDiscoveryShape["discover"]>(() =>
+      Effect.succeed({
+        versionControlSystems: [
+          {
+            kind: "git",
+            implemented: true,
+            label: "Git",
+            executable: "git",
+            status: "available",
+            version: "git version 2.50.0",
+            installHint: "Install Git and make sure `git` is available on PATH.",
+            detail: null,
+          },
+        ],
+        sourceControlProviders: [
+          {
+            kind: "github",
+            label: "GitHub",
+            executable: "gh",
+            status: "available",
+            version: "gh version 2.75.0",
+            installHint: "Install GitHub CLI and run `gh auth login`.",
+            detail: null,
+            auth: {
+              status: "authenticated",
+              account: "octocat",
+              host: "github.com",
+              detail: "Logged in to github.com account octocat",
+            },
+          },
+        ],
+      }),
+    );
+    server = await createTestServer({
+      cwd: "/my/workspace",
+      sourceControlDiscovery: { discover },
+    });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.serverDiscoverSourceControl);
+    expect(response.error).toBeUndefined();
+    expect(discover).toHaveBeenCalledWith({ cwd: "/my/workspace" });
+    expect(response.result as SourceControlDiscoveryResult).toEqual(
+      expect.objectContaining({
+        versionControlSystems: [expect.objectContaining({ kind: "git", status: "available" })],
+        sourceControlProviders: [
+          expect.objectContaining({
+            kind: "github",
+            auth: expect.objectContaining({ status: "authenticated", account: "octocat" }),
+          }),
+        ],
       }),
     );
   });

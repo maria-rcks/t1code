@@ -36,6 +36,7 @@ import type {
   ServerTraceDiagnosticsResult,
 } from "./server";
 import type { ServerSettings, ServerSettingsPatch } from "./settings";
+import type { SourceControlDiscoveryResult } from "./sourceControl";
 import type {
   TerminalClearInput,
   TerminalCloseInput,
@@ -180,6 +181,7 @@ export interface NativeApi {
     getTraceDiagnostics: () => Promise<ServerTraceDiagnosticsResult>;
     getProcessDiagnostics: () => Promise<ServerProcessDiagnosticsResult>;
     signalProcess: (input: ServerSignalProcessInput) => Promise<ServerSignalProcessResult>;
+    discoverSourceControl: () => Promise<SourceControlDiscoveryResult>;
   };
   orchestration: {
     getSnapshot: () => Promise<OrchestrationReadModel>;

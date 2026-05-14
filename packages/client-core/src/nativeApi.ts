@@ -141,6 +141,7 @@ export function createTransportNativeApi(options: NativeApiAdapterOptions): {
       getProcessDiagnostics: () => transport.request(WS_METHODS.serverGetProcessDiagnostics),
       signalProcess: (input: ServerSignalProcessInput) =>
         transport.request(WS_METHODS.serverSignalProcess, input),
+      discoverSourceControl: () => transport.request(WS_METHODS.serverDiscoverSourceControl),
     },
     orchestration: {
       getSnapshot: () => transport.request(ORCHESTRATION_WS_METHODS.getSnapshot),

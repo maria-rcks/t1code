@@ -138,6 +138,18 @@ it.effect("accepts server.signalProcess requests", () =>
   }),
 );
 
+it.effect("accepts server.discoverSourceControl requests", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWebSocketRequest({
+      id: "req-source-control-1",
+      body: {
+        _tag: WS_METHODS.serverDiscoverSourceControl,
+      },
+    });
+    assert.strictEqual(parsed.body._tag, WS_METHODS.serverDiscoverSourceControl);
+  }),
+);
+
 it.effect("accepts typed websocket push envelopes with sequence", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeWsResponse({

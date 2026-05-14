@@ -28,6 +28,7 @@ import { ProviderInstanceRegistryHydrationLive } from "./provider/Layers/Provide
 import { layer as ProviderMaintenanceRunnerLive } from "./provider/providerMaintenanceRunner";
 import { layer as ProcessDiagnosticsLive } from "./diagnostics/ProcessDiagnostics";
 import { layer as TraceDiagnosticsLive } from "./diagnostics/TraceDiagnostics";
+import { layer as SourceControlDiscoveryLive } from "./sourceControl/SourceControlDiscovery";
 import { Server } from "./wsServer";
 import { ServerSettingsLive } from "./serverSettings";
 import { ServerLoggerLive } from "./serverLogger";
@@ -304,6 +305,7 @@ const LayerLive = (input: CliInput) =>
     ),
     Layer.provideMerge(TraceDiagnosticsLive),
     Layer.provideMerge(ProcessDiagnosticsLive),
+    Layer.provideMerge(SourceControlDiscoveryLive),
     Layer.provideMerge(ProviderEventLoggersLive),
     Layer.provideMerge(ServerSettingsLive),
     Layer.provideMerge(ProviderHealthLive),

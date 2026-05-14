@@ -56,6 +56,7 @@ import {
   type ServerSettings,
   type ServerSettingsPatch,
   type ServerTraceDiagnosticsResult,
+  type SourceControlDiscoveryResult,
 } from "@t3tools/contracts";
 import {
   DEFAULT_APP_SETTINGS,
@@ -3376,6 +3377,12 @@ export function App({
   );
   const [traceDiagnosticsError, setTraceDiagnosticsError] = useState<string | null>(null);
   const [isLoadingTraceDiagnostics, setIsLoadingTraceDiagnostics] = useState(false);
+  const [sourceControlDiscovery, setSourceControlDiscovery] =
+    useState<SourceControlDiscoveryResult | null>(null);
+  const [sourceControlDiscoveryError, setSourceControlDiscoveryError] = useState<string | null>(
+    null,
+  );
+  const [isLoadingSourceControlDiscovery, setIsLoadingSourceControlDiscovery] = useState(false);
   const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null);
   const [gitBranchList, setGitBranchList] = useState<GitListBranchesResult | null>(null);
   const [gitStateError, setGitStateError] = useState<string | null>(null);
@@ -3504,6 +3511,21 @@ export function App({
       setIsLoadingTraceDiagnostics(false);
     }
   }, [api, isLoadingTraceDiagnostics, logger]);
+  const refreshSourceControlDiscovery = useCallback(async () => {
+    if (!api || isLoadingSourceControlDiscovery) return;
+    setIsLoadingSourceControlDiscovery(true);
+    setSourceControlDiscoveryError(null);
+    try {
+      const discovery = await api.server.discoverSourceControl();
+      setSourceControlDiscovery(discovery);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Source control discovery failed";
+      logger.log("server.sourceControl.discoveryFailed", { error: message });
+      setSourceControlDiscoveryError(message);
+    } finally {
+      setIsLoadingSourceControlDiscovery(false);
+    }
+  }, [api, isLoadingSourceControlDiscovery, logger]);
   const signalProcess = useCallback(
     async (pid: number, signal: ServerProcessSignal) => {
       if (!api || signalingProcessPid) return;
@@ -11543,6 +11565,115 @@ export function App({
                               />
                             </box>
                           </box>
+                        </SettingsRow>
+                        <SettingsRow
+                          title="Source control"
+                          description="Discover Git and hosted source-control CLI integrations available to the server."
+                          status={
+                            <>
+                              <text
+                                content={
+                                  sourceControlDiscovery
+                                    ? `${sourceControlDiscovery.versionControlSystems.filter((item) => item.status === "available").length}/${sourceControlDiscovery.versionControlSystems.length} VCS · ${sourceControlDiscovery.sourceControlProviders.filter((item) => item.status === "available").length}/${sourceControlDiscovery.sourceControlProviders.length} providers`
+                                    : "No source-control snapshot loaded."
+                                }
+                                style={{ fg: PALETTE.text }}
+                              />
+                              <text
+                                content={
+                                  sourceControlDiscovery
+                                    ? "Provider auth is checked through local CLI status commands."
+                                    : "Refresh to probe git, gh, glab, and az on the server PATH."
+                                }
+                                style={{ fg: PALETTE.subtle }}
+                              />
+                              {sourceControlDiscoveryError ? (
+                                <text
+                                  content={sourceControlDiscoveryError}
+                                  style={{ fg: PALETTE.warning }}
+                                />
+                              ) : null}
+                            </>
+                          }
+                          control={
+                            <ToolbarButton
+                              label={isLoadingSourceControlDiscovery ? "Refreshing..." : "Refresh"}
+                              disabled={!api || isLoadingSourceControlDiscovery}
+                              onPress={() => {
+                                void refreshSourceControlDiscovery();
+                              }}
+                            />
+                          }
+                        >
+                          {sourceControlDiscovery ? (
+                            <>
+                              {sourceControlDiscovery.versionControlSystems.map((item) => (
+                                <box
+                                  key={`vcs:${item.kind}`}
+                                  style={{
+                                    flexDirection: "column",
+                                    backgroundColor: PALETTE.surfaceAlt,
+                                    paddingLeft: 1,
+                                    paddingRight: 1,
+                                    marginBottom: 1,
+                                  }}
+                                >
+                                  <text
+                                    content={`${item.label} · ${item.status}${item.implemented ? "" : " · not implemented"}`}
+                                    style={{
+                                      fg:
+                                        item.status === "available"
+                                          ? PALETTE.text
+                                          : PALETTE.warning,
+                                    }}
+                                  />
+                                  <text
+                                    content={item.version ?? item.detail ?? item.installHint}
+                                    style={{ fg: PALETTE.subtle }}
+                                  />
+                                </box>
+                              ))}
+                              {sourceControlDiscovery.sourceControlProviders.map((item) => (
+                                <box
+                                  key={`source-control:${item.kind}`}
+                                  style={{
+                                    flexDirection: "column",
+                                    backgroundColor: PALETTE.surfaceAlt,
+                                    paddingLeft: 1,
+                                    paddingRight: 1,
+                                    marginBottom: 1,
+                                  }}
+                                >
+                                  <text
+                                    content={`${item.label} · ${item.status} · auth ${item.auth.status}`}
+                                    style={{
+                                      fg:
+                                        item.status === "available" &&
+                                        item.auth.status === "authenticated"
+                                          ? PALETTE.text
+                                          : PALETTE.warning,
+                                    }}
+                                  />
+                                  <text
+                                    content={
+                                      item.auth.account
+                                        ? `${item.auth.account}${item.auth.host ? ` on ${item.auth.host}` : ""}`
+                                        : (item.version ??
+                                          item.auth.detail ??
+                                          item.detail ??
+                                          item.installHint)
+                                    }
+                                    style={{ fg: PALETTE.subtle }}
+                                  />
+                                </box>
+                              ))}
+                            </>
+                          ) : (
+                            <text
+                              content="No source-control tools discovered yet."
+                              style={{ fg: PALETTE.subtle }}
+                            />
+                          )}
                         </SettingsRow>
                         <SettingsRow
                           title="Process diagnostics"
