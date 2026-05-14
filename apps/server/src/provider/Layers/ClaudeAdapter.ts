@@ -26,6 +26,7 @@ import {
   type CanonicalRequestType,
   EventId,
   ProviderInstanceId,
+  ProviderDriverKind,
   type ProviderApprovalDecision,
   ProviderItemId,
   type ProviderRuntimeEvent,
@@ -87,7 +88,7 @@ import {
 import { ClaudeAdapter, type ClaudeAdapterShape } from "../Services/ClaudeAdapter.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
-const PROVIDER = "claudeAgent" as const;
+const PROVIDER = ProviderDriverKind.makeUnsafe("claudeAgent");
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
 const decodeProviderInstanceId = Schema.decodeUnknownSync(ProviderInstanceId);
 type ClaudeTextStreamKind = Extract<RuntimeContentStreamKind, "assistant_text" | "reasoning_text">;
@@ -3156,7 +3157,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   );
 
   return {
-    provider: PROVIDER,
+    provider: "claudeAgent",
     capabilities: {
       sessionModelSwitch: "in-session",
     },

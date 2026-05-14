@@ -6,6 +6,64 @@ import { ProviderRuntimeEvent } from "./providerRuntime";
 const decodeRuntimeEvent = Schema.decodeUnknownSync(ProviderRuntimeEvent);
 
 describe("ProviderRuntimeEvent", () => {
+  it("accepts fork-provided driver kinds as branded slugs", () => {
+    const parsed = decodeRuntimeEvent({
+      type: "session.started",
+      eventId: "event-ollama-session",
+      provider: "ollama",
+      providerInstanceId: "ollama_local",
+      createdAt: "2026-02-28T00:00:00.000Z",
+      threadId: "thread-1",
+      payload: {
+        message: "started",
+      },
+    });
+
+    expect(parsed.provider).toBe("ollama");
+    expect(parsed.providerInstanceId).toBe("ollama_local");
+  });
+
+  it("accepts OpenCode and ACP raw runtime sources", () => {
+    const parsed = decodeRuntimeEvent({
+      type: "content.delta",
+      eventId: "event-opencode-raw",
+      provider: "opencode",
+      providerInstanceId: "opencode",
+      createdAt: "2026-02-28T00:00:00.000Z",
+      threadId: "thread-1",
+      turnId: "turn-1",
+      itemId: "item-1",
+      raw: {
+        source: "opencode.sdk.event",
+        payload: { type: "message.part.updated" },
+      },
+      payload: {
+        streamKind: "assistant_text",
+        delta: "hello",
+      },
+    });
+
+    expect(parsed.raw?.source).toBe("opencode.sdk.event");
+
+    const acpParsed = decodeRuntimeEvent({
+      type: "runtime.warning",
+      eventId: "event-acp-raw",
+      provider: "cursor",
+      providerInstanceId: "cursor",
+      createdAt: "2026-02-28T00:00:00.000Z",
+      threadId: "thread-1",
+      raw: {
+        source: "acp.cursor.extension",
+        payload: { method: "initialize" },
+      },
+      payload: {
+        message: "extension warning",
+      },
+    });
+
+    expect(acpParsed.raw?.source).toBe("acp.cursor.extension");
+  });
+
   it("decodes turn.plan.updated for plan rendering", () => {
     const parsed = decodeRuntimeEvent({
       type: "turn.plan.updated",

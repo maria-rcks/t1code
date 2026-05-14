@@ -12,6 +12,7 @@ import {
   type CanonicalRequestType,
   CodexSettings,
   type ProviderEvent,
+  ProviderDriverKind,
   ProviderInstanceId,
   type ProviderRuntimeEvent,
   type ProviderRequestKind,
@@ -60,7 +61,7 @@ const isCodexSessionRuntimeThreadIdMissingError = Schema.is(
 );
 const isCodexResumeCursorSchema = Schema.is(CodexResumeCursorSchema);
 
-const PROVIDER = "codex" as const;
+const PROVIDER = ProviderDriverKind.makeUnsafe("codex");
 const decodeCodexSettings = Schema.decodeUnknownSync(CodexSettings);
 const decodeProviderInstanceId = Schema.decodeUnknownSync(ProviderInstanceId);
 
@@ -426,7 +427,7 @@ function runtimeEventBase(
   const refs = providerRefsFromEvent(event);
   return {
     eventId: event.id,
-    provider: event.provider,
+    provider: PROVIDER,
     threadId: canonicalThreadId,
     createdAt: event.createdAt,
     ...(event.turnId ? { turnId: event.turnId } : {}),
@@ -1666,7 +1667,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
   );
 
   return {
-    provider: PROVIDER,
+    provider: "codex",
     capabilities: {
       sessionModelSwitch: "in-session",
     },

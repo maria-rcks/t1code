@@ -4,6 +4,7 @@ import {
   ApprovalRequestId,
   EventId,
   ProviderApprovalDecision,
+  ProviderDriverKind,
   ProviderRuntimeEvent,
   RuntimeSessionId,
   ProviderSession,
@@ -225,6 +226,7 @@ function missingSessionEffect(
 export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapterHarnessOptions) =>
   Effect.gen(function* () {
     const provider = options?.provider ?? "codex";
+    const runtimeProvider = ProviderDriverKind.makeUnsafe(provider);
     const runtimeEvents = yield* Queue.unbounded<ProviderRuntimeEvent>();
     let sessionCount = 0;
     const sessions = new Map<ThreadId, SessionState>();
@@ -364,7 +366,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
           yield* emit({
             type: "turn.completed",
             eventId: EventId.makeUnsafe(randomUUID()),
-            provider,
+            provider: runtimeProvider,
             createdAt: nowIso(),
             threadId: state.snapshot.threadId,
             turnId,
