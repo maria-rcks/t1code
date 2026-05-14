@@ -4,6 +4,7 @@ import {
   type ProviderInstanceId,
   type ProviderKind,
   type ProviderModelOptions,
+  type ProviderOptionSelection,
   type RuntimeMode,
 } from "@t3tools/contracts";
 import fs from "node:fs/promises";
@@ -55,6 +56,7 @@ export interface TuiPrefs {
   readonly draftProviderInstanceId?: ProviderInstanceId;
   readonly draftModel?: string;
   readonly draftModelOptions?: ProviderModelOptions;
+  readonly draftProviderOptionSelections?: readonly ProviderOptionSelection[];
   readonly draftRuntimeMode?: RuntimeMode;
   readonly draftInteractionMode?: "default" | "plan";
   readonly diffOpen?: boolean;

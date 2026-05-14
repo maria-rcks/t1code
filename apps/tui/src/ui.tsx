@@ -47,6 +47,7 @@ import {
   type ProviderInteractionMode,
   type ProviderKind,
   type ProviderModelOptions,
+  type ProviderOptionDescriptor,
   type ProviderOptionSelection,
   type RuntimeMode,
   type ServerConfig,
@@ -126,6 +127,9 @@ import {
   createModelSelection,
   getDefaultReasoningEffort,
   getModelOptions,
+  getProviderOptionCurrentLabel,
+  getProviderOptionCurrentValue,
+  getProviderOptionDescriptors,
   getReasoningEffortOptions,
   isClaudeUltrathinkPrompt,
   normalizeModelSlug,
@@ -199,6 +203,12 @@ import {
   type InstallProviderSettings,
   type ProviderSettingsKey,
 } from "./providerSettings";
+import {
+  filterProviderOptionSelectionsForDescriptors,
+  mergeProviderOptionSelections,
+  modelOptionsToProviderOptionSelections,
+  setProviderOptionSelection,
+} from "./providerOptionSelections";
 import {
   normalizeRendererThemeMode,
   resolveTerminalPalette,
@@ -1247,29 +1257,34 @@ function getDispatchModelOptions(
 function modelOptionSelectionsForDispatch(
   provider: ProviderKind,
   modelOptions: ProviderModelOptions | null | undefined,
+  providerOptionSelections: ReadonlyArray<ProviderOptionSelection> | null | undefined,
+  descriptors: ReadonlyArray<ProviderOptionDescriptor> | null | undefined,
 ): ReadonlyArray<ProviderOptionSelection> | undefined {
-  const selections: ProviderOptionSelection[] = [];
-  if (provider === "codex") {
-    const options = modelOptions?.codex;
-    if (options?.reasoningEffort) {
-      selections.push({ id: "reasoningEffort", value: options.reasoningEffort });
-    }
-    if (options?.fastMode === true) {
-      selections.push({ id: "fastMode", value: true });
-    }
-  } else {
-    const options = modelOptions?.claudeAgent;
-    if (options?.thinking !== undefined) {
-      selections.push({ id: "thinking", value: options.thinking });
-    }
-    if (options?.effort) {
-      selections.push({ id: "effort", value: options.effort });
-    }
-    if (options?.fastMode === true) {
-      selections.push({ id: "fastMode", value: true });
-    }
+  const merged = mergeProviderOptionSelections(
+    modelOptionsToProviderOptionSelections(provider, modelOptions),
+    providerOptionSelections,
+  );
+  if (!descriptors || descriptors.length === 0) {
+    return merged;
   }
-  return selections.length > 0 ? selections : undefined;
+  return filterProviderOptionSelectionsForDescriptors(merged, descriptors);
+}
+
+function getOptionDefaultValue(descriptor: ProviderOptionDescriptor): string | boolean | undefined {
+  if (descriptor.type === "boolean") return false;
+  return descriptor.options.find((option) => option.isDefault)?.id;
+}
+
+function selectedContextWindowLabel(
+  descriptors: ReadonlyArray<ProviderOptionDescriptor>,
+): string | null {
+  const descriptor = descriptors.find(
+    (candidate) => candidate.type === "select" && candidate.id === "contextWindow",
+  );
+  if (!descriptor) return null;
+  const currentValue = getProviderOptionCurrentValue(descriptor);
+  if (!currentValue || currentValue === getOptionDefaultValue(descriptor)) return null;
+  return getProviderOptionCurrentLabel(descriptor) ?? String(currentValue);
 }
 
 function resolveModelName(
@@ -3406,6 +3421,9 @@ export function App({
     useState<ProviderInstanceId>(DEFAULT_CODEX_INSTANCE_ID);
   const [draftModel, setDraftModel] = useState(DEFAULT_MODEL_BY_PROVIDER.codex);
   const [draftModelOptions, setDraftModelOptions] = useState<ProviderModelOptions | undefined>();
+  const [draftProviderOptionSelections, setDraftProviderOptionSelections] = useState<
+    readonly ProviderOptionSelection[] | undefined
+  >();
   const [draftRuntimeMode, setDraftRuntimeMode] = useState<RuntimeMode>("full-access");
   const [draftInteractionMode, setDraftInteractionMode] = useState<"default" | "plan">("default");
   const [focusArea, setFocusArea] = useState<FocusArea>("composer");
@@ -3970,6 +3988,7 @@ export function App({
         );
         setDraftModel(resolvePersistedModel(nextProvider, prefs.draftModel));
         setDraftModelOptions(prefs.draftModelOptions);
+        setDraftProviderOptionSelections(prefs.draftProviderOptionSelections);
         setDraftRuntimeMode(normalizePersistedRuntimeMode(prefs.draftRuntimeMode) ?? "full-access");
         setDraftInteractionMode(
           normalizePersistedInteractionMode(prefs.draftInteractionMode) ?? "default",
@@ -4192,6 +4211,9 @@ export function App({
       diffView,
       ...(tuiThemeId !== DEFAULT_TUI_THEME_ID ? { tuiThemeId } : {}),
       ...(draftModelOptions ? { draftModelOptions } : {}),
+      ...(draftProviderOptionSelections
+        ? { draftProviderOptionSelections: draftProviderOptionSelections }
+        : {}),
       ...(selectedProjectId ? { selectedProjectId } : {}),
       ...(selectedThreadId ? { selectedThreadId } : {}),
       ...(expandedProjectIds.size > 0 ? { expandedProjectIds: [...expandedProjectIds] } : {}),
@@ -4213,6 +4235,7 @@ export function App({
     draftInteractionMode,
     draftModel,
     draftModelOptions,
+    draftProviderOptionSelections,
     draftProvider,
     draftProviderInstanceId,
     draftRuntimeMode,
@@ -4554,6 +4577,27 @@ export function App({
   const visibleModelSearchResults = isModelSearchActive ? modelSearchResults : [];
   const draftProviderModelOptions =
     providerModelOptionsByInstance.get(draftProviderInstanceId) ?? [];
+  const draftModelCapabilities = useMemo(
+    () =>
+      providerSnapshots
+        .find((provider) => provider.instanceId === draftProviderInstanceId)
+        ?.models.find((model) => model.slug === draftModel)?.capabilities ?? null,
+    [draftModel, draftProviderInstanceId, providerSnapshots],
+  );
+  const draftProviderOptionDescriptors = useMemo(
+    () =>
+      draftModelCapabilities
+        ? getProviderOptionDescriptors({
+            caps: draftModelCapabilities,
+            selections: mergeProviderOptionSelections(
+              modelOptionsToProviderOptionSelections(draftProvider, draftModelOptions),
+              draftProviderOptionSelections,
+            ),
+          })
+        : [],
+    [draftModelCapabilities, draftModelOptions, draftProvider, draftProviderOptionSelections],
+  );
+  const selectedContextWindow = selectedContextWindowLabel(draftProviderOptionDescriptors);
   const providerOptionsForDispatch = useMemo(
     () => getProviderStartOptions(appSettings),
     [appSettings],
@@ -8439,7 +8483,12 @@ export function App({
       const dispatchModelSelection = createModelSelection(
         draftProviderInstanceId,
         draftModel,
-        modelOptionSelectionsForDispatch(draftProvider, dispatchModelOptions),
+        modelOptionSelectionsForDispatch(
+          draftProvider,
+          dispatchModelOptions,
+          draftProviderOptionSelections,
+          draftProviderOptionDescriptors,
+        ),
       );
       const serializedMentionText = composerMentions.map((mention) => `@${mention.path}`).join(" ");
       const promptTextForSend =
@@ -8934,6 +8983,23 @@ export function App({
       setStatus("traits");
     },
     [draftModel, logger],
+  );
+
+  const updateDraftProviderOptionSelection = useCallback(
+    (selection: ProviderOptionSelection) => {
+      setDraftProviderOptionSelections((current) => {
+        const next = setProviderOptionSelection(current, selection);
+        logger.log("controls.providerOptionSelectionChanged", {
+          provider: draftProvider,
+          instanceId: draftProviderInstanceId,
+          model: draftModel,
+          selection,
+        });
+        return next;
+      });
+      setStatus("traits");
+    },
+    [draftModel, draftProvider, draftProviderInstanceId, logger],
   );
 
   function toggleTraitsMenu(event?: SidebarMouseEvent) {
@@ -9469,12 +9535,18 @@ export function App({
     activeThreadIsRunning,
     hasSendableContent: composerHasSendableContent,
   });
-  const composerTraits = composerTraitsLabel(
+  const legacyComposerTraits = composerTraitsLabel(
     draftProvider,
     draftModel,
     composer,
     draftModelOptions,
   );
+  const composerTraits = [
+    legacyComposerTraits,
+    selectedContextWindow ? `${selectedContextWindow} ctx` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const composerPlaceholder = imagePasteInFlight
     ? "Attaching clipboard image..."
     : activePendingApproval
@@ -9686,8 +9758,37 @@ export function App({
       );
     }
 
+    const contextWindowDescriptor = draftProviderOptionDescriptors.find(
+      (descriptor) => descriptor.type === "select" && descriptor.id === "contextWindow",
+    );
+    if (contextWindowDescriptor?.type === "select") {
+      const currentContextWindow = getProviderOptionCurrentValue(contextWindowDescriptor);
+      for (const option of contextWindowDescriptor.options) {
+        items.push({
+          id: `claude-context-window-${option.id}`,
+          section: contextWindowDescriptor.label,
+          label: `${option.label}${option.isDefault ? " (default)" : ""}`,
+          selected: currentContextWindow === option.id,
+          onSelect: () => {
+            updateDraftProviderOptionSelection({
+              id: contextWindowDescriptor.id,
+              value: option.id,
+            });
+          },
+        });
+      }
+    }
+
     return items;
-  }, [composer, draftModel, draftModelOptions, draftProvider, updateDraftProviderModelOptions]);
+  }, [
+    composer,
+    draftModel,
+    draftModelOptions,
+    draftProvider,
+    draftProviderOptionDescriptors,
+    updateDraftProviderModelOptions,
+    updateDraftProviderOptionSelection,
+  ]);
   useEffect(() => {
     if (traitsMenuItems.length === 0) {
       setTraitsMenuIndex(0);
