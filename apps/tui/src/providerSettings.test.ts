@@ -7,6 +7,7 @@ import {
 } from "@t3tools/contracts";
 import { Schema } from "effect";
 import {
+  ADDITIONAL_COMING_SOON_MODEL_PROVIDER_OPTIONS,
   COMING_SOON_INSTALL_PROVIDER_OPTIONS,
   INSTALL_PROVIDER_SETTINGS,
   buildDeleteProviderInstancePatch,
@@ -76,6 +77,18 @@ describe("providerSettings", () => {
       { provider: "gemini", title: "Gemini" },
       { provider: "acpRegistry", title: "ACP Registry" },
       { provider: "piAgent", title: "Pi Agent" },
+    ]);
+  });
+
+  it("exposes additional coming soon model picker options", () => {
+    expect(
+      ADDITIONAL_COMING_SOON_MODEL_PROVIDER_OPTIONS.map((option) => ({
+        provider: option.provider,
+        title: option.title,
+      })),
+    ).toEqual([
+      { provider: "gemini", title: "Gemini" },
+      { provider: "githubCopilot", title: "GitHub Copilot" },
     ]);
   });
 

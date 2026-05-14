@@ -61,6 +61,10 @@ export type ComingSoonInstallProviderOption = {
   readonly provider: ProviderDriverKind;
   readonly title: string;
 };
+export type ComingSoonModelProviderOption = {
+  readonly provider: ProviderDriverKind;
+  readonly title: string;
+};
 type DefaultProviderInstancePatch = {
   readonly accentColor?: ProviderInstanceConfig["accentColor"] | undefined;
   readonly displayName?: ProviderInstanceConfig["displayName"] | undefined;
@@ -187,6 +191,18 @@ export const COMING_SOON_INSTALL_PROVIDER_OPTIONS: readonly ComingSoonInstallPro
     title: "Pi Agent",
   },
 ];
+
+export const ADDITIONAL_COMING_SOON_MODEL_PROVIDER_OPTIONS: readonly ComingSoonModelProviderOption[] =
+  [
+    {
+      provider: decodeProviderDriverKind("gemini"),
+      title: "Gemini",
+    },
+    {
+      provider: decodeProviderDriverKind("githubCopilot"),
+      title: "GitHub Copilot",
+    },
+  ];
 
 export function providerDriverKindForSettingsKey(
   provider: ProviderSettingsKey,

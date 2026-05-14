@@ -182,6 +182,7 @@ import {
 import { openExternalUrl } from "./openExternal";
 import { type TuiPrefs, readPrefs, writePrefs } from "./prefs";
 import {
+  ADDITIONAL_COMING_SOON_MODEL_PROVIDER_OPTIONS,
   COMING_SOON_INSTALL_PROVIDER_OPTIONS,
   INSTALL_PROVIDER_SETTINGS,
   buildDeleteProviderInstancePatch,
@@ -2463,7 +2464,10 @@ const COMING_SOON_MODEL_PROVIDER_OPTIONS = [
     id: option.value,
     label: option.label,
   })),
-  { id: "gemini", label: "Gemini" },
+  ...ADDITIONAL_COMING_SOON_MODEL_PROVIDER_OPTIONS.map((option) => ({
+    id: option.provider,
+    label: option.title,
+  })),
 ] as const;
 
 type ModelMenuInstanceEntry = {
