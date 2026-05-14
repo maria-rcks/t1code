@@ -13,13 +13,15 @@ import type { ProviderInstance } from "../ProviderDriver.ts";
 import { ProviderInstanceRegistry } from "../Services/ProviderInstanceRegistry.ts";
 import { ProviderRegistry } from "../Services/ProviderRegistry.ts";
 import { makeProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
-import { ProviderRegistryLive } from "./ProviderRegistry.ts";
+import { ProviderRegistryLive, selectProvidersByKind } from "./ProviderRegistry.ts";
 
 const decodeProviderDriverKind = Schema.decodeUnknownSync(ProviderDriverKind);
 const decodeProviderInstanceId = Schema.decodeUnknownSync(ProviderInstanceId);
 const CODEX_DRIVER = decodeProviderDriverKind("codex");
+const CLAUDE_DRIVER = decodeProviderDriverKind("claudeAgent");
 const GHOST_DRIVER = decodeProviderDriverKind("ghostDriver");
 const CODEX_INSTANCE_ID = decodeProviderInstanceId("codex");
+const CLAUDE_INSTANCE_ID = decodeProviderInstanceId("claudeAgent");
 const GHOST_INSTANCE_ID = decodeProviderInstanceId("ghostDriver");
 
 const maintenanceCapabilities = makeProviderMaintenanceCapabilities({
@@ -140,6 +142,25 @@ function makeTestLayer(input: {
 }
 
 describe("ProviderRegistryLive", () => {
+  it("selects provider snapshots by driver kind", () => {
+    const providers = [
+      makeProvider({ instanceId: CODEX_INSTANCE_ID, driver: CODEX_DRIVER }),
+      makeProvider({
+        instanceId: CLAUDE_INSTANCE_ID,
+        driver: CLAUDE_DRIVER,
+        displayName: "Claude",
+      }),
+      unavailableProvider,
+    ];
+
+    assert.deepStrictEqual(
+      selectProvidersByKind(providers, new Set([CODEX_DRIVER, GHOST_DRIVER])).map(
+        (provider) => provider.instanceId,
+      ),
+      [CODEX_INSTANCE_ID, GHOST_INSTANCE_ID],
+    );
+  });
+
   it.effect("aggregates live and unavailable provider snapshots", () =>
     Effect.gen(function* () {
       const snapshotRef = yield* Ref.make(makeProvider({ version: "fallback" }));
