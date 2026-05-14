@@ -10,6 +10,7 @@
  * @module ProviderServiceLive
  */
 import {
+  defaultInstanceIdForDriver,
   NonNegativeInt,
   ThreadId,
   ProviderInterruptTurnInput,
@@ -18,6 +19,8 @@ import {
   ProviderSendTurnInput,
   ProviderSessionStartInput,
   ProviderStopSessionInput,
+  type ProviderDriverKind,
+  type ProviderInstanceId,
   type ProviderKind,
   type ProviderRuntimeEvent,
   type ProviderSession,
@@ -156,6 +159,10 @@ function decodeRoutableProvider(
   );
 }
 
+function defaultProviderInstanceId(provider: ProviderKind): ProviderInstanceId {
+  return defaultInstanceIdForDriver(provider as ProviderDriverKind);
+}
+
 const makeProviderService = (options?: ProviderServiceLiveOptions) =>
   Effect.gen(function* () {
     const analytics = yield* Effect.service(AnalyticsService);
@@ -185,6 +192,7 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
       session: ProviderSession,
       threadId: ThreadId,
       extra?: {
+        readonly providerInstanceId?: ProviderInstanceId;
         readonly modelOptions?: unknown;
         readonly providerOptions?: unknown;
         readonly lastRuntimeEvent?: string;
@@ -196,9 +204,11 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           session.provider,
           "ProviderService.upsertSessionBinding",
         );
+        const providerInstanceId = session.providerInstanceId ?? extra?.providerInstanceId;
         yield* directory.upsert({
           threadId,
           provider,
+          ...(providerInstanceId ? { providerInstanceId } : {}),
           runtimeMode: session.runtimeMode,
           status: toRuntimeStatus(session),
           ...(session.resumeCursor !== undefined ? { resumeCursor: session.resumeCursor } : {}),
@@ -206,10 +216,14 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
         });
       });
 
-    const providers = yield* registry.listProviders();
-    const adapters = yield* Effect.forEach(providers, (provider) =>
-      registry.getByProvider(provider),
-    );
+    const adapters =
+      registry.listInstances && registry.getByInstance
+        ? yield* Effect.forEach(yield* registry.listInstances(), (instanceId) =>
+            registry.getByInstance!(instanceId),
+          )
+        : yield* Effect.forEach(yield* registry.listProviders(), (provider) =>
+            registry.getByProvider(provider),
+          );
     const processRuntimeEvent = (event: ProviderRuntimeEvent): Effect.Effect<void> =>
       publishRuntimeEvent(event);
 
@@ -229,7 +243,17 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
       readonly operation: string;
     }) =>
       Effect.gen(function* () {
-        const adapter = yield* registry.getByProvider(input.binding.provider);
+        const instanceId =
+          input.binding.providerInstanceId ?? defaultProviderInstanceId(input.binding.provider);
+        const adapter =
+          registry.getByInstance !== undefined
+            ? yield* registry.getByInstance(instanceId)
+            : instanceId === defaultProviderInstanceId(input.binding.provider)
+              ? yield* registry.getByProvider(input.binding.provider)
+              : yield* toValidationError(
+                  input.operation,
+                  `Provider instance '${instanceId}' is not supported by this server build.`,
+                );
         const hasResumeCursor =
           input.binding.resumeCursor !== null && input.binding.resumeCursor !== undefined;
         const hasActiveSession = yield* adapter.hasSession(input.binding.threadId);
@@ -239,7 +263,9 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
             (session) => session.threadId === input.binding.threadId,
           );
           if (existing) {
-            yield* upsertSessionBinding(existing, input.binding.threadId);
+            yield* upsertSessionBinding(existing, input.binding.threadId, {
+              providerInstanceId: instanceId,
+            });
             yield* analytics.record("provider.session.recovered", {
               provider: existing.provider,
               strategy: "adopt-existing",
@@ -263,6 +289,7 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
         const resumed = yield* adapter.startSession({
           threadId: input.binding.threadId,
           provider: input.binding.provider,
+          providerInstanceId: instanceId,
           ...(persistedCwd ? { cwd: persistedCwd } : {}),
           ...(persistedModelOptions ? { modelOptions: persistedModelOptions } : {}),
           ...(persistedProviderOptions ? { providerOptions: persistedProviderOptions } : {}),
@@ -276,7 +303,9 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           );
         }
 
-        yield* upsertSessionBinding(resumed, input.binding.threadId);
+        yield* upsertSessionBinding(resumed, input.binding.threadId, {
+          providerInstanceId: instanceId,
+        });
         yield* analytics.record("provider.session.recovered", {
           provider: resumed.provider,
           strategy: "resume-thread",
@@ -299,19 +328,34 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
             `Cannot route thread '${input.threadId}' because no persisted provider binding exists.`,
           );
         }
-        const adapter = yield* registry.getByProvider(binding.provider);
+        const instanceId =
+          binding.providerInstanceId ?? defaultProviderInstanceId(binding.provider);
+        const adapter =
+          registry.getByInstance !== undefined
+            ? yield* registry.getByInstance(instanceId)
+            : instanceId === defaultProviderInstanceId(binding.provider)
+              ? yield* registry.getByProvider(binding.provider)
+              : yield* toValidationError(
+                  input.operation,
+                  `Provider instance '${instanceId}' is not supported by this server build.`,
+                );
 
         const hasRequestedSession = yield* adapter.hasSession(input.threadId);
         if (hasRequestedSession) {
-          return { adapter, threadId: input.threadId, isActive: true } as const;
+          return { adapter, instanceId, threadId: input.threadId, isActive: true } as const;
         }
 
         if (!input.allowRecovery) {
-          return { adapter, threadId: input.threadId, isActive: false } as const;
+          return { adapter, instanceId, threadId: input.threadId, isActive: false } as const;
         }
 
         const recovered = yield* recoverSessionForThread({ binding, operation: input.operation });
-        return { adapter: recovered.adapter, threadId: input.threadId, isActive: true } as const;
+        return {
+          adapter: recovered.adapter,
+          instanceId,
+          threadId: input.threadId,
+          isActive: true,
+        } as const;
       });
 
     const startSession: ProviderServiceShape["startSession"] = (threadId, rawInput) =>
@@ -327,23 +371,58 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           threadId,
           provider: parsed.provider ?? "codex",
         };
-        const provider = yield* decodeRoutableProvider(
+        const requestedProvider = yield* decodeRoutableProvider(
           input.provider,
           "ProviderService.startSession",
         );
+        const requestedInstanceId =
+          input.providerInstanceId ??
+          input.modelSelection?.instanceId ??
+          defaultProviderInstanceId(requestedProvider);
+        const instanceInfo =
+          registry.getInstanceInfo !== undefined
+            ? yield* registry.getInstanceInfo(requestedInstanceId)
+            : undefined;
+        const provider = yield* decodeRoutableProvider(
+          instanceInfo?.driverKind ?? requestedProvider,
+          "ProviderService.startSession",
+        );
+        if (input.provider !== undefined && input.provider !== provider) {
+          return yield* toValidationError(
+            "ProviderService.startSession",
+            `Provider instance '${requestedInstanceId}' belongs to provider '${provider}', not '${input.provider}'.`,
+          );
+        }
+        if (instanceInfo && !instanceInfo.enabled) {
+          return yield* toValidationError(
+            "ProviderService.startSession",
+            `Provider instance '${requestedInstanceId}' is disabled in T1 Code settings.`,
+          );
+        }
         const persistedBinding = Option.getOrUndefined(yield* directory.getBinding(threadId));
         const effectiveResumeCursor =
           input.resumeCursor ??
-          (persistedBinding?.provider === provider ? persistedBinding.resumeCursor : undefined);
+          (persistedBinding?.providerInstanceId === requestedInstanceId
+            ? persistedBinding.resumeCursor
+            : undefined);
         const effectiveCwd =
           input.cwd ??
-          (persistedBinding?.provider === provider
+          (persistedBinding?.providerInstanceId === requestedInstanceId
             ? readPersistedCwd(persistedBinding.runtimePayload)
             : undefined);
-        const adapter = yield* registry.getByProvider(provider);
+        const adapter =
+          registry.getByInstance !== undefined
+            ? yield* registry.getByInstance(requestedInstanceId)
+            : requestedInstanceId === defaultProviderInstanceId(provider)
+              ? yield* registry.getByProvider(provider)
+              : yield* toValidationError(
+                  "ProviderService.startSession",
+                  `Provider instance '${requestedInstanceId}' is not supported by this server build.`,
+                );
         const session = yield* adapter.startSession({
           ...input,
           provider,
+          providerInstanceId: requestedInstanceId,
           ...(effectiveCwd !== undefined ? { cwd: effectiveCwd } : {}),
           ...(effectiveResumeCursor !== undefined ? { resumeCursor: effectiveResumeCursor } : {}),
         });
@@ -354,20 +433,25 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
             `Adapter/provider mismatch: requested '${adapter.provider}', received '${session.provider}'.`,
           );
         }
+        const sessionWithInstance = {
+          ...session,
+          providerInstanceId: session.providerInstanceId ?? requestedInstanceId,
+        };
 
-        yield* upsertSessionBinding(session, threadId, {
+        yield* upsertSessionBinding(sessionWithInstance, threadId, {
+          providerInstanceId: requestedInstanceId,
           modelOptions: input.modelOptions,
           providerOptions: input.providerOptions,
         });
         yield* analytics.record("provider.session.started", {
-          provider: session.provider,
+          provider: sessionWithInstance.provider,
           runtimeMode: input.runtimeMode,
-          hasResumeCursor: session.resumeCursor !== undefined,
+          hasResumeCursor: sessionWithInstance.resumeCursor !== undefined,
           hasCwd: typeof effectiveCwd === "string" && effectiveCwd.trim().length > 0,
           hasModel: typeof input.model === "string" && input.model.trim().length > 0,
         });
 
-        return session;
+        return sessionWithInstance;
       });
 
     const sendTurn: ProviderServiceShape["sendTurn"] = (rawInput) =>
@@ -397,6 +481,7 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
         yield* directory.upsert({
           threadId: input.threadId,
           provider: routed.adapter.provider,
+          providerInstanceId: routed.instanceId,
           status: "running",
           ...(turn.resumeCursor !== undefined ? { resumeCursor: turn.resumeCursor } : {}),
           runtimePayload: {

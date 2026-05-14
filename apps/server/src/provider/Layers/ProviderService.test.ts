@@ -12,6 +12,8 @@ import type {
 import {
   ApprovalRequestId,
   EventId,
+  ProviderDriverKind,
+  ProviderInstanceId,
   type ProviderKind,
   ProviderSessionStartInput,
   ThreadId,
@@ -71,6 +73,7 @@ function makeFakeCodexAdapter(provider: ProviderKind = "codex") {
       const now = new Date().toISOString();
       const session: ProviderSession = {
         provider,
+        ...(input.providerInstanceId ? { providerInstanceId: input.providerInstanceId } : {}),
         status: "ready",
         runtimeMode: input.runtimeMode,
         threadId: input.threadId,
@@ -1086,6 +1089,85 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
 
 const validation = makeProviderServiceLayer();
 validation.layer("ProviderServiceLive validation", (it) => {
+  it.effect("routes sessions and turns through provider instance ids", () =>
+    Effect.gen(function* () {
+      const defaultCodex = makeFakeCodexAdapter();
+      const customCodex = makeFakeCodexAdapter();
+      const customInstanceId = ProviderInstanceId.makeUnsafe("codex_custom");
+      const registry: typeof ProviderAdapterRegistry.Service = {
+        getByProvider: (provider) =>
+          provider === "codex"
+            ? Effect.succeed(defaultCodex.adapter)
+            : Effect.fail(new ProviderUnsupportedError({ provider })),
+        listProviders: () => Effect.succeed(["codex"]),
+        getByInstance: (instanceId) =>
+          instanceId === customInstanceId
+            ? Effect.succeed(customCodex.adapter)
+            : Effect.fail(new ProviderUnsupportedError({ provider: instanceId })),
+        getInstanceInfo: (instanceId) =>
+          instanceId === customInstanceId
+            ? Effect.succeed({
+                instanceId,
+                driverKind: ProviderDriverKind.makeUnsafe("codex"),
+                displayName: "Custom Codex",
+                enabled: true,
+                continuationIdentity: {
+                  driverKind: ProviderDriverKind.makeUnsafe("codex"),
+                  continuationKey: "codex:instance:codex_custom",
+                },
+              })
+            : Effect.fail(new ProviderUnsupportedError({ provider: instanceId })),
+        listInstances: () => Effect.succeed([customInstanceId]),
+      };
+      const providerAdapterLayer = Layer.succeed(ProviderAdapterRegistry, registry);
+      const runtimeRepositoryLayer = ProviderSessionRuntimeRepositoryLive.pipe(
+        Layer.provide(SqlitePersistenceMemory),
+      );
+      const directoryLayer = ProviderSessionDirectoryLive.pipe(
+        Layer.provide(runtimeRepositoryLayer),
+      );
+      const testLayer = makeProviderServiceLive().pipe(
+        Layer.provide(providerAdapterLayer),
+        Layer.provide(directoryLayer),
+        Layer.provideMerge(AnalyticsService.layerTest),
+      );
+
+      const threadId = asThreadId("thread-custom-instance");
+      yield* Effect.gen(function* () {
+        const provider = yield* ProviderService;
+        yield* provider.startSession(threadId, {
+          threadId,
+          provider: "codex",
+          providerInstanceId: customInstanceId,
+          modelSelection: {
+            instanceId: customInstanceId,
+            model: "gpt-5.4",
+          },
+          runtimeMode: "full-access",
+        });
+        yield* provider.sendTurn({
+          threadId,
+          input: "hello",
+        });
+      }).pipe(Effect.provide(testLayer));
+
+      assert.equal(defaultCodex.startSession.mock.calls.length, 0);
+      assert.equal(defaultCodex.sendTurn.mock.calls.length, 0);
+      assert.equal(customCodex.startSession.mock.calls.length, 1);
+      assert.equal(customCodex.sendTurn.mock.calls.length, 1);
+
+      const runtime = yield* Effect.gen(function* () {
+        const repository = yield* ProviderSessionRuntimeRepository;
+        return yield* repository.getByThreadId({ threadId });
+      }).pipe(Effect.provide(runtimeRepositoryLayer));
+
+      assert.equal(Option.isSome(runtime), true);
+      if (Option.isSome(runtime)) {
+        assert.equal(runtime.value.providerInstanceId, customInstanceId);
+      }
+    }),
+  );
+
   it.effect("returns ProviderValidationError for invalid input payloads", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService;
