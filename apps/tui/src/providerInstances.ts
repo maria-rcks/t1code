@@ -26,6 +26,8 @@ export interface ProviderInstanceEntry {
 export interface ProviderInstanceModelOption {
   readonly slug: string;
   readonly name: string;
+  readonly shortName?: string;
+  readonly subProvider?: string;
   readonly isCustom: boolean;
 }
 
@@ -155,11 +157,20 @@ export function getProviderInstanceModelOptions(
   const instanceModels = getProviderInstanceModels(providers, instanceId);
   if (instanceModels.length === 0) return fallbackOptions;
 
-  const options: ProviderInstanceModelOption[] = instanceModels.map((model) => ({
-    slug: model.slug,
-    name: model.name,
-    isCustom: model.isCustom,
-  }));
+  const options: ProviderInstanceModelOption[] = instanceModels.map((model) => {
+    const option: ProviderInstanceModelOption = {
+      slug: model.slug,
+      name: model.name,
+      isCustom: model.isCustom,
+    };
+    if (model.shortName) {
+      Object.assign(option, { shortName: model.shortName });
+    }
+    if (model.subProvider) {
+      Object.assign(option, { subProvider: model.subProvider });
+    }
+    return option;
+  });
   const seen = new Set(options.map((option) => option.slug));
   for (const option of fallbackOptions) {
     if (!option.isCustom || seen.has(option.slug)) {

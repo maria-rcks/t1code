@@ -1,6 +1,8 @@
 export interface ModelPickerSearchItem {
   readonly name: string;
   readonly slug: string;
+  readonly shortName?: string;
+  readonly subProvider?: string;
   readonly driverKind: string;
   readonly providerDisplayName: string;
   readonly isFavorite?: boolean;
@@ -19,9 +21,20 @@ function searchFields(item: ModelPickerSearchItem): ReadonlyArray<string> {
   return [
     item.name,
     item.slug,
+    ...(item.shortName ? [item.shortName] : []),
+    ...(item.subProvider ? [item.subProvider] : []),
     item.driverKind,
     item.providerDisplayName,
-    `${item.providerDisplayName} ${item.name} ${item.slug}`,
+    [
+      item.providerDisplayName,
+      item.name,
+      item.shortName,
+      item.subProvider,
+      item.slug,
+      item.driverKind,
+    ]
+      .filter((field): field is string => typeof field === "string" && field.length > 0)
+      .join(" "),
   ].map(normalizeModelPickerSearchQuery);
 }
 

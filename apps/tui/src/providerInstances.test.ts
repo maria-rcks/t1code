@@ -150,6 +150,35 @@ describe("providerInstances", () => {
     ]);
   });
 
+  it("preserves server model display metadata in picker options", () => {
+    const providers = [
+      provider({
+        instanceId: "codex",
+        driver: "codex",
+        models: [
+          {
+            ...model("claude-opus-4-6"),
+            name: "Claude Opus 4.6",
+            shortName: "Opus 4.6",
+            subProvider: "GitHub Copilot",
+          },
+        ],
+      }),
+    ];
+
+    expect(
+      getProviderInstanceModelOptions(providers, decodeProviderInstanceId("codex"), []),
+    ).toEqual([
+      {
+        slug: "claude-opus-4-6",
+        name: "Claude Opus 4.6",
+        shortName: "Opus 4.6",
+        subProvider: "GitHub Copilot",
+        isCustom: false,
+      },
+    ]);
+  });
+
   it("resolves unavailable selections to the first enabled available instance", () => {
     const providers = [
       provider({

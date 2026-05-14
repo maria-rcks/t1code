@@ -44,4 +44,18 @@ describe("model picker search", () => {
     );
     expect(rankModelPickerItems(items, "does-not-exist")).toEqual([]);
   });
+
+  it("matches model short names and subproviders", () => {
+    const copilotModel = {
+      name: "Claude Opus 4.6",
+      slug: "claude-opus-4-6",
+      shortName: "Opus 4.6",
+      subProvider: "GitHub Copilot",
+      driverKind: "opencode",
+      providerDisplayName: "OpenCode",
+    };
+
+    expect(scoreModelPickerSearch(copilotModel, "copilot opus")).not.toBeNull();
+    expect(scoreModelPickerSearch(copilotModel, "github 4.6")).not.toBeNull();
+  });
 });

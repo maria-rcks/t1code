@@ -684,14 +684,10 @@ function readProviderInstanceConfigStringArray(
 }
 
 function applyProviderModelPreferences(
-  options: ReadonlyArray<{
-    readonly slug: string;
-    readonly name: string;
-    readonly isCustom: boolean;
-  }>,
+  options: ReadonlyArray<ModelMenuOption>,
   appSettings: AppSettings,
   instanceId: ProviderInstanceId,
-): ReadonlyArray<{ readonly slug: string; readonly name: string; readonly isCustom: boolean }> {
+): ReadonlyArray<ModelMenuOption> {
   const preferences = appSettings.providerModelPreferences[instanceId];
   const hiddenModels = new Set(preferences?.hiddenModels ?? []);
   return sortProviderModelPreferenceOptions(options, appSettings, instanceId).filter(
@@ -700,14 +696,10 @@ function applyProviderModelPreferences(
 }
 
 function sortProviderModelPreferenceOptions(
-  options: ReadonlyArray<{
-    readonly slug: string;
-    readonly name: string;
-    readonly isCustom: boolean;
-  }>,
+  options: ReadonlyArray<ModelMenuOption>,
   appSettings: AppSettings,
   instanceId: ProviderInstanceId,
-): ReadonlyArray<{ readonly slug: string; readonly name: string; readonly isCustom: boolean }> {
+): ReadonlyArray<ModelMenuOption> {
   const preferences = appSettings.providerModelPreferences[instanceId];
   const modelOrder = new Map((preferences?.modelOrder ?? []).map((slug, index) => [slug, index]));
   const favoriteModels = new Set(
@@ -1116,9 +1108,15 @@ function modelControlLabel(
   options: ReadonlyArray<{
     readonly slug: string;
     readonly name: string;
+    readonly shortName?: string;
   }> = MODEL_OPTIONS_BY_PROVIDER[provider],
 ): string {
   const resolvedModel = resolveSelectableModel(provider, model, options) ?? model;
+  const selectedOption = options.find((option) => option.slug === resolvedModel);
+
+  if (selectedOption?.shortName) {
+    return selectedOption.shortName;
+  }
 
   if (provider === "codex") {
     return resolveModelName(provider, resolvedModel, options);
@@ -2475,6 +2473,8 @@ type ModelMenuInstanceEntry = {
 type ModelMenuOption = {
   readonly slug: string;
   readonly name: string;
+  readonly shortName?: string;
+  readonly subProvider?: string;
   readonly isCustom: boolean;
 };
 type ModelSearchMenuItem = {
@@ -2486,8 +2486,20 @@ type ModelSearchMenuItem = {
   readonly option: ModelMenuOption;
   readonly name: string;
   readonly slug: string;
+  readonly shortName?: string;
+  readonly subProvider?: string;
   readonly isFavorite: boolean;
 };
+
+function modelMenuDisplayName(option: ModelMenuOption, options?: { preferShortName?: boolean }) {
+  if (options?.preferShortName && option.shortName) return option.shortName;
+  return option.name;
+}
+
+function modelMenuDisplayLabel(option: ModelMenuOption): string {
+  const name = modelMenuDisplayName(option, { preferShortName: true });
+  return option.subProvider ? `${option.subProvider} · ${name}` : name;
+}
 
 const FALLBACK_MODEL_MENU_INSTANCE_ENTRIES: ReadonlyArray<ModelMenuInstanceEntry> =
   AVAILABLE_MODEL_PROVIDER_OPTIONS.map((option) => ({
@@ -4416,10 +4428,7 @@ export function App({
     [modelMenuEntries],
   );
   const rawProviderModelOptionsByInstance = useMemo(() => {
-    const optionsByInstance = new Map<
-      ProviderInstanceId,
-      ReadonlyArray<{ readonly slug: string; readonly name: string; readonly isCustom: boolean }>
-    >();
+    const optionsByInstance = new Map<ProviderInstanceId, ReadonlyArray<ModelMenuOption>>();
     for (const entry of modelMenuEntries) {
       const fallbackOptions = getAppModelOptions(
         entry.provider,
@@ -4440,10 +4449,7 @@ export function App({
     providerSnapshots,
   ]);
   const providerModelOptionsByInstance = useMemo(() => {
-    const optionsByInstance = new Map<
-      ProviderInstanceId,
-      ReadonlyArray<{ readonly slug: string; readonly name: string; readonly isCustom: boolean }>
-    >();
+    const optionsByInstance = new Map<ProviderInstanceId, ReadonlyArray<ModelMenuOption>>();
     for (const entry of modelMenuEntries) {
       optionsByInstance.set(
         entry.instanceId,
@@ -4473,6 +4479,8 @@ export function App({
           option,
           name: option.name,
           slug: option.slug,
+          ...(option.shortName ? { shortName: option.shortName } : {}),
+          ...(option.subProvider ? { subProvider: option.subProvider } : {}),
           isFavorite: favoriteKeys.has(`${entry.instanceId}:${option.slug}`),
         });
       }
@@ -4674,9 +4682,12 @@ export function App({
   const selectedCustomModelProviderLabel =
     MODEL_PROVIDER_SETTINGS.find((entry) => entry.provider === selectedCustomModelProvider)
       ?.title ?? "Codex";
-  const selectedGitTextGenerationModelLabel =
-    gitTextGenerationModelOptions.find((option) => option.slug === currentGitTextGenerationModel)
-      ?.name ?? currentGitTextGenerationModel;
+  const selectedGitTextGenerationModelOption = gitTextGenerationModelOptions.find(
+    (option) => option.slug === currentGitTextGenerationModel,
+  );
+  const selectedGitTextGenerationModelLabel = selectedGitTextGenerationModelOption
+    ? modelMenuDisplayLabel(selectedGitTextGenerationModelOption)
+    : currentGitTextGenerationModel;
   const selectedGitTextGenerationProviderLabel = currentGitTextGenerationEntry.displayName;
   const totalCustomModels =
     customModelsByProvider.codex.length + customModelsByProvider.claudeAgent.length;
@@ -4842,7 +4853,7 @@ export function App({
       case "git-model":
         return gitTextGenerationModelOptions.map((option) => ({
           id: option.slug,
-          label: option.name,
+          label: modelMenuDisplayLabel(option),
           selected: option.slug === currentGitTextGenerationModel,
           onSelect: () => {
             updateGitTextGenerationModel(currentGitTextGenerationInstanceId, option.slug);
@@ -13999,7 +14010,7 @@ export function App({
                             : providerPickerIcon(item.provider)
                         }
                         iconColor={item.accentColor ?? providerColor(item.provider)}
-                        label={`${item.option.name} · ${item.providerDisplayName}`}
+                        label={`${modelMenuDisplayLabel(item.option)} · ${item.providerDisplayName}`}
                         active={index === modelMenuIndex}
                         onHover={() => setModelMenuIndex(index)}
                         onPress={() => applyDraftProviderModel(item.instanceId, item.slug)}
@@ -14020,7 +14031,7 @@ export function App({
                           ? "󰄬"
                           : " "
                       }
-                      label={option.name}
+                      label={modelMenuDisplayLabel(option)}
                       active={index === modelMenuIndex}
                       onHover={() => setModelMenuIndex(index)}
                       onPress={() => applyDraftProviderModel(modelMenuInstanceId, option.slug)}
