@@ -1041,6 +1041,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* sourceControlRepositories.cloneRepository(body);
       }
 
+      case WS_METHODS.sourceControlPublishRepository: {
+        const body = stripRequestTag(request.body);
+        return yield* sourceControlRepositories.publishRepository(body);
+      }
+
       case WS_METHODS.serverGetSettings:
         return yield* serverSettings.getSettings.pipe(Effect.map(redactServerSettingsForClient));
 

@@ -9,6 +9,7 @@ import {
   type ServerProviderUpdateInput,
   type ServerRefreshProvidersInput,
   type SourceControlCloneRepositoryInput,
+  type SourceControlPublishRepositoryInput,
   type SourceControlRepositoryLookupInput,
   WS_CHANNELS,
   WS_METHODS,
@@ -135,6 +136,8 @@ export function createTransportNativeApi(options: NativeApiAdapterOptions): {
         transport.request(WS_METHODS.sourceControlLookupRepository, input),
       cloneRepository: (input: SourceControlCloneRepositoryInput) =>
         transport.request(WS_METHODS.sourceControlCloneRepository, input, { timeoutMs: null }),
+      publishRepository: (input: SourceControlPublishRepositoryInput) =>
+        transport.request(WS_METHODS.sourceControlPublishRepository, input, { timeoutMs: null }),
     },
     server: {
       getConfig: () => transport.request(WS_METHODS.serverGetConfig),

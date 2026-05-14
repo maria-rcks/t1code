@@ -7,6 +7,7 @@
  */
 import { ServiceMap } from "effect";
 import type { Effect } from "effect";
+import type { SourceControlRepositoryVisibility } from "@t3tools/contracts";
 
 import type { ProcessRunResult } from "../../processRunner";
 import type { GitHubCliError } from "../Errors.ts";
@@ -65,6 +66,15 @@ export interface GitHubCliShape {
   readonly getRepositoryCloneUrls: (input: {
     readonly cwd: string;
     readonly repository: string;
+  }) => Effect.Effect<GitHubRepositoryCloneUrls, GitHubCliError>;
+
+  /**
+   * Create a GitHub repository and return its clone URLs.
+   */
+  readonly createRepository: (input: {
+    readonly cwd: string;
+    readonly repository: string;
+    readonly visibility: SourceControlRepositoryVisibility;
   }) => Effect.Effect<GitHubRepositoryCloneUrls, GitHubCliError>;
 
   /**

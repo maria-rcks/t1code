@@ -6,6 +6,7 @@ import { Effect, Layer } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ServerConfig, type ServerConfigShape } from "../config";
+import { GitCommandError } from "../git/Errors";
 import { GitCore, type GitCoreShape } from "../git/Services/GitCore";
 import { GitHubCli, type GitHubCliShape } from "../git/Services/GitHubCli";
 import {
@@ -57,8 +58,8 @@ const serverConfigLayer = Layer.succeed(ServerConfig, {
 } satisfies ServerConfigShape);
 
 function makeLayer(input: {
-  gitHubCli: Pick<GitHubCliShape, "getRepositoryCloneUrls">;
-  gitCore?: Pick<GitCoreShape, "execute">;
+  gitHubCli: Pick<GitHubCliShape, "getRepositoryCloneUrls"> & Partial<GitHubCliShape>;
+  gitCore?: Pick<GitCoreShape, "execute"> & Partial<GitCoreShape>;
 }) {
   return SourceControlRepositoryServiceLive.pipe(
     Layer.provideMerge(serverConfigLayer),
@@ -66,6 +67,9 @@ function makeLayer(input: {
     Layer.provideMerge(
       Layer.succeed(GitHubCli, {
         getRepositoryCloneUrls: input.gitHubCli.getRepositoryCloneUrls,
+        createRepository:
+          input.gitHubCli.createRepository ??
+          (() => Effect.die("GitHubCli.createRepository should not be called in this test")),
       } as GitHubCliShape),
     ),
     Layer.provideMerge(
@@ -73,6 +77,12 @@ function makeLayer(input: {
         execute:
           input.gitCore?.execute ??
           (() => Effect.die("GitCore.execute should not be called in this test")),
+        ensureRemote:
+          input.gitCore?.ensureRemote ??
+          (() => Effect.die("GitCore.ensureRemote should not be called in this test")),
+        statusDetails:
+          input.gitCore?.statusDetails ??
+          (() => Effect.die("GitCore.statusDetails should not be called in this test")),
       } as GitCoreShape),
     ),
   );
@@ -250,5 +260,170 @@ describe("SourceControlRepositoryService", () => {
 
     expect(result._tag).toBe("Failure");
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("publishes by creating the repository, adding a remote, and pushing upstream", async () => {
+    const execute = vi.fn<GitCoreShape["execute"]>((input) =>
+      Effect.succeed({
+        code: 0,
+        stdout: input.args.includes("push") ? "pushed" : "",
+        stderr: "",
+      }),
+    );
+    const ensureRemote = vi.fn<GitCoreShape["ensureRemote"]>(() => Effect.succeed("origin"));
+    const statusDetails = vi.fn<GitCoreShape["statusDetails"]>(() =>
+      Effect.succeed({
+        branch: "feature/source-control",
+        hasWorkingTreeChanges: false,
+        workingTree: {
+          files: [],
+          insertions: 0,
+          deletions: 0,
+        },
+        hasUpstream: false,
+        aheadCount: 1,
+        behindCount: 0,
+        upstreamRef: null,
+      }),
+    );
+    const createRepository = vi.fn<GitHubCliShape["createRepository"]>(() =>
+      Effect.succeed({
+        nameWithOwner: "octocat/hello-world",
+        url: "https://github.com/octocat/hello-world",
+        sshUrl: "git@github.com:octocat/hello-world.git",
+      }),
+    );
+    const layer = makeLayer({
+      gitHubCli: {
+        getRepositoryCloneUrls: () => Effect.die("GitHubCli should not be called"),
+        createRepository,
+      },
+      gitCore: {
+        execute,
+        ensureRemote,
+        statusDetails,
+      },
+    });
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* SourceControlRepositoryService;
+        return yield* service.publishRepository({
+          cwd: "/workspace",
+          provider: "github",
+          repository: "octocat/hello-world",
+          visibility: "private",
+          remoteName: "origin",
+          protocol: "ssh",
+        });
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(createRepository).toHaveBeenCalledWith({
+      cwd: "/workspace",
+      repository: "octocat/hello-world",
+      visibility: "private",
+    });
+    expect(ensureRemote).toHaveBeenCalledWith({
+      cwd: "/workspace",
+      preferredName: "origin",
+      url: "git@github.com:octocat/hello-world.git",
+    });
+    expect(execute).toHaveBeenNthCalledWith(1, {
+      operation: "SourceControlRepositoryService.publishRepository.headCheck",
+      cwd: "/workspace",
+      args: ["rev-parse", "--verify", "HEAD"],
+    });
+    expect(execute).toHaveBeenNthCalledWith(2, {
+      operation: "SourceControlRepositoryService.publishRepository.push",
+      cwd: "/workspace",
+      args: ["push", "-u", "origin", "HEAD:refs/heads/feature/source-control"],
+      timeoutMs: 120_000,
+      maxOutputBytes: 256 * 1024,
+    });
+    expect(result).toEqual({
+      repository: {
+        provider: "github",
+        nameWithOwner: "octocat/hello-world",
+        url: "https://github.com/octocat/hello-world",
+        sshUrl: "git@github.com:octocat/hello-world.git",
+      },
+      remoteName: "origin",
+      remoteUrl: "git@github.com:octocat/hello-world.git",
+      branch: "feature/source-control",
+      upstreamBranch: "origin/feature/source-control",
+      status: "pushed",
+    });
+  });
+
+  it("adds the publish remote without pushing empty repositories", async () => {
+    const execute = vi.fn<GitCoreShape["execute"]>(() =>
+      Effect.fail(
+        new GitCommandError({
+          operation: "SourceControlRepositoryService.publishRepository.headCheck",
+          command: "git rev-parse --verify HEAD",
+          cwd: "/workspace",
+          detail: "no HEAD",
+        }),
+      ),
+    );
+    const ensureRemote = vi.fn<GitCoreShape["ensureRemote"]>(() => Effect.succeed("origin"));
+    const statusDetails = vi.fn<GitCoreShape["statusDetails"]>(() =>
+      Effect.succeed({
+        branch: "main",
+        hasWorkingTreeChanges: false,
+        workingTree: {
+          files: [],
+          insertions: 0,
+          deletions: 0,
+        },
+        hasUpstream: false,
+        aheadCount: 0,
+        behindCount: 0,
+        upstreamRef: null,
+      }),
+    );
+    const layer = makeLayer({
+      gitHubCli: {
+        getRepositoryCloneUrls: () => Effect.die("GitHubCli should not be called"),
+        createRepository: () =>
+          Effect.succeed({
+            nameWithOwner: "octocat/empty",
+            url: "https://github.com/octocat/empty",
+            sshUrl: "git@github.com:octocat/empty.git",
+          }),
+      },
+      gitCore: {
+        execute,
+        ensureRemote,
+        statusDetails,
+      },
+    });
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* SourceControlRepositoryService;
+        return yield* service.publishRepository({
+          cwd: "/workspace",
+          provider: "github",
+          repository: "octocat/empty",
+          visibility: "public",
+        });
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      repository: {
+        provider: "github",
+        nameWithOwner: "octocat/empty",
+        url: "https://github.com/octocat/empty",
+        sshUrl: "git@github.com:octocat/empty.git",
+      },
+      remoteName: "origin",
+      remoteUrl: "git@github.com:octocat/empty.git",
+      branch: "main",
+      status: "remote_added",
+    });
   });
 });

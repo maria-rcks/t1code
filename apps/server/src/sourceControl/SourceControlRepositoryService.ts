@@ -3,6 +3,8 @@ import {
   type SourceControlCloneProtocol,
   type SourceControlCloneRepositoryInput,
   type SourceControlCloneRepositoryResult,
+  type SourceControlPublishRepositoryInput,
+  type SourceControlPublishRepositoryResult,
   SourceControlRepositoryError,
   type SourceControlProviderKind,
   type SourceControlRepositoryInfo,
@@ -23,6 +25,9 @@ export interface SourceControlRepositoryServiceShape {
   readonly cloneRepository: (
     input: SourceControlCloneRepositoryInput,
   ) => Effect.Effect<SourceControlCloneRepositoryResult, SourceControlRepositoryError>;
+  readonly publishRepository: (
+    input: SourceControlPublishRepositoryInput,
+  ) => Effect.Effect<SourceControlPublishRepositoryResult, SourceControlRepositoryError>;
 }
 
 export class SourceControlRepositoryService extends ServiceMap.Service<
@@ -222,6 +227,74 @@ export const make = Effect.fn("makeSourceControlRepositoryService")(function* ()
     } satisfies SourceControlCloneRepositoryResult;
   });
 
+  const publishRepository = Effect.fn("SourceControlRepositoryService.publishRepository")(
+    function* (input: SourceControlPublishRepositoryInput) {
+      if (input.provider !== "github") {
+        return yield* unsupportedProvider(input.provider, "publish");
+      }
+
+      const urls = yield* gitHubCli.createRepository({
+        cwd: input.cwd,
+        repository: input.repository.trim(),
+        visibility: input.visibility,
+      });
+      const repository = {
+        provider: "github",
+        nameWithOwner: urls.nameWithOwner,
+        url: urls.url,
+        sshUrl: urls.sshUrl,
+      } satisfies SourceControlRepositoryInfo;
+      const remoteUrl = selectRemoteUrl(repository, input.protocol);
+      const remoteName = yield* git.ensureRemote({
+        cwd: input.cwd,
+        preferredName: input.remoteName?.trim() || "origin",
+        url: remoteUrl,
+      });
+
+      const hasCommits = yield* git
+        .execute({
+          operation: "SourceControlRepositoryService.publishRepository.headCheck",
+          cwd: input.cwd,
+          args: ["rev-parse", "--verify", "HEAD"],
+        })
+        .pipe(
+          Effect.map(() => true),
+          Effect.catch(() => Effect.succeed(false)),
+        );
+      const details = yield* git
+        .statusDetails(input.cwd)
+        .pipe(Effect.catch(() => Effect.succeed(null)));
+      const branch = details?.branch ?? "main";
+
+      if (!hasCommits) {
+        return {
+          repository,
+          remoteName,
+          remoteUrl,
+          branch,
+          status: "remote_added" as const,
+        } satisfies SourceControlPublishRepositoryResult;
+      }
+
+      yield* git.execute({
+        operation: "SourceControlRepositoryService.publishRepository.push",
+        cwd: input.cwd,
+        args: ["push", "-u", remoteName, `HEAD:refs/heads/${branch}`],
+        timeoutMs: 120_000,
+        maxOutputBytes: 256 * 1024,
+      });
+
+      return {
+        repository,
+        remoteName,
+        remoteUrl,
+        branch,
+        upstreamBranch: `${remoteName}/${branch}`,
+        status: "pushed" as const,
+      } satisfies SourceControlPublishRepositoryResult;
+    },
+  );
+
   return SourceControlRepositoryService.of({
     lookupRepository: (input) =>
       lookupRepository(input).pipe(mapRepositoryError("lookupRepository", input.provider)),
@@ -229,6 +302,8 @@ export const make = Effect.fn("makeSourceControlRepositoryService")(function* ()
       cloneRepository(input).pipe(
         mapRepositoryError("cloneRepository", input.provider ?? "unknown"),
       ),
+    publishRepository: (input) =>
+      publishRepository(input).pipe(mapRepositoryError("publishRepository", input.provider)),
   });
 });
 

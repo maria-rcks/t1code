@@ -143,6 +143,37 @@ function normalizeRepositoryCloneUrls(
   };
 }
 
+function deriveRepositoryCloneUrlsFromCreateOutput(
+  stdout: string,
+  repository: string,
+): GitHubRepositoryCloneUrls {
+  const match = stdout.match(/https?:\/\/[^\s]+/);
+  if (match) {
+    const cleaned = match[0].replace(/\.git$/, "");
+    try {
+      const parsed = new URL(cleaned);
+      const pathname = parsed.pathname.replace(/^\/+|\/+$/g, "");
+      const segments = pathname.split("/").filter(Boolean);
+      if (segments.length === 2) {
+        const nameWithOwner = `${segments[0]}/${segments[1]}`;
+        return {
+          nameWithOwner,
+          url: `${parsed.origin}/${nameWithOwner}`,
+          sshUrl: `git@${parsed.host}:${nameWithOwner}.git`,
+        };
+      }
+    } catch {
+      // Fall through to input-derived GitHub defaults.
+    }
+  }
+
+  return {
+    nameWithOwner: repository,
+    url: `https://github.com/${repository}`,
+    sshUrl: `git@github.com:${repository}.git`,
+  };
+}
+
 function decodeGitHubJson<S extends Schema.Top>(
   raw: string,
   schema: S,
@@ -240,6 +271,15 @@ const makeGitHubCli = Effect.sync(() => {
           ),
         ),
         Effect.map(normalizeRepositoryCloneUrls),
+      ),
+    createRepository: (input) =>
+      execute({
+        cwd: input.cwd,
+        args: ["repo", "create", input.repository, `--${input.visibility}`],
+      }).pipe(
+        Effect.map((result) =>
+          deriveRepositoryCloneUrlsFromCreateOutput(result.stdout, input.repository),
+        ),
       ),
     createPullRequest: (input) =>
       execute({

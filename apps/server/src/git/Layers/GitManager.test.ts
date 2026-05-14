@@ -466,6 +466,11 @@ function createGitHubCliWithFakeGh(scenario: FakeGhScenario = {}): {
           cwd: input.cwd,
           args: ["repo", "view", input.repository, "--json", "nameWithOwner,url,sshUrl"],
         }).pipe(Effect.map((result) => JSON.parse(result.stdout))),
+      createRepository: (input) =>
+        execute({
+          cwd: input.cwd,
+          args: ["repo", "create", input.repository, `--${input.visibility}`],
+        }).pipe(Effect.map((result) => JSON.parse(result.stdout))),
       checkoutPullRequest: (input) =>
         execute({
           cwd: input.cwd,

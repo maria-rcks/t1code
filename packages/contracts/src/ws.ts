@@ -46,6 +46,7 @@ import {
 import { ServerSettingsPatch } from "./settings";
 import {
   SourceControlCloneRepositoryInput,
+  SourceControlPublishRepositoryInput,
   SourceControlRepositoryLookupInput,
 } from "./sourceControl";
 
@@ -98,6 +99,7 @@ export const WS_METHODS = {
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
   sourceControlCloneRepository: "sourceControl.cloneRepository",
+  sourceControlPublishRepository: "sourceControl.publishRepository",
 } as const;
 
 // ── Push Event Channels ──────────────────────────────────────────────
@@ -175,6 +177,7 @@ const WebSocketRequestBody = Schema.Union([
   // Source control methods
   tagRequestBody(WS_METHODS.sourceControlLookupRepository, SourceControlRepositoryLookupInput),
   tagRequestBody(WS_METHODS.sourceControlCloneRepository, SourceControlCloneRepositoryInput),
+  tagRequestBody(WS_METHODS.sourceControlPublishRepository, SourceControlPublishRepositoryInput),
 ]);
 
 export const WebSocketRequest = Schema.Struct({

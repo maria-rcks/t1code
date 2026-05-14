@@ -173,6 +173,20 @@ const defaultSourceControlRepositoryService: SourceControlRepositoryServiceShape
       remoteUrl: input.remoteUrl ?? "git@github.com:owner/repo.git",
       repository: null,
     }),
+  publishRepository: (input) =>
+    Effect.succeed({
+      repository: {
+        provider: input.provider,
+        nameWithOwner: input.repository,
+        url: `https://github.com/${input.repository}`,
+        sshUrl: `git@github.com:${input.repository}.git`,
+      },
+      remoteName: input.remoteName ?? "origin",
+      remoteUrl: `git@github.com:${input.repository}.git`,
+      branch: "main",
+      upstreamBranch: `${input.remoteName ?? "origin"}/main`,
+      status: "pushed",
+    }),
 };
 
 const defaultProviderStatuses: ReadonlyArray<ServerProviderStatus> = [
@@ -1513,6 +1527,68 @@ describe("WebSocket Server", () => {
         url: "https://github.com/octocat/hello-world",
         sshUrl: "git@github.com:octocat/hello-world.git",
       },
+    });
+  });
+
+  it("publishes source control repositories over websocket", async () => {
+    const publishRepository = vi.fn<SourceControlRepositoryServiceShape["publishRepository"]>(
+      (input) =>
+        Effect.succeed({
+          repository: {
+            provider: input.provider,
+            nameWithOwner: "octocat/hello-world",
+            url: "https://github.com/octocat/hello-world",
+            sshUrl: "git@github.com:octocat/hello-world.git",
+          },
+          remoteName: "origin",
+          remoteUrl: "git@github.com:octocat/hello-world.git",
+          branch: "main",
+          upstreamBranch: "origin/main",
+          status: "pushed",
+        }),
+    );
+    server = await createTestServer({
+      cwd: "/my/workspace",
+      sourceControlRepositoryService: {
+        ...defaultSourceControlRepositoryService,
+        publishRepository,
+      },
+    });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.sourceControlPublishRepository, {
+      cwd: "/tmp/hello-world",
+      provider: "github",
+      repository: "octocat/hello-world",
+      visibility: "private",
+      remoteName: "origin",
+      protocol: "ssh",
+    });
+    expect(response.error).toBeUndefined();
+    expect(publishRepository).toHaveBeenCalledWith({
+      cwd: "/tmp/hello-world",
+      provider: "github",
+      repository: "octocat/hello-world",
+      visibility: "private",
+      remoteName: "origin",
+      protocol: "ssh",
+    });
+    expect(response.result).toEqual({
+      repository: {
+        provider: "github",
+        nameWithOwner: "octocat/hello-world",
+        url: "https://github.com/octocat/hello-world",
+        sshUrl: "git@github.com:octocat/hello-world.git",
+      },
+      remoteName: "origin",
+      remoteUrl: "git@github.com:octocat/hello-world.git",
+      branch: "main",
+      upstreamBranch: "origin/main",
+      status: "pushed",
     });
   });
 

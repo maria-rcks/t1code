@@ -44,6 +44,32 @@ export const SourceControlCloneRepositoryResult = Schema.Struct({
 });
 export type SourceControlCloneRepositoryResult = typeof SourceControlCloneRepositoryResult.Type;
 
+export const SourceControlRepositoryVisibility = Schema.Literals(["private", "public"]);
+export type SourceControlRepositoryVisibility = typeof SourceControlRepositoryVisibility.Type;
+
+export const SourceControlPublishRepositoryInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  provider: SourceControlProviderKind,
+  repository: TrimmedNonEmptyString,
+  visibility: SourceControlRepositoryVisibility,
+  remoteName: Schema.optional(TrimmedNonEmptyString),
+  protocol: Schema.optional(SourceControlCloneProtocol),
+});
+export type SourceControlPublishRepositoryInput = typeof SourceControlPublishRepositoryInput.Type;
+
+export const SourceControlPublishStatus = Schema.Literals(["pushed", "remote_added"]);
+export type SourceControlPublishStatus = typeof SourceControlPublishStatus.Type;
+
+export const SourceControlPublishRepositoryResult = Schema.Struct({
+  repository: SourceControlRepositoryInfo,
+  remoteName: TrimmedNonEmptyString,
+  remoteUrl: TrimmedNonEmptyString,
+  branch: TrimmedNonEmptyString,
+  upstreamBranch: Schema.optional(TrimmedNonEmptyString),
+  status: SourceControlPublishStatus,
+});
+export type SourceControlPublishRepositoryResult = typeof SourceControlPublishRepositoryResult.Type;
+
 export const VcsDriverKind = Schema.Literals(["git", "unknown"]);
 export type VcsDriverKind = typeof VcsDriverKind.Type;
 

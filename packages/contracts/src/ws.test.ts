@@ -187,6 +187,27 @@ it.effect("accepts sourceControl.cloneRepository requests", () =>
   }),
 );
 
+it.effect("accepts sourceControl.publishRepository requests", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWebSocketRequest({
+      id: "req-source-control-publish-1",
+      body: {
+        _tag: WS_METHODS.sourceControlPublishRepository,
+        cwd: "/workspace/repo",
+        provider: "github",
+        repository: "owner/repo",
+        visibility: "private",
+        remoteName: "origin",
+        protocol: "ssh",
+      },
+    });
+    assert.strictEqual(parsed.body._tag, WS_METHODS.sourceControlPublishRepository);
+    if (parsed.body._tag === WS_METHODS.sourceControlPublishRepository) {
+      assert.strictEqual(parsed.body.repository, "owner/repo");
+    }
+  }),
+);
+
 it.effect("accepts typed websocket push envelopes with sequence", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeWsResponse({

@@ -106,6 +106,66 @@ layer("GitHubCliLive", (it) => {
     }),
   );
 
+  it.effect("creates repositories and derives clone URLs from gh output", () =>
+    Effect.gen(function* () {
+      mockedRunProcess.mockResolvedValueOnce({
+        stdout:
+          "✓ Created repository octocat/codething-mvp on github.com\nhttps://github.com/octocat/codething-mvp\n",
+        stderr: "",
+        code: 0,
+        signal: null,
+        timedOut: false,
+      });
+
+      const result = yield* Effect.gen(function* () {
+        const gh = yield* GitHubCli;
+        return yield* gh.createRepository({
+          cwd: "/repo",
+          repository: "octocat/codething-mvp",
+          visibility: "private",
+        });
+      });
+
+      assert.deepStrictEqual(result, {
+        nameWithOwner: "octocat/codething-mvp",
+        url: "https://github.com/octocat/codething-mvp",
+        sshUrl: "git@github.com:octocat/codething-mvp.git",
+      });
+      expect(mockedRunProcess).toHaveBeenCalledWith(
+        "gh",
+        ["repo", "create", "octocat/codething-mvp", "--private"],
+        expect.objectContaining({ cwd: "/repo" }),
+      );
+    }),
+  );
+
+  it.effect("falls back to constructed clone URLs when create output omits a URL", () =>
+    Effect.gen(function* () {
+      mockedRunProcess.mockResolvedValueOnce({
+        stdout: "",
+        stderr: "",
+        code: 0,
+        signal: null,
+        timedOut: false,
+      });
+
+      const result = yield* Effect.gen(function* () {
+        const gh = yield* GitHubCli;
+        return yield* gh.createRepository({
+          cwd: "/repo",
+          repository: "octocat/codething-mvp",
+          visibility: "public",
+        });
+      });
+
+      assert.deepStrictEqual(result, {
+        nameWithOwner: "octocat/codething-mvp",
+        url: "https://github.com/octocat/codething-mvp",
+        sshUrl: "git@github.com:octocat/codething-mvp.git",
+      });
+    }),
+  );
+
   it.effect("surfaces a friendly error when the pull request is not found", () =>
     Effect.gen(function* () {
       mockedRunProcess.mockRejectedValueOnce(

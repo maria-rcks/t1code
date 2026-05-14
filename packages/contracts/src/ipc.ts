@@ -40,6 +40,8 @@ import type {
   SourceControlCloneRepositoryInput,
   SourceControlCloneRepositoryResult,
   SourceControlDiscoveryResult,
+  SourceControlPublishRepositoryInput,
+  SourceControlPublishRepositoryResult,
   SourceControlRepositoryInfo,
   SourceControlRepositoryLookupInput,
 } from "./sourceControl";
@@ -182,6 +184,9 @@ export interface NativeApi {
     cloneRepository: (
       input: SourceControlCloneRepositoryInput,
     ) => Promise<SourceControlCloneRepositoryResult>;
+    publishRepository: (
+      input: SourceControlPublishRepositoryInput,
+    ) => Promise<SourceControlPublishRepositoryResult>;
   };
   server: {
     getConfig: () => Promise<ServerConfig>;
