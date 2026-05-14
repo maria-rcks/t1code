@@ -3362,6 +3362,8 @@ export function App({
   );
   const [isOpeningKeybindings, setIsOpeningKeybindings] = useState(false);
   const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
+  const [isOpeningLogsDirectory, setIsOpeningLogsDirectory] = useState(false);
+  const [openLogsDirectoryError, setOpenLogsDirectoryError] = useState<string | null>(null);
   const [prefsReady, setPrefsReady] = useState(false);
   const [serverHttpOrigin, setServerHttpOrigin] = useState<string | null>(null);
   const [processDiagnostics, setProcessDiagnostics] =
@@ -7500,6 +7502,26 @@ export function App({
     }
   }
 
+  async function openLogsDirectory() {
+    const logsDirectoryPath = serverConfig?.observability.logsDirectoryPath;
+    if (!api || !serverConfig || !logsDirectoryPath || isOpeningLogsDirectory) return;
+    setOpenLogsDirectoryError(null);
+    setIsOpeningLogsDirectory(true);
+    try {
+      if (!hasAvailableFileManager(serverConfig.availableEditors)) {
+        throw new Error("No file manager is available.");
+      }
+      await api.shell.openInEditor(logsDirectoryPath, "file-manager");
+      setStatus("Opened logs folder");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to open logs folder.";
+      setOpenLogsDirectoryError(message);
+      setStatus(message);
+    } finally {
+      setIsOpeningLogsDirectory(false);
+    }
+  }
+
   async function resolveProjectWorkspaceRoot(rawWorkspaceRoot: string): Promise<string> {
     const workspaceRoot = normalizeWorkspaceRoot(rawWorkspaceRoot, paths.homeDir);
     if (!workspaceRoot) {
@@ -11444,7 +11466,25 @@ export function App({
                                 content="Local diagnostics scan this directory."
                                 style={{ fg: PALETTE.subtle }}
                               />
+                              {openLogsDirectoryError ? (
+                                <text
+                                  content={openLogsDirectoryError}
+                                  style={{ fg: PALETTE.warning }}
+                                />
+                              ) : null}
                             </>
+                          }
+                          control={
+                            <ToolbarButton
+                              label={isOpeningLogsDirectory ? "Opening..." : "Open logs"}
+                              disabled={
+                                !serverConfig?.observability.logsDirectoryPath ||
+                                isOpeningLogsDirectory
+                              }
+                              onPress={() => {
+                                void openLogsDirectory();
+                              }}
+                            />
                           }
                         >
                           <box style={{ flexDirection: "column" }}>
