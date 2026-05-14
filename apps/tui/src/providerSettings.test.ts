@@ -33,23 +33,28 @@ describe("providerSettings", () => {
     expect(
       INSTALL_PROVIDER_SETTINGS.map((settings) => ({
         provider: settings.provider,
+        badgeLabel: settings.badgeLabel ?? null,
         fields: settings.fields.map((field) => field.key),
       })),
     ).toEqual([
       {
         provider: "codex",
+        badgeLabel: null,
         fields: ["binaryPath", "homePath", "shadowHomePath"],
       },
       {
         provider: "claudeAgent",
+        badgeLabel: null,
         fields: ["binaryPath", "homePath", "launchArgs"],
       },
       {
         provider: "cursor",
+        badgeLabel: "Early Access",
         fields: ["binaryPath", "apiEndpoint"],
       },
       {
         provider: "opencode",
+        badgeLabel: null,
         fields: ["binaryPath", "serverUrl", "serverPassword"],
       },
     ]);

@@ -11244,6 +11244,12 @@ export function App({
                                       content={providerSettings.title}
                                       style={{ fg: PALETTE.text, marginRight: 1 }}
                                     />
+                                    {providerSettings.badgeLabel ? (
+                                      <text
+                                        content={providerSettings.badgeLabel}
+                                        style={{ fg: PALETTE.warning, marginRight: 1 }}
+                                      />
+                                    ) : null}
                                     {isProviderDirty ? (
                                       <text content="Custom" style={{ fg: PALETTE.subtle }} />
                                     ) : null}

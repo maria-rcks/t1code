@@ -41,6 +41,7 @@ type ProviderSettingsSchema = {
 type ProviderSettingsDefinition = {
   readonly provider: ProviderSettingsKey;
   readonly title: string;
+  readonly badgeLabel?: string;
   readonly schema: ProviderSettingsSchema;
 };
 export type InstallProviderFieldKey = string;
@@ -53,6 +54,7 @@ export type InstallProviderField = {
 export type InstallProviderSettings = {
   readonly provider: ProviderSettingsKey;
   readonly title: string;
+  readonly badgeLabel?: string;
   readonly fields: readonly InstallProviderField[];
 };
 export type ComingSoonInstallProviderOption = {
@@ -84,6 +86,7 @@ const PROVIDER_SETTINGS_DEFINITIONS: readonly ProviderSettingsDefinition[] = [
   {
     provider: "cursor",
     title: "Cursor",
+    badgeLabel: "Early Access",
     schema: CursorSettings,
   },
   {
@@ -154,11 +157,17 @@ function deriveInstallProviderFields(
 }
 
 export const INSTALL_PROVIDER_SETTINGS: readonly InstallProviderSettings[] =
-  PROVIDER_SETTINGS_DEFINITIONS.map((definition) => ({
-    provider: definition.provider,
-    title: definition.title,
-    fields: deriveInstallProviderFields(definition.schema),
-  }));
+  PROVIDER_SETTINGS_DEFINITIONS.map((definition) => {
+    const settings: InstallProviderSettings = {
+      provider: definition.provider,
+      title: definition.title,
+      fields: deriveInstallProviderFields(definition.schema),
+    };
+    if (definition.badgeLabel) {
+      Object.assign(settings, { badgeLabel: definition.badgeLabel });
+    }
+    return settings;
+  });
 
 export const COMING_SOON_INSTALL_PROVIDER_OPTIONS: readonly ComingSoonInstallProviderOption[] = [
   {
