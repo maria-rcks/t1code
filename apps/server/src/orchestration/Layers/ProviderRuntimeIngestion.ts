@@ -8,6 +8,7 @@ import {
   CheckpointRef,
   isToolLifecycleItemType,
   ThreadId,
+  type ThreadTokenUsageSnapshot,
   TurnId,
   type OrchestrationThreadActivity,
   type ProviderRuntimeEvent,
@@ -95,6 +96,15 @@ function proposedPlanIdFromEvent(event: ProviderRuntimeEvent, threadId: ThreadId
     return `plan:${threadId}:item:${event.itemId}`;
   }
   return `plan:${threadId}:event:${event.eventId}`;
+}
+
+function buildContextWindowActivityPayload(
+  event: ProviderRuntimeEvent,
+): ThreadTokenUsageSnapshot | undefined {
+  if (event.type !== "thread.token-usage.updated" || event.payload.usage.usedTokens <= 0) {
+    return undefined;
+  }
+  return event.payload.usage;
 }
 
 function asString(value: unknown): string | undefined {
@@ -275,6 +285,26 @@ function runtimeEventToActivities(
             message: truncateDetail(event.payload.message),
             ...(event.payload.detail !== undefined ? { detail: event.payload.detail } : {}),
           },
+          turnId: toTurnId(event.turnId) ?? null,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    case "thread.token-usage.updated": {
+      const payload = buildContextWindowActivityPayload(event);
+      if (!payload) {
+        return [];
+      }
+
+      return [
+        {
+          id: event.eventId,
+          createdAt: event.createdAt,
+          tone: "info",
+          kind: "context-window.updated",
+          summary: "Context window updated",
+          payload,
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
         },

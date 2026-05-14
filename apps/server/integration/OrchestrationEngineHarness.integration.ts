@@ -158,6 +158,20 @@ const tryRuntimePromise = <A>(operation: string, run: () => Promise<A>) =>
     catch: (cause) => new OrchestrationHarnessRuntimeError({ operation, cause }),
   });
 
+function makeFailingPartialService<Service extends object>(
+  name: string,
+  service: Partial<Service>,
+): Service {
+  return new Proxy(service, {
+    get(target, property, receiver) {
+      if (property in target) {
+        return Reflect.get(target, property, receiver);
+      }
+      return () => Effect.die(`Unexpected ${name}.${String(property)} call`);
+    },
+  }) as Service;
+}
+
 export interface OrchestrationIntegrationHarness {
   readonly rootDir: string;
   readonly workspaceDir: string;
@@ -296,33 +310,37 @@ export const makeOrchestrationIntegrationHarness = (
       RuntimeReceiptBusLive,
     );
     const runtimeIngestionLayer = ProviderRuntimeIngestionLive.pipe(
-      Layer.provideMerge(runtimeServicesLayer),
+      Layer.provide(runtimeServicesLayer),
     );
-    const gitCoreLayer = Layer.succeed(GitCore, {
-      renameBranch: (input: Parameters<GitCoreShape["renameBranch"]>[0]) =>
-        Effect.succeed({ branch: input.newBranch }),
-    } as unknown as GitCoreShape);
-    const textGenerationLayer = Layer.succeed(TextGeneration, {
-      generateBranchName: () => Effect.succeed({ branch: null }),
-    } as unknown as TextGenerationShape);
+    const gitCoreLayer = Layer.succeed(
+      GitCore,
+      makeFailingPartialService<GitCoreShape>("GitCore", {
+        renameBranch: (input: Parameters<GitCoreShape["renameBranch"]>[0]) =>
+          Effect.succeed({ branch: input.newBranch }),
+      }),
+    );
+    const textGenerationLayer = Layer.succeed(
+      TextGeneration,
+      makeFailingPartialService<TextGenerationShape>("TextGeneration", {
+        generateBranchName: () => Effect.succeed({ branch: "test-branch" }),
+      }),
+    );
     const providerCommandReactorLayer = ProviderCommandReactorLive.pipe(
-      Layer.provideMerge(runtimeServicesLayer),
-      Layer.provideMerge(gitCoreLayer),
-      Layer.provideMerge(textGenerationLayer),
+      Layer.provide(runtimeServicesLayer),
+      Layer.provide(gitCoreLayer),
+      Layer.provide(textGenerationLayer),
     );
-    const checkpointReactorLayer = CheckpointReactorLive.pipe(
-      Layer.provideMerge(runtimeServicesLayer),
-    );
+    const checkpointReactorLayer = CheckpointReactorLive.pipe(Layer.provide(runtimeServicesLayer));
     const orchestrationReactorLayer = OrchestrationReactorLive.pipe(
-      Layer.provideMerge(runtimeIngestionLayer),
-      Layer.provideMerge(providerCommandReactorLayer),
-      Layer.provideMerge(checkpointReactorLayer),
+      Layer.provide(
+        Layer.mergeAll(runtimeIngestionLayer, providerCommandReactorLayer, checkpointReactorLayer),
+      ),
     );
-    const layer = orchestrationReactorLayer.pipe(
+    const layer = Layer.mergeAll(runtimeServicesLayer, orchestrationReactorLayer).pipe(
       Layer.provide(persistenceLayer),
       Layer.provideMerge(ServerConfig.layerTest(workspaceDir, rootDir)),
       Layer.provideMerge(NodeServices.layer),
-    ) as Layer.Layer<any, never, never>;
+    );
 
     const runtime = ManagedRuntime.make(layer);
     const engine = yield* tryRuntimePromise("load OrchestrationEngine service", () =>

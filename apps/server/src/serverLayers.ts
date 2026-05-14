@@ -40,8 +40,6 @@ type RuntimePtyAdapterLoader = {
   layer: Layer.Layer<PtyAdapter, never, FileSystem.FileSystem | Path.Path>;
 };
 
-type RuntimeServicesLayer = Layer.Layer<any, never, never>;
-
 const runtimePtyAdapterLoaders = {
   bun: () => import("./terminal/Layers/BunPTY"),
   node: () => import("./terminal/Layers/NodePTY"),
@@ -123,37 +121,36 @@ export function makeServerRuntimeServicesLayer() {
     RuntimeReceiptBusLive,
   );
   const runtimeIngestionLayer = ProviderRuntimeIngestionLive.pipe(
-    Layer.provideMerge(runtimeServicesLayer),
+    Layer.provide(runtimeServicesLayer),
   );
   const providerCommandReactorLayer = ProviderCommandReactorLive.pipe(
-    Layer.provideMerge(runtimeServicesLayer),
-    Layer.provideMerge(GitCoreLive),
-    Layer.provideMerge(textGenerationLayer),
+    Layer.provide(runtimeServicesLayer),
+    Layer.provide(GitCoreLive),
+    Layer.provide(textGenerationLayer),
   );
-  const checkpointReactorLayer = CheckpointReactorLive.pipe(
-    Layer.provideMerge(runtimeServicesLayer),
-  );
+  const checkpointReactorLayer = CheckpointReactorLive.pipe(Layer.provide(runtimeServicesLayer));
   const orchestrationReactorLayer = OrchestrationReactorLive.pipe(
-    Layer.provideMerge(runtimeIngestionLayer),
-    Layer.provideMerge(providerCommandReactorLayer),
-    Layer.provideMerge(checkpointReactorLayer),
+    Layer.provide(
+      Layer.mergeAll(runtimeIngestionLayer, providerCommandReactorLayer, checkpointReactorLayer),
+    ),
   );
 
   const terminalLayer = TerminalManagerLive.pipe(Layer.provide(makeRuntimePtyAdapterLayer()));
 
   const gitManagerLayer = GitManagerLive.pipe(
-    Layer.provideMerge(AzureDevOpsCliLive),
-    Layer.provideMerge(GitCoreLive),
-    Layer.provideMerge(GitHubCliLive),
-    Layer.provideMerge(GitLabCliLive),
-    Layer.provideMerge(textGenerationLayer),
+    Layer.provide(AzureDevOpsCliLive),
+    Layer.provide(GitCoreLive),
+    Layer.provide(GitHubCliLive),
+    Layer.provide(GitLabCliLive),
+    Layer.provide(textGenerationLayer),
   );
 
   return Layer.mergeAll(
+    runtimeServicesLayer,
     orchestrationReactorLayer,
     GitCoreLive,
     gitManagerLayer,
     terminalLayer,
     KeybindingsLive,
-  ).pipe(Layer.provideMerge(NodeServices.layer)) as RuntimeServicesLayer;
+  ).pipe(Layer.provideMerge(NodeServices.layer));
 }

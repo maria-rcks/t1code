@@ -1683,6 +1683,50 @@ describe("ProviderRuntimeIngestion", () => {
     expect(resolvedPayload?.requestType).toBe("command_execution_approval");
   });
 
+  it("maps token usage events into context window activities", async () => {
+    const harness = await createHarness();
+    const now = new Date().toISOString();
+
+    harness.emit({
+      type: "thread.token-usage.updated",
+      eventId: asEventId("evt-token-usage"),
+      provider: "codex",
+      threadId: asThreadId("thread-1"),
+      createdAt: now,
+      turnId: asTurnId("turn-token-usage"),
+      payload: {
+        usage: {
+          usedTokens: 42_000,
+          totalProcessedTokens: 55_000,
+          maxTokens: 200_000,
+          compactsAutomatically: true,
+        },
+      },
+    });
+
+    const thread = await waitForThread(harness.engine, (entry) =>
+      entry.activities.some(
+        (activity: ProviderRuntimeTestActivity) =>
+          activity.id === "evt-token-usage" && activity.kind === "context-window.updated",
+      ),
+    );
+
+    const activity = thread.activities.find(
+      (entry: ProviderRuntimeTestActivity) => entry.id === "evt-token-usage",
+    );
+    expect(activity).toMatchObject({
+      kind: "context-window.updated",
+      summary: "Context window updated",
+      turnId: "turn-token-usage",
+      payload: {
+        usedTokens: 42_000,
+        totalProcessedTokens: 55_000,
+        maxTokens: 200_000,
+        compactsAutomatically: true,
+      },
+    });
+  });
+
   it("maps runtime.error into errored session state", async () => {
     const harness = await createHarness();
     const now = new Date().toISOString();
