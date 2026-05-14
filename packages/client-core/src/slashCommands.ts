@@ -20,7 +20,7 @@ export const SLASH_COMMAND_DEFINITIONS: readonly SlashCommandDefinition[] = [
   },
   {
     command: "clone",
-    usage: "/clone owner/repo [path]",
+    usage: "/clone owner/repo [path] [provider=github|gitlab|azure-devops]",
     description: "Clone a hosted repository and add it as a project",
     template: "/clone ",
   },

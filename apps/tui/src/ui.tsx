@@ -1647,12 +1647,14 @@ function parsePublishCommandArgs(args: string): ParsedPublishCommandArgs | null 
         remoteName = nextRemoteName;
       }
     } else if (normalized.startsWith("provider=")) {
-      const nextProvider = normalizePublishProvider(normalized.slice("provider=".length));
+      const nextProvider = normalizeSourceControlCommandProvider(
+        normalized.slice("provider=".length),
+      );
       if (nextProvider) {
         provider = nextProvider;
       }
     } else {
-      const nextProvider = normalizePublishProvider(normalized);
+      const nextProvider = normalizeSourceControlCommandProvider(normalized);
       if (nextProvider) {
         provider = nextProvider;
       }
@@ -1668,7 +1670,7 @@ function parsePublishCommandArgs(args: string): ParsedPublishCommandArgs | null 
   };
 }
 
-function normalizePublishProvider(value: string): SourceControlProviderKind | null {
+function normalizeSourceControlCommandProvider(value: string): SourceControlProviderKind | null {
   switch (value) {
     case "github":
     case "gh":
@@ -1718,14 +1720,27 @@ function parseCloneCommandArgs(
     return null;
   }
 
+  let provider: SourceControlProviderKind = "github";
   let protocol: SourceControlCloneProtocol | undefined;
   let destinationPath: string | null = null;
   for (const token of tokens.slice(1)) {
     const normalized = token.toLowerCase();
     if (normalized === "ssh" || normalized === "https" || normalized === "auto") {
       protocol = normalized;
-    } else if (!destinationPath) {
-      destinationPath = token;
+    } else if (normalized.startsWith("provider=")) {
+      const nextProvider = normalizeSourceControlCommandProvider(
+        normalized.slice("provider=".length),
+      );
+      if (nextProvider) {
+        provider = nextProvider;
+      }
+    } else {
+      const nextProvider = normalizeSourceControlCommandProvider(normalized);
+      if (nextProvider) {
+        provider = nextProvider;
+      } else if (!destinationPath) {
+        destinationPath = token;
+      }
     }
   }
 
@@ -1744,7 +1759,7 @@ function parseCloneCommandArgs(
 
   return {
     ...cloneInput,
-    provider: "github",
+    provider,
     repository: source,
   };
 }
@@ -9347,7 +9362,7 @@ export function App({
     if (!cloneInput) {
       resetComposerTextarea("/clone ");
       setFocusArea("composer");
-      setStatus("Use /clone owner/repo [path] or /clone <url> [path]");
+      setStatus("Use /clone owner/repo [path] [provider=gitlab] or /clone <url> [path]");
       return;
     }
 
