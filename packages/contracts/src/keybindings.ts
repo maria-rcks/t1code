@@ -7,15 +7,58 @@ export const MAX_WHEN_EXPRESSION_DEPTH = 64;
 export const MAX_SCRIPT_ID_LENGTH = 24;
 export const MAX_KEYBINDINGS_COUNT = 256;
 
+export const THREAD_JUMP_KEYBINDING_COMMANDS = [
+  "thread.jump.1",
+  "thread.jump.2",
+  "thread.jump.3",
+  "thread.jump.4",
+  "thread.jump.5",
+  "thread.jump.6",
+  "thread.jump.7",
+  "thread.jump.8",
+  "thread.jump.9",
+] as const;
+export type ThreadJumpKeybindingCommand = (typeof THREAD_JUMP_KEYBINDING_COMMANDS)[number];
+
+export const MODEL_PICKER_JUMP_KEYBINDING_COMMANDS = [
+  "modelPicker.jump.1",
+  "modelPicker.jump.2",
+  "modelPicker.jump.3",
+  "modelPicker.jump.4",
+  "modelPicker.jump.5",
+  "modelPicker.jump.6",
+  "modelPicker.jump.7",
+  "modelPicker.jump.8",
+  "modelPicker.jump.9",
+] as const;
+export type ModelPickerJumpKeybindingCommand =
+  (typeof MODEL_PICKER_JUMP_KEYBINDING_COMMANDS)[number];
+
+export const THREAD_KEYBINDING_COMMANDS = [
+  "thread.previous",
+  "thread.next",
+  ...THREAD_JUMP_KEYBINDING_COMMANDS,
+] as const;
+export type ThreadKeybindingCommand = (typeof THREAD_KEYBINDING_COMMANDS)[number];
+
+export const MODEL_PICKER_KEYBINDING_COMMANDS = [
+  "modelPicker.toggle",
+  ...MODEL_PICKER_JUMP_KEYBINDING_COMMANDS,
+] as const;
+export type ModelPickerKeybindingCommand = (typeof MODEL_PICKER_KEYBINDING_COMMANDS)[number];
+
 const STATIC_KEYBINDING_COMMANDS = [
   "terminal.toggle",
   "terminal.split",
   "terminal.new",
   "terminal.close",
   "diff.toggle",
+  "commandPalette.toggle",
   "chat.new",
   "chat.newLocal",
   "editor.openFavorite",
+  ...MODEL_PICKER_KEYBINDING_COMMANDS,
+  ...THREAD_KEYBINDING_COMMANDS,
 ] as const;
 
 export const SCRIPT_RUN_COMMAND_PATTERN = Schema.TemplateLiteral([

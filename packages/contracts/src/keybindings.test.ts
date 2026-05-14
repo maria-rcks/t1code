@@ -46,6 +46,25 @@ it.effect("parses keybinding rules", () =>
       command: "chat.newLocal",
     });
     assert.strictEqual(parsedLocal.command, "chat.newLocal");
+
+    const parsedModelPickerToggle = yield* decode(KeybindingRule, {
+      key: "mod+shift+m",
+      command: "modelPicker.toggle",
+    });
+    assert.strictEqual(parsedModelPickerToggle.command, "modelPicker.toggle");
+
+    const parsedModelPickerJump = yield* decode(KeybindingRule, {
+      key: "mod+1",
+      command: "modelPicker.jump.1",
+      when: "modelPickerOpen",
+    });
+    assert.strictEqual(parsedModelPickerJump.command, "modelPicker.jump.1");
+
+    const parsedThreadJump = yield* decode(KeybindingRule, {
+      key: "mod+1",
+      command: "thread.jump.1",
+    });
+    assert.strictEqual(parsedThreadJump.command, "thread.jump.1");
   }),
 );
 
@@ -120,8 +139,19 @@ it.effect("parses resolved keybindings arrays", () =>
           modKey: true,
         },
       },
+      {
+        command: "modelPicker.jump.3",
+        shortcut: {
+          key: "3",
+          metaKey: false,
+          ctrlKey: false,
+          shiftKey: false,
+          altKey: false,
+          modKey: true,
+        },
+      },
     ]);
-    assert.lengthOf(parsed, 1);
+    assert.lengthOf(parsed, 2);
   }),
 );
 

@@ -55,6 +55,7 @@ import {
   type ServerProvider,
   type ServerSettings,
   type ServerSettingsPatch,
+  type ResolvedKeybindingsConfig,
   type ServerTraceDiagnosticsResult,
   type SourceControlDiscoveryResult,
 } from "@t3tools/contracts";
@@ -154,6 +155,7 @@ import {
 import { saveClipboardImageToFile } from "./clipboardImage";
 import { copyTextToClipboard } from "./clipboardText";
 import { KEYBINDING_GUIDE_SECTIONS, isCtrlC, shouldClearComposerOnCtrlC } from "./keyboardBehavior";
+import { modelPickerJumpIndexFromCommand, resolveTuiShortcutCommand } from "./keybindings";
 import { createT1Logger } from "./log";
 import {
   deriveProviderInstanceEntries,
@@ -2390,6 +2392,7 @@ function isAvailableModelProviderOption(
 
 const AVAILABLE_MODEL_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter(isAvailableModelProviderOption);
 const EMPTY_PROVIDER_SNAPSHOTS: ReadonlyArray<ServerProvider> = [];
+const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const DEFAULT_CODEX_INSTANCE_ID = defaultInstanceIdForDriver("codex" as ProviderDriverKind);
 const DEFAULT_CLAUDE_INSTANCE_ID = defaultInstanceIdForDriver("claudeAgent" as ProviderDriverKind);
 const COMING_SOON_MODEL_PROVIDER_OPTIONS = [
@@ -6345,6 +6348,24 @@ export function App({
       source: key.source,
       sequence: key.sequence,
     });
+    const shortcutCommand = resolveTuiShortcutCommand(
+      {
+        keyName: key.name,
+        sequence: key.sequence,
+        ctrl: key.ctrl,
+        meta: key.meta,
+        super: key.super ?? false,
+        shift: key.shift,
+      },
+      serverConfig?.keybindings ?? EMPTY_KEYBINDINGS,
+      {
+        context: {
+          terminalFocus: false,
+          terminalOpen: false,
+          modelPickerOpen: overlayMenu === "model",
+        },
+      },
+    );
     if (confirmDialog && key.name === "escape") {
       key.preventDefault();
       if (confirmDialog.escapeBehavior === "confirm") {
@@ -6487,7 +6508,31 @@ export function App({
         return;
       }
     }
+    if (shortcutCommand === "modelPicker.toggle") {
+      key.preventDefault();
+      toggleModelMenu();
+      return;
+    }
     if (overlayMenu === "model") {
+      const modelPickerJumpIndex = modelPickerJumpIndexFromCommand(shortcutCommand ?? "");
+      if (modelPickerJumpIndex !== null) {
+        key.preventDefault();
+        const selectedSearchResult = isModelSearchActive
+          ? visibleModelSearchResults[modelPickerJumpIndex]
+          : null;
+        if (selectedSearchResult) {
+          applyDraftProviderModel(selectedSearchResult.instanceId, selectedSearchResult.slug);
+          return;
+        }
+        const selected = modelOptions[modelPickerJumpIndex];
+        if (!isModelSearchActive && selected) {
+          applyDraftProviderModel(modelMenuInstanceId, selected.slug);
+          return;
+        }
+        setModelSubmenuOpen(true);
+        setModelMenuIndex(Math.min(Math.max(modelOptions.length - 1, 0), modelPickerJumpIndex));
+        return;
+      }
       const printableSequence =
         !key.ctrl && !key.meta && !key.super && key.sequence && key.sequence.length === 1
           ? key.sequence
