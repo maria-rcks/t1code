@@ -292,6 +292,7 @@ type ProviderEnvironmentDraft = {
   readonly value: string;
   readonly sensitive: boolean;
 };
+type ProviderEnvironmentDraftMap = Readonly<Record<string, ProviderEnvironmentDraft>>;
 type TuiProviderInstancePatch = {
   readonly accentColor?: ProviderInstanceConfig["accentColor"] | undefined;
   readonly displayName?: ProviderInstanceConfig["displayName"] | undefined;
@@ -299,6 +300,11 @@ type TuiProviderInstancePatch = {
 };
 
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Readonly<Record<string, PendingUserInputDraftAnswer>> = {};
+const EMPTY_PROVIDER_ENVIRONMENT_DRAFT: ProviderEnvironmentDraft = {
+  name: "",
+  value: "",
+  sensitive: true,
+};
 const PROVIDER_ENVIRONMENT_VARIABLE_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const GIT_FETCH_INTERVAL_STEP_SECONDS = 5;
 type T1Api = ReturnType<typeof createTransportNativeApi>["api"];
@@ -3513,11 +3519,13 @@ export function App({
   const [providerEnvironmentDraftByProvider, setProviderEnvironmentDraftByProvider] = useState<
     Record<InstallProviderKey, ProviderEnvironmentDraft>
   >({
-    codex: { name: "", value: "", sensitive: true },
-    claudeAgent: { name: "", value: "", sensitive: true },
-    cursor: { name: "", value: "", sensitive: true },
-    opencode: { name: "", value: "", sensitive: true },
+    codex: EMPTY_PROVIDER_ENVIRONMENT_DRAFT,
+    claudeAgent: EMPTY_PROVIDER_ENVIRONMENT_DRAFT,
+    cursor: EMPTY_PROVIDER_ENVIRONMENT_DRAFT,
+    opencode: EMPTY_PROVIDER_ENVIRONMENT_DRAFT,
   });
+  const [providerEnvironmentDraftByInstance, setProviderEnvironmentDraftByInstance] =
+    useState<ProviderEnvironmentDraftMap>({});
   const [customModelInputByProvider, setCustomModelInputByProvider] = useState<
     Record<ProviderKind, string>
   >({
@@ -7699,6 +7707,10 @@ export function App({
         ? { textGenerationModel: DEFAULT_APP_SETTINGS.textGenerationModel }
         : {}),
     });
+    setProviderEnvironmentDraftByInstance((currentDrafts) => {
+      const { [instanceId]: _removed, ...rest } = currentDrafts;
+      return rest;
+    });
     updateServerSettings({
       ...settingsPatch,
       ...(textGenerationModelSelection ? { textGenerationModelSelection } : {}),
@@ -7743,6 +7755,105 @@ export function App({
   function updateProviderInstallInstanceDisplayName(instanceId: ProviderInstanceId, value: string) {
     const trimmed = value.trim();
     updateProviderInstallInstance(instanceId, {}, { displayName: trimmed || undefined });
+  }
+
+  function updateProviderInstallInstanceAccentColor(instanceId: ProviderInstanceId, value: string) {
+    const trimmed = value.trim();
+    updateProviderInstallInstance(
+      instanceId,
+      {},
+      {
+        accentColor:
+          trimmed.length === 0 ? undefined : (normalizeProviderAccentColor(trimmed) ?? trimmed),
+      },
+    );
+  }
+
+  function updateProviderInstallInstanceEnvironment(
+    instanceId: ProviderInstanceId,
+    environment: readonly ProviderInstanceEnvironmentVariable[],
+  ) {
+    updateProviderInstallInstance(
+      instanceId,
+      {},
+      { environment: environment.length > 0 ? [...environment] : undefined },
+    );
+  }
+
+  function addProviderInstallInstanceEnvironmentVariable(instanceId: ProviderInstanceId) {
+    const draft =
+      providerEnvironmentDraftByInstance[instanceId] ?? EMPTY_PROVIDER_ENVIRONMENT_DRAFT;
+    const name = draft.name.trim();
+    if (!PROVIDER_ENVIRONMENT_VARIABLE_NAME_PATTERN.test(name)) {
+      setStatus("Invalid environment variable name");
+      return;
+    }
+    const current = serverSettings?.providerInstances[instanceId]?.environment ?? [];
+    if (current.some((variable) => variable.name === name)) {
+      setStatus("Environment variable already exists");
+      return;
+    }
+    updateProviderInstallInstanceEnvironment(instanceId, [
+      ...current,
+      {
+        name,
+        value: draft.value,
+        sensitive: draft.sensitive,
+      },
+    ]);
+    setProviderEnvironmentDraftByInstance((currentDrafts) => ({
+      ...currentDrafts,
+      [instanceId]: EMPTY_PROVIDER_ENVIRONMENT_DRAFT,
+    }));
+  }
+
+  function removeProviderInstallInstanceEnvironmentVariable(
+    instanceId: ProviderInstanceId,
+    name: string,
+  ) {
+    updateProviderInstallInstanceEnvironment(
+      instanceId,
+      (serverSettings?.providerInstances[instanceId]?.environment ?? []).filter(
+        (variable) => variable.name !== name,
+      ),
+    );
+  }
+
+  function updateProviderInstallInstanceEnvironmentVariable(
+    instanceId: ProviderInstanceId,
+    name: string,
+    patch: Partial<Pick<ProviderInstanceEnvironmentVariable, "sensitive" | "value">>,
+  ) {
+    updateProviderInstallInstanceEnvironment(
+      instanceId,
+      (serverSettings?.providerInstances[instanceId]?.environment ?? []).map((variable) => {
+        if (variable.name !== name) return variable;
+        const nextName = variable.name;
+        const nextValue = patch.value ?? variable.value;
+        const nextSensitive = patch.sensitive ?? variable.sensitive;
+        if (patch.value !== undefined) {
+          return {
+            name: nextName,
+            value: nextValue,
+            sensitive: nextSensitive,
+            valueRedacted: false,
+          };
+        }
+        if (variable.valueRedacted !== undefined) {
+          return {
+            name: nextName,
+            value: nextValue,
+            sensitive: nextSensitive,
+            valueRedacted: variable.valueRedacted,
+          };
+        }
+        return {
+          name: nextName,
+          value: nextValue,
+          sensitive: nextSensitive,
+        };
+      }),
+    );
   }
 
   function updateProviderInstallInstanceField(
@@ -11559,6 +11670,285 @@ export function App({
                                                       placeholderColor: PALETTE.subtle,
                                                     }}
                                                   />
+                                                </box>
+                                                <text
+                                                  content="Accent color"
+                                                  style={{ fg: PALETTE.text, marginBottom: 1 }}
+                                                />
+                                                <box
+                                                  style={{
+                                                    backgroundColor: PALETTE.input,
+                                                    paddingLeft: 1,
+                                                    paddingRight: 1,
+                                                    height: 3,
+                                                    justifyContent: "center",
+                                                    marginBottom: 1,
+                                                  }}
+                                                >
+                                                  <input
+                                                    value={instance.accentColor?.trim() ?? ""}
+                                                    onInput={(value) =>
+                                                      updateProviderInstallInstanceAccentColor(
+                                                        instanceId,
+                                                        value,
+                                                      )
+                                                    }
+                                                    placeholder="#7c3aed"
+                                                    cursorColor={PALETTE.cursor}
+                                                    style={{
+                                                      backgroundColor: PALETTE.input,
+                                                      focusedBackgroundColor: PALETTE.input,
+                                                      textColor: PALETTE.text,
+                                                      focusedTextColor: PALETTE.text,
+                                                      placeholderColor: PALETTE.subtle,
+                                                    }}
+                                                  />
+                                                </box>
+                                                <box
+                                                  style={{
+                                                    flexDirection: "column",
+                                                    marginBottom: 1,
+                                                  }}
+                                                >
+                                                  <box
+                                                    style={{
+                                                      flexDirection: "row",
+                                                      alignItems: "center",
+                                                      justifyContent: "space-between",
+                                                      marginBottom: 1,
+                                                    }}
+                                                  >
+                                                    <text
+                                                      content="Environment variables"
+                                                      style={{ fg: PALETTE.text }}
+                                                    />
+                                                    <ToolbarButton
+                                                      label="Add"
+                                                      onPress={() =>
+                                                        addProviderInstallInstanceEnvironmentVariable(
+                                                          instanceId,
+                                                        )
+                                                      }
+                                                    />
+                                                  </box>
+                                                  {(instance.environment ?? []).length === 0 ? (
+                                                    <text
+                                                      content="Add API keys, base URLs, or other per-instance CLI settings."
+                                                      style={{
+                                                        fg: PALETTE.subtle,
+                                                        marginBottom: 1,
+                                                      }}
+                                                    />
+                                                  ) : (
+                                                    (instance.environment ?? []).map((variable) => (
+                                                      <box
+                                                        key={`${providerSettings.provider}:instance:${String(instanceId)}:env:${variable.name}`}
+                                                        style={{
+                                                          flexDirection: "row",
+                                                          alignItems: "center",
+                                                          justifyContent: "space-between",
+                                                          backgroundColor: PALETTE.surfaceAlt,
+                                                          paddingLeft: 1,
+                                                          paddingRight: 1,
+                                                          marginBottom: 1,
+                                                        }}
+                                                      >
+                                                        <box
+                                                          style={{
+                                                            flexDirection: "column",
+                                                            flexGrow: 1,
+                                                            flexShrink: 1,
+                                                          }}
+                                                        >
+                                                          <text
+                                                            content={`${variable.name}${variable.sensitive ? " · sensitive" : ""}`}
+                                                            style={{ fg: PALETTE.text }}
+                                                          />
+                                                          <text
+                                                            content={
+                                                              variable.valueRedacted
+                                                                ? "stored secret"
+                                                                : variable.value
+                                                                  ? variable.sensitive
+                                                                    ? "value hidden"
+                                                                    : variable.value
+                                                                  : "empty value"
+                                                            }
+                                                            style={{ fg: PALETTE.subtle }}
+                                                          />
+                                                        </box>
+                                                        <box
+                                                          style={{
+                                                            flexDirection: "row",
+                                                            alignItems: "center",
+                                                          }}
+                                                        >
+                                                          <ToolbarButton
+                                                            label={
+                                                              variable.sensitive
+                                                                ? "Public"
+                                                                : "Sensitive"
+                                                            }
+                                                            onPress={() =>
+                                                              updateProviderInstallInstanceEnvironmentVariable(
+                                                                instanceId,
+                                                                variable.name,
+                                                                {
+                                                                  sensitive: !variable.sensitive,
+                                                                },
+                                                              )
+                                                            }
+                                                          />
+                                                          <ToolbarButton
+                                                            label="Remove"
+                                                            onPress={() =>
+                                                              removeProviderInstallInstanceEnvironmentVariable(
+                                                                instanceId,
+                                                                variable.name,
+                                                              )
+                                                            }
+                                                          />
+                                                        </box>
+                                                      </box>
+                                                    ))
+                                                  )}
+                                                  <box
+                                                    style={{
+                                                      flexDirection: "column",
+                                                      backgroundColor: PALETTE.surfaceAlt,
+                                                      paddingLeft: 1,
+                                                      paddingRight: 1,
+                                                      marginBottom: 1,
+                                                    }}
+                                                  >
+                                                    <box
+                                                      style={{
+                                                        backgroundColor: PALETTE.input,
+                                                        paddingLeft: 1,
+                                                        paddingRight: 1,
+                                                        height: 3,
+                                                        justifyContent: "center",
+                                                        marginBottom: 1,
+                                                      }}
+                                                    >
+                                                      <input
+                                                        value={
+                                                          (
+                                                            providerEnvironmentDraftByInstance[
+                                                              instanceId
+                                                            ] ?? EMPTY_PROVIDER_ENVIRONMENT_DRAFT
+                                                          ).name
+                                                        }
+                                                        onInput={(value) =>
+                                                          setProviderEnvironmentDraftByInstance(
+                                                            (current) => ({
+                                                              ...current,
+                                                              [instanceId]: {
+                                                                ...(current[instanceId] ??
+                                                                  EMPTY_PROVIDER_ENVIRONMENT_DRAFT),
+                                                                name: value,
+                                                              },
+                                                            }),
+                                                          )
+                                                        }
+                                                        placeholder="VARIABLE_NAME"
+                                                        cursorColor={PALETTE.cursor}
+                                                        style={{
+                                                          backgroundColor: PALETTE.input,
+                                                          focusedBackgroundColor: PALETTE.input,
+                                                          textColor: PALETTE.text,
+                                                          focusedTextColor: PALETTE.text,
+                                                          placeholderColor: PALETTE.subtle,
+                                                        }}
+                                                      />
+                                                    </box>
+                                                    <box
+                                                      style={{
+                                                        backgroundColor: PALETTE.input,
+                                                        paddingLeft: 1,
+                                                        paddingRight: 1,
+                                                        height: 3,
+                                                        justifyContent: "center",
+                                                        marginBottom: 1,
+                                                      }}
+                                                    >
+                                                      <input
+                                                        value={
+                                                          (
+                                                            providerEnvironmentDraftByInstance[
+                                                              instanceId
+                                                            ] ?? EMPTY_PROVIDER_ENVIRONMENT_DRAFT
+                                                          ).value
+                                                        }
+                                                        onInput={(value) =>
+                                                          setProviderEnvironmentDraftByInstance(
+                                                            (current) => ({
+                                                              ...current,
+                                                              [instanceId]: {
+                                                                ...(current[instanceId] ??
+                                                                  EMPTY_PROVIDER_ENVIRONMENT_DRAFT),
+                                                                value,
+                                                              },
+                                                            }),
+                                                          )
+                                                        }
+                                                        placeholder="Value"
+                                                        cursorColor={PALETTE.cursor}
+                                                        style={{
+                                                          backgroundColor: PALETTE.input,
+                                                          focusedBackgroundColor: PALETTE.input,
+                                                          textColor: PALETTE.text,
+                                                          focusedTextColor: PALETTE.text,
+                                                          placeholderColor: PALETTE.subtle,
+                                                        }}
+                                                      />
+                                                    </box>
+                                                    <box
+                                                      style={{
+                                                        flexDirection: "row",
+                                                        alignItems: "center",
+                                                        justifyContent: "space-between",
+                                                      }}
+                                                    >
+                                                      <text
+                                                        content={
+                                                          (
+                                                            providerEnvironmentDraftByInstance[
+                                                              instanceId
+                                                            ] ?? EMPTY_PROVIDER_ENVIRONMENT_DRAFT
+                                                          ).sensitive
+                                                            ? "Sensitive value"
+                                                            : "Public value"
+                                                        }
+                                                        style={{ fg: PALETTE.subtle }}
+                                                      />
+                                                      <TogglePill
+                                                        checked={
+                                                          (
+                                                            providerEnvironmentDraftByInstance[
+                                                              instanceId
+                                                            ] ?? EMPTY_PROVIDER_ENVIRONMENT_DRAFT
+                                                          ).sensitive
+                                                        }
+                                                        onPress={() =>
+                                                          setProviderEnvironmentDraftByInstance(
+                                                            (current) => {
+                                                              const draft =
+                                                                current[instanceId] ??
+                                                                EMPTY_PROVIDER_ENVIRONMENT_DRAFT;
+                                                              return {
+                                                                ...current,
+                                                                [instanceId]: {
+                                                                  ...draft,
+                                                                  sensitive: !draft.sensitive,
+                                                                },
+                                                              };
+                                                            },
+                                                          )
+                                                        }
+                                                      />
+                                                    </box>
+                                                  </box>
                                                 </box>
                                                 {providerSettings.fields.map((field) => (
                                                   <box
