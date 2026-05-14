@@ -125,6 +125,13 @@ describe("ProviderCommandReactor", () => {
         typeof input.model === "string"
           ? input.model
           : undefined;
+      const providerInstanceId =
+        typeof input === "object" &&
+        input !== null &&
+        "providerInstanceId" in input &&
+        typeof input.providerInstanceId === "string"
+          ? ProviderInstanceId.makeUnsafe(input.providerInstanceId)
+          : undefined;
       const threadId =
         typeof input === "object" &&
         input !== null &&
@@ -143,6 +150,7 @@ describe("ProviderCommandReactor", () => {
             ? input.runtimeMode
             : "full-access",
         ...(model !== undefined ? { model } : {}),
+        ...(providerInstanceId !== undefined ? { providerInstanceId } : {}),
         threadId,
         resumeCursor: resumeCursor ?? { opaque: `resume-${sessionIndex}` },
         createdAt: now,
@@ -411,6 +419,7 @@ describe("ProviderCommandReactor", () => {
     await waitFor(() => harness.startSession.mock.calls.length === 1);
     await waitFor(() => harness.sendTurn.mock.calls.length === 1);
     expect(harness.startSession.mock.calls[0]?.[1]).toMatchObject({
+      providerInstanceId: ProviderInstanceId.makeUnsafe("codex"),
       model: "gpt-5.3-codex",
       modelSelection: {
         instanceId: ProviderInstanceId.makeUnsafe("codex"),
@@ -427,6 +436,9 @@ describe("ProviderCommandReactor", () => {
         },
       },
     });
+    const readModel = await Effect.runPromise(harness.engine.getReadModel());
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.makeUnsafe("thread-1"));
+    expect(thread?.session?.providerInstanceId).toBe(ProviderInstanceId.makeUnsafe("codex"));
     expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
       threadId: ThreadId.makeUnsafe("thread-1"),
       modelSelection: {
