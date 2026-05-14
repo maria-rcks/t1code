@@ -12,6 +12,10 @@
       "import": "./src/ids.ts",
       "types": "./src/ids.ts"
     },
+    "./contextWindow": {
+      "import": "./src/contextWindow.ts",
+      "types": "./src/contextWindow.ts"
+    },
     "./nativeApi": {
       "import": "./src/nativeApi.ts",
       "types": "./src/nativeApi.ts"

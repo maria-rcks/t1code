@@ -5,6 +5,7 @@ import {
   PROVIDER_OPTIONS,
   derivePendingApprovals,
   deriveTimelineEntries,
+  deriveWorkLogEntries,
   hasUnseenCompletion,
 } from "./sessionLogic";
 
@@ -119,5 +120,33 @@ describe("sessionLogic", () => {
         ],
       ).map((entry) => entry.id),
     ).toEqual(["work-1", "message-1", "plan-1"]);
+  });
+
+  it("excludes context window updates from work log entries", () => {
+    expect(
+      deriveWorkLogEntries(
+        [
+          {
+            id: "activity-context" as never,
+            turnId: null,
+            kind: "context-window.updated",
+            tone: "info",
+            summary: "Context window updated",
+            payload: { usedTokens: 42_000, maxTokens: 200_000 },
+            createdAt: "2026-03-24T10:00:00.000Z",
+          },
+          {
+            id: "activity-tool" as never,
+            turnId: null,
+            kind: "tool.completed",
+            tone: "tool",
+            summary: "Ran command",
+            payload: {},
+            createdAt: "2026-03-24T10:00:01.000Z",
+          },
+        ],
+        undefined,
+      ).map((entry) => entry.id),
+    ).toEqual(["activity-tool"]);
   });
 });

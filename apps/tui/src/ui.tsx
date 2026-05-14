@@ -94,6 +94,7 @@ import {
   type SidebarThreadSortOrder,
   type TimestampFormat,
   createTransportNativeApi,
+  deriveLatestContextWindowSnapshot,
   derivePendingApprovals,
   derivePendingUserInputProgress,
   derivePendingUserInputs,
@@ -117,6 +118,8 @@ import {
   type ThreadStatusPill,
   type TimelineEntry,
   WsTransport,
+  formatContextWindowTokens,
+  type ContextWindowSnapshot,
 } from "@t3tools/client-core";
 import {
   applyClaudePromptEffortPrefix,
@@ -2931,6 +2934,50 @@ function FooterDivider() {
   );
 }
 
+function formatContextWindowPercentage(value: number | null): string | null {
+  if (value === null || !Number.isFinite(value)) {
+    return null;
+  }
+  if (value < 10) {
+    return `${value.toFixed(1).replace(/\.0$/, "")}%`;
+  }
+  return `${Math.round(value)}%`;
+}
+
+function contextWindowMeterColor(usage: ContextWindowSnapshot): TuiColor {
+  const usedPercentage = usage.usedPercentage ?? 0;
+  if (usedPercentage >= 90) return PALETTE.composerStop;
+  if (usedPercentage >= 75) return PALETTE.warning;
+  return PALETTE.muted;
+}
+
+function ContextWindowStatus(props: { usage: ContextWindowSnapshot; compact?: boolean }) {
+  const percentage = formatContextWindowPercentage(props.usage.usedPercentage);
+  const label = props.compact
+    ? (percentage ?? formatContextWindowTokens(props.usage.usedTokens))
+    : `ctx ${percentage ?? formatContextWindowTokens(props.usage.usedTokens)}`;
+  const color = contextWindowMeterColor(props.usage);
+
+  return (
+    <box
+      style={{
+        backgroundColor: PALETTE.control,
+        paddingLeft: props.compact ? 0 : 1,
+        paddingRight: props.compact ? 0 : 1,
+        marginRight: 1,
+        minHeight: 1,
+        ...(props.compact ? { width: 5 } : {}),
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
+    >
+      <text content={label} style={{ fg: color }} />
+    </box>
+  );
+}
+
 function SidebarRow(props: {
   active?: boolean;
   selected?: boolean;
@@ -4281,6 +4328,10 @@ export function App({
   const workEntries = activeThread
     ? deriveWorkLogEntries(activeThread.activities, activeThread.latestTurn?.turnId ?? undefined)
     : [];
+  const activeContextWindow = useMemo(
+    () => (activeThread ? deriveLatestContextWindowSnapshot(activeThread.activities) : null),
+    [activeThread],
+  );
   const approvals = useMemo(
     () => (activeThread ? derivePendingApprovals(activeThread.activities) : []),
     [activeThread],
@@ -13741,6 +13792,15 @@ export function App({
                                 compact={!responsiveLayout.showComposerTraitsLabel}
                                 active={overlayMenu === "traits"}
                                 onPress={toggleTraitsMenu}
+                              />
+                            </>
+                          ) : null}
+                          {activeContextWindow ? (
+                            <>
+                              {responsiveLayout.showComposerDividers ? <FooterDivider /> : null}
+                              <ContextWindowStatus
+                                usage={activeContextWindow}
+                                compact={!responsiveLayout.showComposerModeLabels}
                               />
                             </>
                           ) : null}

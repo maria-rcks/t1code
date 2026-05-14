@@ -1,4 +1,5 @@
 export * from "./appSettings";
+export * from "./contextWindow";
 export * from "./ids";
 export * from "./gitQuickAction";
 export * from "./modelPickerSearch";
