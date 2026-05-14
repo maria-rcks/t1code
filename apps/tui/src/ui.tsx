@@ -2520,6 +2520,48 @@ const FALLBACK_MODEL_MENU_INSTANCE_ENTRIES: ReadonlyArray<ModelMenuInstanceEntry
     isDefault: true,
   }));
 
+function modelMenuFallbackOptions(
+  entry: ModelMenuInstanceEntry,
+  customModelsByProvider: Record<ProviderKind, readonly string[]>,
+  selectedModel: string | undefined,
+): ReadonlyArray<ModelMenuOption> {
+  const legacyProvider = legacyProviderKindForDriver(entry.driverKind);
+  if (legacyProvider) {
+    return getAppModelOptions(
+      legacyProvider,
+      customModelsByProvider[legacyProvider],
+      selectedModel,
+    );
+  }
+
+  const trimmedModel = selectedModel?.trim();
+  return trimmedModel ? [{ slug: trimmedModel, name: trimmedModel, isCustom: true }] : [];
+}
+
+function resolveModelMenuModel(
+  entry: ModelMenuInstanceEntry,
+  value: string | null | undefined,
+  options: ReadonlyArray<ModelMenuOption>,
+): string {
+  const legacyProvider = legacyProviderKindForDriver(entry.driverKind);
+  if (legacyProvider) {
+    return (
+      resolveSelectableModel(legacyProvider, value, options) ??
+      DEFAULT_MODEL_BY_PROVIDER[legacyProvider]
+    );
+  }
+
+  const trimmed = value?.trim();
+  if (trimmed) {
+    const direct = options.find((option) => option.slug === trimmed);
+    if (direct) return direct.slug;
+    const byName = options.find((option) => option.name.toLowerCase() === trimmed.toLowerCase());
+    if (byName) return byName.slug;
+    return trimmed;
+  }
+  return options[0]?.slug ?? "auto";
+}
+
 function countDistinctSections(items: readonly TraitsMenuItem[]): number {
   let count = 0;
   let previousSection: string | null = null;
@@ -4465,8 +4507,8 @@ export function App({
   const modelMenuEntries = useMemo<ReadonlyArray<ModelMenuInstanceEntry>>(() => {
     const entries = sortProviderInstanceEntries(deriveProviderInstanceEntries(providerSnapshots))
       .map((entry) => {
-        const provider = legacyProviderKindForDriver(entry.driverKind);
-        if (!provider || !entry.enabled || !entry.isAvailable) return null;
+        const provider = legacyProviderKindForDriver(entry.driverKind) ?? "codex";
+        if (!entry.enabled || !entry.isAvailable) return null;
         if (entry.accentColor) {
           return {
             instanceId: entry.instanceId,
@@ -4495,9 +4537,9 @@ export function App({
   const rawProviderModelOptionsByInstance = useMemo(() => {
     const optionsByInstance = new Map<ProviderInstanceId, ReadonlyArray<ModelMenuOption>>();
     for (const entry of modelMenuEntries) {
-      const fallbackOptions = getAppModelOptions(
-        entry.provider,
-        customModelsByProvider[entry.provider],
+      const fallbackOptions = modelMenuFallbackOptions(
+        entry,
+        customModelsByProvider,
         entry.instanceId === draftProviderInstanceId ? draftModel : undefined,
       );
       optionsByInstance.set(
@@ -4598,24 +4640,23 @@ export function App({
   const gitTextGenerationModelOptions = useMemo(() => {
     const options = providerModelOptionsByInstance.get(currentGitTextGenerationInstanceId);
     if (options && options.length > 0) return options;
-    return getAppModelOptions(
-      currentGitTextGenerationEntry.provider,
-      customModelsByProvider[currentGitTextGenerationEntry.provider],
+    return modelMenuFallbackOptions(
+      currentGitTextGenerationEntry,
+      customModelsByProvider,
       configuredGitTextGenerationModel ?? DEFAULT_GIT_TEXT_GENERATION_MODEL,
     );
   }, [
     configuredGitTextGenerationModel,
-    currentGitTextGenerationEntry.provider,
+    currentGitTextGenerationEntry,
     currentGitTextGenerationInstanceId,
     customModelsByProvider,
     providerModelOptionsByInstance,
   ]);
-  const currentGitTextGenerationModel =
-    resolveSelectableModel(
-      currentGitTextGenerationEntry.provider,
-      configuredGitTextGenerationModel,
-      gitTextGenerationModelOptions,
-    ) ?? DEFAULT_MODEL_BY_PROVIDER[currentGitTextGenerationEntry.provider];
+  const currentGitTextGenerationModel = resolveModelMenuModel(
+    currentGitTextGenerationEntry,
+    configuredGitTextGenerationModel,
+    gitTextGenerationModelOptions,
+  );
   const isGitRepo = gitBranchList?.isRepo ?? true;
   const hasOriginRemote = gitBranchList?.hasOriginRemote ?? false;
   const visibleGitBranches = useMemo(
@@ -4923,14 +4964,16 @@ export function App({
           onSelect: () => {
             const nextOptions =
               providerModelOptionsByInstance.get(entry.instanceId) ??
-              getAppModelOptions(
-                entry.provider,
-                customModelsByProvider[entry.provider],
+              modelMenuFallbackOptions(
+                entry,
+                customModelsByProvider,
                 currentGitTextGenerationModel,
               );
-            const nextModel =
-              resolveSelectableModel(entry.provider, currentGitTextGenerationModel, nextOptions) ??
-              DEFAULT_MODEL_BY_PROVIDER[entry.provider];
+            const nextModel = resolveModelMenuModel(
+              entry,
+              currentGitTextGenerationModel,
+              nextOptions,
+            );
             updateGitTextGenerationModel(entry.instanceId, nextModel);
             setOverlayMenu(null);
           },
@@ -5242,9 +5285,12 @@ export function App({
   useEffect(() => {
     if (!activeThread) return;
     const nextProvider = activeThread.session?.providerName;
+    const nextProviderInstanceId =
+      activeThread.session?.providerInstanceId ??
+      (typeof nextProvider === "string" ? (nextProvider as ProviderInstanceId) : undefined);
     const sessionInstance =
-      typeof nextProvider === "string"
-        ? modelMenuEntryByInstanceId.get(nextProvider as ProviderInstanceId)
+      nextProviderInstanceId !== undefined
+        ? modelMenuEntryByInstanceId.get(nextProviderInstanceId)
         : undefined;
     const resolvedProvider =
       sessionInstance?.provider ??
@@ -5262,7 +5308,11 @@ export function App({
     if (resolvedInstanceId !== draftProviderInstanceId) {
       setDraftProviderInstanceId(resolvedInstanceId);
     }
-    setDraftModel(resolvePersistedModel(resolvedProvider, activeThread.model));
+    setDraftModel(
+      sessionInstance && !legacyProviderKindForDriver(sessionInstance.driverKind)
+        ? activeThread.model
+        : resolvePersistedModel(resolvedProvider, activeThread.model),
+    );
     setDraftRuntimeMode(activeThread.runtimeMode);
     setDraftInteractionMode(activeThread.interactionMode);
   }, [activeThread, draftProvider, draftProviderInstanceId, modelMenuEntryByInstanceId]);
@@ -14177,8 +14227,8 @@ export function App({
             {modelMenuEntries.map((entry) => (
               <PopupRow
                 key={`provider:${entry.instanceId}`}
-                icon={providerPickerIcon(entry.provider)}
-                iconColor={entry.accentColor ?? providerColor(entry.provider)}
+                icon={providerPickerIcon(entry.driverKind)}
+                iconColor={entry.accentColor ?? providerColor(entry.driverKind)}
                 label={entry.displayName}
                 active={modelMenuInstanceId === entry.instanceId}
                 onHover={() => {
@@ -14220,9 +14270,9 @@ export function App({
                         icon={
                           item.slug === draftModel && item.instanceId === draftProviderInstanceId
                             ? "󰄬"
-                            : providerPickerIcon(item.provider)
+                            : providerPickerIcon(item.driverKind)
                         }
-                        iconColor={item.accentColor ?? providerColor(item.provider)}
+                        iconColor={item.accentColor ?? providerColor(item.driverKind)}
                         label={`${modelMenuDisplayLabel(item.option)} · ${item.providerDisplayName}`}
                         active={index === modelMenuIndex}
                         onHover={() => setModelMenuIndex(index)}
