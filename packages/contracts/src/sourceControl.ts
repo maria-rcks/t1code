@@ -25,6 +25,25 @@ export const SourceControlRepositoryLookupInput = Schema.Struct({
 });
 export type SourceControlRepositoryLookupInput = typeof SourceControlRepositoryLookupInput.Type;
 
+export const SourceControlCloneProtocol = Schema.Literals(["auto", "ssh", "https"]);
+export type SourceControlCloneProtocol = typeof SourceControlCloneProtocol.Type;
+
+export const SourceControlCloneRepositoryInput = Schema.Struct({
+  provider: Schema.optional(SourceControlProviderKind),
+  repository: Schema.optional(TrimmedNonEmptyString),
+  remoteUrl: Schema.optional(TrimmedNonEmptyString),
+  destinationPath: TrimmedNonEmptyString,
+  protocol: Schema.optional(SourceControlCloneProtocol),
+});
+export type SourceControlCloneRepositoryInput = typeof SourceControlCloneRepositoryInput.Type;
+
+export const SourceControlCloneRepositoryResult = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  remoteUrl: TrimmedNonEmptyString,
+  repository: Schema.NullOr(SourceControlRepositoryInfo),
+});
+export type SourceControlCloneRepositoryResult = typeof SourceControlCloneRepositoryResult.Type;
+
 export const VcsDriverKind = Schema.Literals(["git", "unknown"]);
 export type VcsDriverKind = typeof VcsDriverKind.Type;
 

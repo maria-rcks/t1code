@@ -167,6 +167,12 @@ const defaultSourceControlRepositoryService: SourceControlRepositoryServiceShape
       url: "https://github.com/owner/repo",
       sshUrl: "git@github.com:owner/repo.git",
     } satisfies SourceControlRepositoryInfo),
+  cloneRepository: (input) =>
+    Effect.succeed({
+      cwd: input.destinationPath,
+      remoteUrl: input.remoteUrl ?? "git@github.com:owner/repo.git",
+      repository: null,
+    }),
 };
 
 const defaultProviderStatuses: ReadonlyArray<ServerProviderStatus> = [
@@ -1430,6 +1436,7 @@ describe("WebSocket Server", () => {
     server = await createTestServer({
       cwd: "/my/workspace",
       sourceControlRepositoryService: {
+        ...defaultSourceControlRepositoryService,
         lookupRepository,
       },
     });
@@ -1455,6 +1462,57 @@ describe("WebSocket Server", () => {
       nameWithOwner: "octocat/hello-world",
       url: "https://github.com/octocat/hello-world",
       sshUrl: "git@github.com:octocat/hello-world.git",
+    });
+  });
+
+  it("clones source control repositories over websocket", async () => {
+    const cloneRepository = vi.fn<SourceControlRepositoryServiceShape["cloneRepository"]>((input) =>
+      Effect.succeed({
+        cwd: input.destinationPath,
+        remoteUrl: "git@github.com:octocat/hello-world.git",
+        repository: {
+          provider: "github",
+          nameWithOwner: "octocat/hello-world",
+          url: "https://github.com/octocat/hello-world",
+          sshUrl: "git@github.com:octocat/hello-world.git",
+        },
+      }),
+    );
+    server = await createTestServer({
+      cwd: "/my/workspace",
+      sourceControlRepositoryService: {
+        ...defaultSourceControlRepositoryService,
+        cloneRepository,
+      },
+    });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.sourceControlCloneRepository, {
+      provider: "github",
+      repository: "octocat/hello-world",
+      destinationPath: "/tmp/hello-world",
+      protocol: "ssh",
+    });
+    expect(response.error).toBeUndefined();
+    expect(cloneRepository).toHaveBeenCalledWith({
+      provider: "github",
+      repository: "octocat/hello-world",
+      destinationPath: "/tmp/hello-world",
+      protocol: "ssh",
+    });
+    expect(response.result).toEqual({
+      cwd: "/tmp/hello-world",
+      remoteUrl: "git@github.com:octocat/hello-world.git",
+      repository: {
+        provider: "github",
+        nameWithOwner: "octocat/hello-world",
+        url: "https://github.com/octocat/hello-world",
+        sshUrl: "git@github.com:octocat/hello-world.git",
+      },
     });
   });
 

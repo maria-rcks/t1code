@@ -1,12 +1,17 @@
+import * as NodeOS from "node:os";
 import {
+  type SourceControlCloneProtocol,
+  type SourceControlCloneRepositoryInput,
+  type SourceControlCloneRepositoryResult,
   SourceControlRepositoryError,
   type SourceControlProviderKind,
   type SourceControlRepositoryInfo,
   type SourceControlRepositoryLookupInput,
 } from "@t3tools/contracts";
-import { Effect, Layer, Schema, ServiceMap } from "effect";
+import { Effect, FileSystem, Layer, Path, Schema, ServiceMap } from "effect";
 
 import { ServerConfig } from "../config";
+import { GitCore } from "../git/Services/GitCore";
 import { GitHubCli } from "../git/Services/GitHubCli";
 
 const isSourceControlRepositoryError = Schema.is(SourceControlRepositoryError);
@@ -15,6 +20,9 @@ export interface SourceControlRepositoryServiceShape {
   readonly lookupRepository: (
     input: SourceControlRepositoryLookupInput,
   ) => Effect.Effect<SourceControlRepositoryInfo, SourceControlRepositoryError>;
+  readonly cloneRepository: (
+    input: SourceControlCloneRepositoryInput,
+  ) => Effect.Effect<SourceControlCloneRepositoryResult, SourceControlRepositoryError>;
 }
 
 export class SourceControlRepositoryService extends ServiceMap.Service<
@@ -69,9 +77,35 @@ function unsupportedProvider(provider: SourceControlProviderKind, operation: str
   });
 }
 
+function selectRemoteUrl(
+  urls: SourceControlRepositoryInfo,
+  protocol: SourceControlCloneProtocol | undefined,
+): string {
+  switch (protocol ?? "auto") {
+    case "https":
+      return urls.url;
+    case "auto":
+    case "ssh":
+      return urls.sshUrl;
+  }
+}
+
+function expandHomePath(input: string, path: Path.Path): string {
+  if (input === "~") {
+    return NodeOS.homedir();
+  }
+  if (input.startsWith("~/") || input.startsWith("~\\")) {
+    return path.join(NodeOS.homedir(), input.slice(2));
+  }
+  return input;
+}
+
 export const make = Effect.fn("makeSourceControlRepositoryService")(function* () {
   const config = yield* ServerConfig;
+  const fileSystem = yield* FileSystem.FileSystem;
+  const git = yield* GitCore;
   const gitHubCli = yield* GitHubCli;
+  const path = yield* Path.Path;
 
   const lookupRepository = Effect.fn("SourceControlRepositoryService.lookupRepository")(function* (
     input: SourceControlRepositoryLookupInput,
@@ -94,9 +128,107 @@ export const make = Effect.fn("makeSourceControlRepositoryService")(function* ()
     } satisfies SourceControlRepositoryInfo;
   });
 
+  const normalizeDestinationPath = Effect.fn("SourceControlRepositoryService.normalizeDestination")(
+    function* (destinationPath: string) {
+      const trimmed = destinationPath.trim();
+      if (trimmed.length === 0) {
+        return yield* repositoryError({
+          operation: "cloneRepository",
+          provider: "unknown",
+          detail: "Choose a destination path before cloning.",
+        });
+      }
+
+      return path.resolve(expandHomePath(trimmed, path));
+    },
+  );
+
+  const prepareDestination = Effect.fn("SourceControlRepositoryService.prepareDestination")(
+    function* (destinationPath: string) {
+      const normalizedDestination = yield* normalizeDestinationPath(destinationPath);
+      const exists = yield* fileSystem
+        .exists(normalizedDestination)
+        .pipe(Effect.orElseSucceed(() => false));
+      if (exists) {
+        const entries = yield* fileSystem
+          .readDirectory(normalizedDestination, { recursive: false })
+          .pipe(
+            Effect.mapError((cause) =>
+              repositoryError({
+                operation: "cloneRepository",
+                provider: "unknown",
+                detail: "Destination path already exists and is not a directory.",
+                cause,
+              }),
+            ),
+          );
+        if (entries.length > 0) {
+          return yield* repositoryError({
+            operation: "cloneRepository",
+            provider: "unknown",
+            detail: "Destination path already exists and is not empty.",
+          });
+        }
+      } else {
+        yield* fileSystem.makeDirectory(path.dirname(normalizedDestination), { recursive: true });
+      }
+
+      return {
+        destinationPath: normalizedDestination,
+        parentPath: path.dirname(normalizedDestination),
+        directoryName: path.basename(normalizedDestination),
+      };
+    },
+  );
+
+  const cloneRepository = Effect.fn("SourceControlRepositoryService.cloneRepository")(function* (
+    input: SourceControlCloneRepositoryInput,
+  ) {
+    const preparedDestination = yield* prepareDestination(input.destinationPath);
+    let repository: SourceControlRepositoryInfo | null = null;
+    let remoteUrl = input.remoteUrl?.trim() ?? null;
+    let provider: SourceControlProviderKind = input.provider ?? "unknown";
+
+    if (input.provider && input.repository) {
+      repository = yield* lookupRepository({
+        provider: input.provider,
+        repository: input.repository,
+        cwd: preparedDestination.parentPath,
+      });
+      remoteUrl = selectRemoteUrl(repository, input.protocol);
+      provider = input.provider;
+    }
+
+    if (!remoteUrl) {
+      return yield* repositoryError({
+        operation: "cloneRepository",
+        provider,
+        detail: "Enter a repository path or clone URL before cloning.",
+      });
+    }
+
+    yield* git.execute({
+      operation: "SourceControlRepositoryService.cloneRepository",
+      cwd: preparedDestination.parentPath,
+      args: ["clone", remoteUrl, preparedDestination.directoryName],
+      timeoutMs: 120_000,
+      maxOutputBytes: 256 * 1024,
+    });
+
+    return {
+      cwd: preparedDestination.destinationPath,
+      remoteUrl,
+      repository,
+    } satisfies SourceControlCloneRepositoryResult;
+  });
+
   return SourceControlRepositoryService.of({
     lookupRepository: (input) =>
       lookupRepository(input).pipe(mapRepositoryError("lookupRepository", input.provider)),
+    cloneRepository: (input) =>
+      cloneRepository(input).pipe(
+        mapRepositoryError("cloneRepository", input.provider ?? "unknown"),
+      ),
   });
 });
 

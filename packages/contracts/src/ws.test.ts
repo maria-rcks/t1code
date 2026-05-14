@@ -168,6 +168,25 @@ it.effect("accepts sourceControl.lookupRepository requests", () =>
   }),
 );
 
+it.effect("accepts sourceControl.cloneRepository requests", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWebSocketRequest({
+      id: "req-source-control-clone-1",
+      body: {
+        _tag: WS_METHODS.sourceControlCloneRepository,
+        provider: "github",
+        repository: "owner/repo",
+        destinationPath: "/workspace/repo",
+        protocol: "ssh",
+      },
+    });
+    assert.strictEqual(parsed.body._tag, WS_METHODS.sourceControlCloneRepository);
+    if (parsed.body._tag === WS_METHODS.sourceControlCloneRepository) {
+      assert.strictEqual(parsed.body.destinationPath, "/workspace/repo");
+    }
+  }),
+);
+
 it.effect("accepts typed websocket push envelopes with sequence", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeWsResponse({

@@ -37,6 +37,8 @@ import type {
 } from "./server";
 import type { ServerSettings, ServerSettingsPatch } from "./settings";
 import type {
+  SourceControlCloneRepositoryInput,
+  SourceControlCloneRepositoryResult,
   SourceControlDiscoveryResult,
   SourceControlRepositoryInfo,
   SourceControlRepositoryLookupInput,
@@ -177,6 +179,9 @@ export interface NativeApi {
     lookupRepository: (
       input: SourceControlRepositoryLookupInput,
     ) => Promise<SourceControlRepositoryInfo>;
+    cloneRepository: (
+      input: SourceControlCloneRepositoryInput,
+    ) => Promise<SourceControlCloneRepositoryResult>;
   };
   server: {
     getConfig: () => Promise<ServerConfig>;

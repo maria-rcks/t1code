@@ -44,7 +44,10 @@ import {
   ServerRefreshProvidersInput,
 } from "./server";
 import { ServerSettingsPatch } from "./settings";
-import { SourceControlRepositoryLookupInput } from "./sourceControl";
+import {
+  SourceControlCloneRepositoryInput,
+  SourceControlRepositoryLookupInput,
+} from "./sourceControl";
 
 // ── WebSocket RPC Method Names ───────────────────────────────────────
 
@@ -94,6 +97,7 @@ export const WS_METHODS = {
 
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
+  sourceControlCloneRepository: "sourceControl.cloneRepository",
 } as const;
 
 // ── Push Event Channels ──────────────────────────────────────────────
@@ -170,6 +174,7 @@ const WebSocketRequestBody = Schema.Union([
 
   // Source control methods
   tagRequestBody(WS_METHODS.sourceControlLookupRepository, SourceControlRepositoryLookupInput),
+  tagRequestBody(WS_METHODS.sourceControlCloneRepository, SourceControlCloneRepositoryInput),
 ]);
 
 export const WebSocketRequest = Schema.Struct({
