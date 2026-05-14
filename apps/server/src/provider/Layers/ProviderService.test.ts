@@ -1135,6 +1135,9 @@ validation.layer("ProviderServiceLive validation", (it) => {
       const threadId = asThreadId("thread-custom-instance");
       yield* Effect.gen(function* () {
         const provider = yield* ProviderService;
+        const instanceInfo = yield* provider.getInstanceInfo(customInstanceId);
+        assert.equal(instanceInfo.driverKind, "codex");
+        assert.equal(instanceInfo.displayName, "Custom Codex");
         yield* provider.startSession(threadId, {
           threadId,
           provider: "codex",

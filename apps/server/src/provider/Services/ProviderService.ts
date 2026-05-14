@@ -13,6 +13,7 @@
  */
 import type {
   ProviderInterruptTurnInput,
+  ProviderInstanceId,
   ProviderKind,
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
@@ -29,6 +30,7 @@ import type { Effect, Stream } from "effect";
 
 import type { ProviderServiceError } from "../Errors.ts";
 import type { ProviderAdapterCapabilities } from "./ProviderAdapter.ts";
+import type { ProviderInstanceRoutingInfo } from "./ProviderAdapterRegistry.ts";
 
 /**
  * ProviderServiceShape - Service API for provider session and turn orchestration.
@@ -90,6 +92,13 @@ export interface ProviderServiceShape {
   readonly getCapabilities: (
     provider: ProviderKind,
   ) => Effect.Effect<ProviderAdapterCapabilities, ProviderServiceError>;
+
+  /**
+   * Read routing metadata for a configured provider instance.
+   */
+  readonly getInstanceInfo: (
+    instanceId: ProviderInstanceId,
+  ) => Effect.Effect<ProviderInstanceRoutingInfo, ProviderServiceError>;
 
   /**
    * Roll back provider conversation state by a number of turns.

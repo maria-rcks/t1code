@@ -106,6 +106,7 @@ describe("CheckpointDiffQueryLive", () => {
         })),
       ),
     getCapabilities: () => Effect.die("not implemented"),
+    getInstanceInfo: () => Effect.die("not implemented"),
     rollbackConversation: () => Effect.die("not implemented"),
     streamEvents: Stream.empty,
   });

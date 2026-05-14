@@ -28,7 +28,10 @@ import {
 import { Effect, Layer, Option, PubSub, Queue, Schema, SchemaIssue, Stream } from "effect";
 
 import { ProviderValidationError } from "../Errors.ts";
-import { ProviderAdapterRegistry } from "../Services/ProviderAdapterRegistry.ts";
+import {
+  ProviderAdapterRegistry,
+  type ProviderInstanceRoutingInfo,
+} from "../Services/ProviderAdapterRegistry.ts";
 import { ProviderService, type ProviderServiceShape } from "../Services/ProviderService.ts";
 import {
   ProviderSessionDirectory,
@@ -36,6 +39,7 @@ import {
 } from "../Services/ProviderSessionDirectory.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import { AnalyticsService } from "../../telemetry/Services/AnalyticsService.ts";
+import { defaultProviderContinuationIdentity } from "../ProviderDriver.ts";
 
 export interface ProviderServiceLiveOptions {
   readonly canonicalEventLogPath?: string;
@@ -161,6 +165,31 @@ function decodeRoutableProvider(
 
 function defaultProviderInstanceId(provider: ProviderKind): ProviderInstanceId {
   return defaultInstanceIdForDriver(provider as ProviderDriverKind);
+}
+
+function makeLegacyInstanceInfo(
+  instanceId: ProviderInstanceId,
+): Effect.Effect<ProviderInstanceRoutingInfo, ProviderValidationError> {
+  return Effect.gen(function* () {
+    const provider = yield* decodeRoutableProvider(instanceId, "ProviderService.getInstanceInfo");
+    const driverKind = provider as ProviderDriverKind;
+    if (instanceId !== defaultProviderInstanceId(provider)) {
+      return yield* toValidationError(
+        "ProviderService.getInstanceInfo",
+        `Provider instance '${instanceId}' is not supported by this server build.`,
+      );
+    }
+    return {
+      instanceId,
+      driverKind,
+      displayName: undefined,
+      enabled: true,
+      continuationIdentity: defaultProviderContinuationIdentity({
+        driverKind,
+        instanceId,
+      }),
+    };
+  });
 }
 
 const makeProviderService = (options?: ProviderServiceLiveOptions) =>
@@ -623,6 +652,11 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
     const getCapabilities: ProviderServiceShape["getCapabilities"] = (provider) =>
       registry.getByProvider(provider).pipe(Effect.map((adapter) => adapter.capabilities));
 
+    const getInstanceInfo: ProviderServiceShape["getInstanceInfo"] = (instanceId) =>
+      registry.getInstanceInfo !== undefined
+        ? registry.getInstanceInfo(instanceId)
+        : makeLegacyInstanceInfo(instanceId);
+
     const rollbackConversation: ProviderServiceShape["rollbackConversation"] = (rawInput) =>
       Effect.gen(function* () {
         const input = yield* decodeInputOrValidationError({
@@ -697,6 +731,7 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
       stopSession,
       listSessions,
       getCapabilities,
+      getInstanceInfo,
       rollbackConversation,
       // Each access creates a fresh PubSub subscription so that multiple
       // consumers (ProviderRuntimeIngestion, CheckpointReactor, etc.) each
