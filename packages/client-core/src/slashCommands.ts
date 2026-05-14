@@ -56,7 +56,7 @@ export const SLASH_COMMAND_DEFINITIONS: readonly SlashCommandDefinition[] = [
   },
   {
     command: "publish",
-    usage: "/publish owner/repo [private|public]",
+    usage: "/publish owner/repo [provider=github|gitlab|azure-devops]",
     description: "Create a hosted repository and push the current Git repo",
     template: "/publish ",
   },

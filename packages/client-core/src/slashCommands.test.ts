@@ -21,7 +21,11 @@ describe("slashCommands", () => {
   });
 
   it("returns matching slash commands for a partial query", () => {
-    expect(matchSlashCommands("pro").map((item) => item.command)).toEqual(["project", "provider"]);
+    expect(matchSlashCommands("pro").map((item) => item.command)).toEqual([
+      "project",
+      "provider",
+      "publish",
+    ]);
   });
 
   it("parses recognized slash commands", () => {
@@ -33,9 +37,9 @@ describe("slashCommands", () => {
       command: "clone",
       args: "t3tools/t1code ~/src/t1code",
     });
-    expect(parseSlashCommandInput("/publish t3tools/t1code public")).toEqual({
+    expect(parseSlashCommandInput("/publish t3tools/t1code provider=gitlab public")).toEqual({
       command: "publish",
-      args: "t3tools/t1code public",
+      args: "t3tools/t1code provider=gitlab public",
     });
   });
 });

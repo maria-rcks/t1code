@@ -1630,6 +1630,7 @@ function parsePublishCommandArgs(args: string): ParsedPublishCommandArgs | null 
     return null;
   }
 
+  let provider: SourceControlProviderKind = "github";
   let visibility: SourceControlRepositoryVisibility = "private";
   let protocol: SourceControlCloneProtocol = "ssh";
   let remoteName = "origin";
@@ -1645,16 +1646,43 @@ function parsePublishCommandArgs(args: string): ParsedPublishCommandArgs | null 
       if (nextRemoteName) {
         remoteName = nextRemoteName;
       }
+    } else if (normalized.startsWith("provider=")) {
+      const nextProvider = normalizePublishProvider(normalized.slice("provider=".length));
+      if (nextProvider) {
+        provider = nextProvider;
+      }
+    } else {
+      const nextProvider = normalizePublishProvider(normalized);
+      if (nextProvider) {
+        provider = nextProvider;
+      }
     }
   }
 
   return {
-    provider: "github",
+    provider,
     repository,
     visibility,
     protocol,
     remoteName,
   };
+}
+
+function normalizePublishProvider(value: string): SourceControlProviderKind | null {
+  switch (value) {
+    case "github":
+    case "gh":
+      return "github";
+    case "gitlab":
+    case "glab":
+      return "gitlab";
+    case "azure":
+    case "azure-devops":
+    case "az":
+      return "azure-devops";
+    default:
+      return null;
+  }
 }
 
 function isRemoteUrlLike(source: string): boolean {
@@ -9263,7 +9291,7 @@ export function App({
     closeOverlayMenu();
     resetComposerTextarea(`/publish ${publishAccount ? `${publishAccount}/` : ""}`);
     setFocusArea("composer");
-    setStatus("Enter owner/repo, then optionally public, https, or remote=<name>");
+    setStatus("Enter owner/repo, then optionally provider=gitlab, public, https, or remote=<name>");
   }
 
   async function publishRepositoryFromCommand(args: string) {
