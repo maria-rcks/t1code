@@ -7,6 +7,7 @@ import {
 } from "@t3tools/contracts";
 import { Schema } from "effect";
 import {
+  COMING_SOON_INSTALL_PROVIDER_OPTIONS,
   INSTALL_PROVIDER_SETTINGS,
   buildDeleteProviderInstancePatch,
   buildDefaultProviderInstanceUpdatePatch,
@@ -57,6 +58,20 @@ describe("providerSettings", () => {
       label: "Server password",
       placeholder: "Optional",
     });
+  });
+
+  it("exposes coming soon provider install options", () => {
+    expect(
+      COMING_SOON_INSTALL_PROVIDER_OPTIONS.map((option) => ({
+        provider: option.provider,
+        title: option.title,
+      })),
+    ).toEqual([
+      { provider: "githubCopilot", title: "GitHub Copilot" },
+      { provider: "gemini", title: "Gemini" },
+      { provider: "acpRegistry", title: "ACP Registry" },
+      { provider: "piAgent", title: "Pi Agent" },
+    ]);
   });
 
   it("promotes default provider edits into providerInstances and resets legacy settings", () => {

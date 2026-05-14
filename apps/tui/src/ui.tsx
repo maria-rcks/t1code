@@ -182,6 +182,7 @@ import {
 import { openExternalUrl } from "./openExternal";
 import { type TuiPrefs, readPrefs, writePrefs } from "./prefs";
 import {
+  COMING_SOON_INSTALL_PROVIDER_OPTIONS,
   INSTALL_PROVIDER_SETTINGS,
   buildDeleteProviderInstancePatch,
   buildDefaultProviderInstanceUpdatePatch,
@@ -1086,7 +1087,10 @@ function providerPickerIcon(provider: string): string {
   if (provider === "claudeAgent") return "✱";
   if (provider === "cursor") return "⌖";
   if (provider === "opencode") return "⌘";
+  if (provider === "githubCopilot") return "";
   if (provider === "gemini") return "◇";
+  if (provider === "acpRegistry") return "󰕮";
+  if (provider === "piAgent") return "π";
   return "󰚩";
 }
 
@@ -12155,6 +12159,32 @@ export function App({
                               </box>
                             );
                           })}
+                          {COMING_SOON_INSTALL_PROVIDER_OPTIONS.map((providerOption) => (
+                            <box
+                              key={`provider-install-soon:${String(providerOption.provider)}`}
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                backgroundColor: PALETTE.surfaceAlt,
+                                paddingLeft: 1,
+                                paddingRight: 1,
+                                marginBottom: 1,
+                              }}
+                            >
+                              <box style={{ flexDirection: "row", alignItems: "center" }}>
+                                <text
+                                  content={providerPickerIcon(String(providerOption.provider))}
+                                  style={{ fg: PALETTE.subtle, marginRight: 1 }}
+                                />
+                                <text
+                                  content={providerOption.title}
+                                  style={{ fg: PALETTE.subtle, marginRight: 1 }}
+                                />
+                              </box>
+                              <text content="Soon" style={{ fg: PALETTE.subtle }} />
+                            </box>
+                          ))}
                         </SettingsRow>
                         <SettingsRow
                           title="Observability"

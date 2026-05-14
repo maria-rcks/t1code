@@ -55,6 +55,10 @@ export type InstallProviderSettings = {
   readonly title: string;
   readonly fields: readonly InstallProviderField[];
 };
+export type ComingSoonInstallProviderOption = {
+  readonly provider: ProviderDriverKind;
+  readonly title: string;
+};
 type DefaultProviderInstancePatch = {
   readonly accentColor?: ProviderInstanceConfig["accentColor"] | undefined;
   readonly displayName?: ProviderInstanceConfig["displayName"] | undefined;
@@ -155,6 +159,25 @@ export const INSTALL_PROVIDER_SETTINGS: readonly InstallProviderSettings[] =
     title: definition.title,
     fields: deriveInstallProviderFields(definition.schema),
   }));
+
+export const COMING_SOON_INSTALL_PROVIDER_OPTIONS: readonly ComingSoonInstallProviderOption[] = [
+  {
+    provider: decodeProviderDriverKind("githubCopilot"),
+    title: "GitHub Copilot",
+  },
+  {
+    provider: decodeProviderDriverKind("gemini"),
+    title: "Gemini",
+  },
+  {
+    provider: decodeProviderDriverKind("acpRegistry"),
+    title: "ACP Registry",
+  },
+  {
+    provider: decodeProviderDriverKind("piAgent"),
+    title: "Pi Agent",
+  },
+];
 
 export function providerDriverKindForSettingsKey(
   provider: ProviderSettingsKey,
