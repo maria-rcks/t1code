@@ -60,6 +60,7 @@ import { ProviderHealth } from "./provider/Services/ProviderHealth";
 import { ProviderInstanceRegistry } from "./provider/Services/ProviderInstanceRegistry";
 import { ProviderMaintenanceRunner } from "./provider/providerMaintenanceRunner.ts";
 import { ProcessDiagnostics } from "./diagnostics/ProcessDiagnostics.ts";
+import { TraceDiagnostics } from "./diagnostics/TraceDiagnostics.ts";
 import { redactServerSettingsForClient, ServerSettingsService } from "./serverSettings";
 import { CheckpointDiffQuery } from "./checkpointing/Services/CheckpointDiffQuery";
 import { clamp } from "effect/Number";
@@ -211,6 +212,7 @@ function stripRequestTag<T extends { _tag: string }>(body: T) {
 
 const encodeWsResponse = Schema.encodeEffect(Schema.fromJsonString(WsResponse));
 const decodeWebSocketRequest = decodeJsonResult(WebSocketRequest);
+const TRACE_DIAGNOSTICS_MAX_FILES = 3;
 
 export type ServerCoreRuntimeServices =
   | OrchestrationEngineService
@@ -222,6 +224,7 @@ export type ServerCoreRuntimeServices =
   | ProviderInstanceRegistry
   | ProviderMaintenanceRunner
   | ProcessDiagnostics
+  | TraceDiagnostics
   | ServerSettingsService;
 
 export type ServerRuntimeServices =
@@ -271,6 +274,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const providerInstanceRegistry = yield* ProviderInstanceRegistry;
   const providerMaintenanceRunner = yield* ProviderMaintenanceRunner;
   const processDiagnostics = yield* ProcessDiagnostics;
+  const traceDiagnostics = yield* TraceDiagnostics;
   const serverSettings = yield* ServerSettingsService;
   const git = yield* GitCore;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -992,6 +996,12 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         const body = stripRequestTag(request.body);
         return yield* providerMaintenanceRunner.updateProvider(body);
       }
+
+      case WS_METHODS.serverGetTraceDiagnostics:
+        return yield* traceDiagnostics.read({
+          traceFilePath: serverConfig.serverTracePath,
+          maxFiles: TRACE_DIAGNOSTICS_MAX_FILES,
+        });
 
       case WS_METHODS.serverGetProcessDiagnostics:
         return yield* processDiagnostics.read;

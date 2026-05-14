@@ -219,6 +219,89 @@ export class ServerProviderUpdateError extends Schema.TaggedErrorClass<ServerPro
   }
 }
 
+export const ServerTraceDiagnosticsErrorKind = Schema.Literals([
+  "trace-file-not-found",
+  "trace-file-read-failed",
+]);
+export type ServerTraceDiagnosticsErrorKind = typeof ServerTraceDiagnosticsErrorKind.Type;
+
+export const ServerTraceDiagnosticsSpanSummary = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  count: NonNegativeInt,
+  failureCount: NonNegativeInt,
+  totalDurationMs: Schema.Number,
+  averageDurationMs: Schema.Number,
+  maxDurationMs: Schema.Number,
+});
+export type ServerTraceDiagnosticsSpanSummary = typeof ServerTraceDiagnosticsSpanSummary.Type;
+
+export const ServerTraceDiagnosticsFailureSummary = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  cause: TrimmedNonEmptyString,
+  count: NonNegativeInt,
+  lastSeenAt: IsoDateTime,
+  traceId: TrimmedNonEmptyString,
+  spanId: TrimmedNonEmptyString,
+});
+export type ServerTraceDiagnosticsFailureSummary = typeof ServerTraceDiagnosticsFailureSummary.Type;
+
+export const ServerTraceDiagnosticsRecentFailure = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  cause: TrimmedNonEmptyString,
+  durationMs: Schema.Number,
+  endedAt: IsoDateTime,
+  traceId: TrimmedNonEmptyString,
+  spanId: TrimmedNonEmptyString,
+});
+export type ServerTraceDiagnosticsRecentFailure = typeof ServerTraceDiagnosticsRecentFailure.Type;
+
+export const ServerTraceDiagnosticsSpanOccurrence = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  durationMs: Schema.Number,
+  endedAt: IsoDateTime,
+  traceId: TrimmedNonEmptyString,
+  spanId: TrimmedNonEmptyString,
+});
+export type ServerTraceDiagnosticsSpanOccurrence = typeof ServerTraceDiagnosticsSpanOccurrence.Type;
+
+export const ServerTraceDiagnosticsLogEvent = Schema.Struct({
+  spanName: TrimmedNonEmptyString,
+  level: TrimmedNonEmptyString,
+  message: TrimmedNonEmptyString,
+  seenAt: IsoDateTime,
+  traceId: TrimmedNonEmptyString,
+  spanId: TrimmedNonEmptyString,
+});
+export type ServerTraceDiagnosticsLogEvent = typeof ServerTraceDiagnosticsLogEvent.Type;
+
+export const ServerTraceDiagnosticsResult = Schema.Struct({
+  traceFilePath: TrimmedNonEmptyString,
+  scannedFilePaths: Schema.Array(TrimmedNonEmptyString),
+  readAt: IsoDateTime,
+  recordCount: NonNegativeInt,
+  parseErrorCount: NonNegativeInt,
+  firstSpanAt: Schema.NullOr(IsoDateTime),
+  lastSpanAt: Schema.NullOr(IsoDateTime),
+  failureCount: NonNegativeInt,
+  interruptionCount: NonNegativeInt,
+  slowSpanThresholdMs: NonNegativeInt,
+  slowSpanCount: NonNegativeInt,
+  logLevelCounts: Schema.Record(TrimmedNonEmptyString, NonNegativeInt),
+  topSpansByCount: Schema.Array(ServerTraceDiagnosticsSpanSummary),
+  slowestSpans: Schema.Array(ServerTraceDiagnosticsSpanOccurrence),
+  commonFailures: Schema.Array(ServerTraceDiagnosticsFailureSummary),
+  latestFailures: Schema.Array(ServerTraceDiagnosticsRecentFailure),
+  latestWarningAndErrorLogs: Schema.Array(ServerTraceDiagnosticsLogEvent),
+  partialFailure: Schema.NullOr(Schema.Boolean),
+  error: Schema.NullOr(
+    Schema.Struct({
+      kind: ServerTraceDiagnosticsErrorKind,
+      message: TrimmedNonEmptyString,
+    }),
+  ),
+});
+export type ServerTraceDiagnosticsResult = typeof ServerTraceDiagnosticsResult.Type;
+
 export const ServerProcessSignal = Schema.Literals(["SIGINT", "SIGKILL"]);
 export type ServerProcessSignal = typeof ServerProcessSignal.Type;
 

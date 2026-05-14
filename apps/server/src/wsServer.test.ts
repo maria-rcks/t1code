@@ -65,6 +65,7 @@ import {
   ProcessDiagnostics,
   type ProcessDiagnosticsShape,
 } from "./diagnostics/ProcessDiagnostics.ts";
+import { TraceDiagnostics, type TraceDiagnosticsShape } from "./diagnostics/TraceDiagnostics.ts";
 import { Open, type OpenShape } from "./open";
 import { GitManager, type GitManagerShape } from "./git/Services/GitManager.ts";
 import type { GitCoreShape } from "./git/Services/GitCore.ts";
@@ -101,6 +102,31 @@ const defaultProcessDiagnostics: ProcessDiagnosticsShape = {
       ...input,
       signaled: true,
       message: null,
+    }),
+};
+
+const defaultTraceDiagnostics: TraceDiagnosticsShape = {
+  read: (options) =>
+    Effect.succeed({
+      traceFilePath: options.traceFilePath,
+      scannedFilePaths: [options.traceFilePath],
+      readAt: "2026-01-01T00:00:00.000Z",
+      recordCount: 0,
+      parseErrorCount: 0,
+      firstSpanAt: null,
+      lastSpanAt: null,
+      failureCount: 0,
+      interruptionCount: 0,
+      slowSpanThresholdMs: options.slowSpanThresholdMs ?? 1_000,
+      slowSpanCount: 0,
+      logLevelCounts: {},
+      topSpansByCount: [],
+      slowestSpans: [],
+      commonFailures: [],
+      latestFailures: [],
+      latestWarningAndErrorLogs: [],
+      partialFailure: null,
+      error: null,
     }),
 };
 
@@ -530,6 +556,7 @@ describe("WebSocket Server", () => {
       providerInstanceRegistry?: ProviderInstanceRegistryShape;
       providerMaintenanceRunner?: ProviderMaintenanceRunnerShape;
       processDiagnostics?: ProcessDiagnosticsShape;
+      traceDiagnostics?: TraceDiagnosticsShape;
       providerHealth?: ProviderHealthShape;
       open?: OpenShape;
       gitManager?: GitManagerShape;
@@ -555,6 +582,10 @@ describe("WebSocket Server", () => {
     const processDiagnosticsLayer = Layer.succeed(
       ProcessDiagnostics,
       options.processDiagnostics ?? defaultProcessDiagnostics,
+    );
+    const traceDiagnosticsLayer = Layer.succeed(
+      TraceDiagnostics,
+      options.traceDiagnostics ?? defaultTraceDiagnostics,
     );
     const serverConfigLayer = Layer.succeed(ServerConfig, {
       mode: "web",
@@ -602,6 +633,7 @@ describe("WebSocket Server", () => {
       Layer.provideMerge(runtimeLayer),
       Layer.provideMerge(providerHealthLayer),
       Layer.provideMerge(providerMaintenanceLayer),
+      Layer.provideMerge(traceDiagnosticsLayer),
       Layer.provideMerge(processDiagnosticsLayer),
       Layer.provideMerge(ProviderEventLoggersLive),
       Layer.provideMerge(ServerSettingsLive),
@@ -1203,6 +1235,64 @@ describe("WebSocket Server", () => {
         serverPid: 42,
         processCount: 1,
         totalRssBytes: 1024,
+      }),
+    );
+  });
+
+  it("returns trace diagnostics over websocket", async () => {
+    const read = vi.fn<TraceDiagnosticsShape["read"]>((options) =>
+      Effect.succeed({
+        traceFilePath: options.traceFilePath,
+        scannedFilePaths: [options.traceFilePath],
+        readAt: "2026-01-01T00:00:00.000Z",
+        recordCount: 2,
+        parseErrorCount: 0,
+        firstSpanAt: "2026-01-01T00:00:00.000Z",
+        lastSpanAt: "2026-01-01T00:00:02.000Z",
+        failureCount: 1,
+        interruptionCount: 0,
+        slowSpanThresholdMs: 1_000,
+        slowSpanCount: 1,
+        logLevelCounts: { Error: 1 },
+        topSpansByCount: [
+          {
+            name: "provider.turn",
+            count: 2,
+            failureCount: 1,
+            totalDurationMs: 1_500,
+            averageDurationMs: 750,
+            maxDurationMs: 1_250,
+          },
+        ],
+        slowestSpans: [],
+        commonFailures: [],
+        latestFailures: [],
+        latestWarningAndErrorLogs: [],
+        partialFailure: null,
+        error: null,
+      }),
+    );
+    server = await createTestServer({
+      cwd: "/my/workspace",
+      traceDiagnostics: { read },
+    });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.serverGetTraceDiagnostics);
+    expect(response.error).toBeUndefined();
+    expect(read).toHaveBeenCalledWith({
+      traceFilePath: expect.stringContaining("server.trace.ndjson"),
+      maxFiles: 3,
+    });
+    expect(response.result).toEqual(
+      expect.objectContaining({
+        recordCount: 2,
+        failureCount: 1,
+        slowSpanCount: 1,
       }),
     );
   });

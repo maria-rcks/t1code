@@ -112,6 +112,18 @@ it.effect("accepts server.getProcessDiagnostics requests", () =>
   }),
 );
 
+it.effect("accepts server.getTraceDiagnostics requests", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWebSocketRequest({
+      id: "req-traces-1",
+      body: {
+        _tag: WS_METHODS.serverGetTraceDiagnostics,
+      },
+    });
+    assert.strictEqual(parsed.body._tag, WS_METHODS.serverGetTraceDiagnostics);
+  }),
+);
+
 it.effect("accepts server.signalProcess requests", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeWebSocketRequest({

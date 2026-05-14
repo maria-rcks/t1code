@@ -137,6 +137,7 @@ export function createTransportNativeApi(options: NativeApiAdapterOptions): {
       getSettings: () => transport.request(WS_METHODS.serverGetSettings),
       updateSettings: (patch) => transport.request(WS_METHODS.serverUpdateSettings, patch),
       upsertKeybinding: (input) => transport.request(WS_METHODS.serverUpsertKeybinding, input),
+      getTraceDiagnostics: () => transport.request(WS_METHODS.serverGetTraceDiagnostics),
       getProcessDiagnostics: () => transport.request(WS_METHODS.serverGetProcessDiagnostics),
       signalProcess: (input: ServerSignalProcessInput) =>
         transport.request(WS_METHODS.serverSignalProcess, input),

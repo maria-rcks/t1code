@@ -33,6 +33,7 @@ import type {
   ServerRefreshProvidersInput,
   ServerSignalProcessInput,
   ServerSignalProcessResult,
+  ServerTraceDiagnosticsResult,
 } from "./server";
 import type { ServerSettings, ServerSettingsPatch } from "./settings";
 import type {
@@ -176,6 +177,7 @@ export interface NativeApi {
     getSettings: () => Promise<ServerSettings>;
     updateSettings: (patch: ServerSettingsPatch) => Promise<ServerSettings>;
     upsertKeybinding: (input: ServerUpsertKeybindingInput) => Promise<ServerUpsertKeybindingResult>;
+    getTraceDiagnostics: () => Promise<ServerTraceDiagnosticsResult>;
     getProcessDiagnostics: () => Promise<ServerProcessDiagnosticsResult>;
     signalProcess: (input: ServerSignalProcessInput) => Promise<ServerSignalProcessResult>;
   };

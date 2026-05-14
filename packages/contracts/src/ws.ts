@@ -86,6 +86,7 @@ export const WS_METHODS = {
   serverGetSettings: "server.getSettings",
   serverUpdateSettings: "server.updateSettings",
   serverUpsertKeybinding: "server.upsertKeybinding",
+  serverGetTraceDiagnostics: "server.getTraceDiagnostics",
   serverGetProcessDiagnostics: "server.getProcessDiagnostics",
   serverSignalProcess: "server.signalProcess",
 } as const;
@@ -157,6 +158,7 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.serverGetSettings, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverUpdateSettings, ServerSettingsPatch),
   tagRequestBody(WS_METHODS.serverUpsertKeybinding, KeybindingRule),
+  tagRequestBody(WS_METHODS.serverGetTraceDiagnostics, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverGetProcessDiagnostics, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverSignalProcess, ServerSignalProcessInput),
 ]);

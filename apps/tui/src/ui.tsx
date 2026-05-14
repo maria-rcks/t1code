@@ -55,6 +55,7 @@ import {
   type ServerProvider,
   type ServerSettings,
   type ServerSettingsPatch,
+  type ServerTraceDiagnosticsResult,
 } from "@t3tools/contracts";
 import {
   DEFAULT_APP_SETTINGS,
@@ -1057,6 +1058,15 @@ function formatCpuPercent(value: number): string {
   if (!Number.isFinite(value)) return "0%";
   const precision = value >= 10 ? 0 : 1;
   return `${value.toFixed(precision)}%`;
+}
+
+function formatDurationMs(value: number): string {
+  if (!Number.isFinite(value) || value < 0) return "0ms";
+  if (value < 1_000) return `${Math.round(value)}ms`;
+  const seconds = value / 1_000;
+  if (seconds < 60) return `${seconds.toFixed(seconds >= 10 ? 0 : 1)}s`;
+  const minutes = seconds / 60;
+  return `${minutes.toFixed(minutes >= 10 ? 0 : 1)}m`;
 }
 
 function isProviderUpdateActive(provider: ServerProvider | null | undefined): boolean {
@@ -3324,6 +3334,11 @@ export function App({
   const [processDiagnosticsError, setProcessDiagnosticsError] = useState<string | null>(null);
   const [isLoadingProcessDiagnostics, setIsLoadingProcessDiagnostics] = useState(false);
   const [signalingProcessPid, setSignalingProcessPid] = useState<number | null>(null);
+  const [traceDiagnostics, setTraceDiagnostics] = useState<ServerTraceDiagnosticsResult | null>(
+    null,
+  );
+  const [traceDiagnosticsError, setTraceDiagnosticsError] = useState<string | null>(null);
+  const [isLoadingTraceDiagnostics, setIsLoadingTraceDiagnostics] = useState(false);
   const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null);
   const [gitBranchList, setGitBranchList] = useState<GitListBranchesResult | null>(null);
   const [gitStateError, setGitStateError] = useState<string | null>(null);
@@ -3436,6 +3451,22 @@ export function App({
       setIsLoadingProcessDiagnostics(false);
     }
   }, [api, isLoadingProcessDiagnostics, logger]);
+  const refreshTraceDiagnostics = useCallback(async () => {
+    if (!api || isLoadingTraceDiagnostics) return;
+    setIsLoadingTraceDiagnostics(true);
+    setTraceDiagnosticsError(null);
+    try {
+      const diagnostics = await api.server.getTraceDiagnostics();
+      setTraceDiagnostics(diagnostics);
+      setTraceDiagnosticsError(diagnostics.error?.message ?? null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Trace diagnostics unavailable";
+      logger.log("server.traceDiagnostics.refreshFailed", { error: message });
+      setTraceDiagnosticsError(message);
+    } finally {
+      setIsLoadingTraceDiagnostics(false);
+    }
+  }, [api, isLoadingTraceDiagnostics, logger]);
   const signalProcess = useCallback(
     async (pid: number, signal: ServerProcessSignal) => {
       if (!api || signalingProcessPid) return;
@@ -11427,6 +11458,148 @@ export function App({
                               style={{ fg: PALETTE.subtle }}
                             />
                           ) : null}
+                        </SettingsRow>
+                        <SettingsRow
+                          title="Trace diagnostics"
+                          description="Summarize local server trace records and recent failures."
+                          status={
+                            <>
+                              <text
+                                content={
+                                  traceDiagnostics
+                                    ? `${traceDiagnostics.recordCount} spans · ${traceDiagnostics.failureCount} failures · ${traceDiagnostics.slowSpanCount} slow`
+                                    : "No trace snapshot loaded."
+                                }
+                                style={{ fg: PALETTE.text }}
+                              />
+                              <text
+                                content={
+                                  traceDiagnostics
+                                    ? `${formatCheckedRelativeTime(traceDiagnostics.readAt)} · ${traceDiagnostics.traceFilePath}`
+                                    : "Refresh to scan local server trace files."
+                                }
+                                style={{ fg: PALETTE.subtle }}
+                              />
+                              {traceDiagnosticsError ? (
+                                <text
+                                  content={
+                                    traceDiagnostics?.partialFailure
+                                      ? `Partial trace scan: ${traceDiagnosticsError}`
+                                      : traceDiagnosticsError
+                                  }
+                                  style={{ fg: PALETTE.warning }}
+                                />
+                              ) : null}
+                            </>
+                          }
+                          control={
+                            <ToolbarButton
+                              label={isLoadingTraceDiagnostics ? "Refreshing..." : "Refresh"}
+                              disabled={!api || isLoadingTraceDiagnostics}
+                              onPress={() => {
+                                void refreshTraceDiagnostics();
+                              }}
+                            />
+                          }
+                        >
+                          {traceDiagnostics ? (
+                            <>
+                              <box
+                                style={{
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  backgroundColor: PALETTE.surfaceAlt,
+                                  paddingLeft: 1,
+                                  paddingRight: 1,
+                                  marginBottom: 1,
+                                }}
+                              >
+                                <text
+                                  content={`Parse errors ${traceDiagnostics.parseErrorCount}`}
+                                  style={{ fg: PALETTE.subtle, marginRight: 2 }}
+                                />
+                                <text
+                                  content={`Interruptions ${traceDiagnostics.interruptionCount}`}
+                                  style={{ fg: PALETTE.subtle, marginRight: 2 }}
+                                />
+                                <text
+                                  content={`Slow >= ${formatDurationMs(traceDiagnostics.slowSpanThresholdMs)}`}
+                                  style={{ fg: PALETTE.subtle }}
+                                />
+                              </box>
+                              {traceDiagnostics.latestFailures.slice(0, 3).map((failure) => (
+                                <box
+                                  key={`trace-failure:${failure.traceId}:${failure.spanId}`}
+                                  style={{
+                                    flexDirection: "column",
+                                    backgroundColor: PALETTE.surfaceAlt,
+                                    paddingLeft: 1,
+                                    paddingRight: 1,
+                                    marginBottom: 1,
+                                  }}
+                                >
+                                  <text
+                                    content={`${failure.name} · ${formatDurationMs(failure.durationMs)} · ${formatCheckedRelativeTime(failure.endedAt)}`}
+                                    style={{ fg: PALETTE.text }}
+                                  />
+                                  <text content={failure.cause} style={{ fg: PALETTE.warning }} />
+                                </box>
+                              ))}
+                              {traceDiagnostics.latestWarningAndErrorLogs
+                                .slice(0, 3)
+                                .map((event) => (
+                                  <box
+                                    key={`trace-log:${event.traceId}:${event.spanId}:${event.seenAt}:${event.message}`}
+                                    style={{
+                                      flexDirection: "column",
+                                      backgroundColor: PALETTE.surfaceAlt,
+                                      paddingLeft: 1,
+                                      paddingRight: 1,
+                                      marginBottom: 1,
+                                    }}
+                                  >
+                                    <text
+                                      content={`${event.level} · ${event.spanName} · ${formatCheckedRelativeTime(event.seenAt)}`}
+                                      style={{ fg: PALETTE.text }}
+                                    />
+                                    <text content={event.message} style={{ fg: PALETTE.subtle }} />
+                                  </box>
+                                ))}
+                              {traceDiagnostics.topSpansByCount.slice(0, 5).map((span) => (
+                                <box
+                                  key={`trace-span:${span.name}`}
+                                  style={{
+                                    flexDirection: "row",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    backgroundColor: PALETTE.surfaceAlt,
+                                    paddingLeft: 1,
+                                    paddingRight: 1,
+                                    marginBottom: 1,
+                                  }}
+                                >
+                                  <box style={{ flexGrow: 1, flexShrink: 1, overflow: "hidden" }}>
+                                    <text content={span.name} style={{ fg: PALETTE.text }} />
+                                  </box>
+                                  <text
+                                    content={`${span.count}x · avg ${formatDurationMs(span.averageDurationMs)} · max ${formatDurationMs(span.maxDurationMs)}`}
+                                    style={{ fg: PALETTE.subtle }}
+                                  />
+                                </box>
+                              ))}
+                              {traceDiagnostics.recordCount === 0 ? (
+                                <text
+                                  content="No local trace records in the latest snapshot."
+                                  style={{ fg: PALETTE.subtle }}
+                                />
+                              ) : null}
+                            </>
+                          ) : (
+                            <text
+                              content="No trace records loaded yet."
+                              style={{ fg: PALETTE.subtle }}
+                            />
+                          )}
                         </SettingsRow>
                         <SettingsRow
                           title="Keybindings"
