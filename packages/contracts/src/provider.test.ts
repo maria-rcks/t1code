@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { Schema } from "effect";
 
-import { ProviderSendTurnInput, ProviderSessionStartInput } from "./provider";
+import {
+  ProviderEvent,
+  ProviderSendTurnInput,
+  ProviderSession,
+  ProviderSessionStartInput,
+} from "./provider";
 
 const decodeProviderSessionStartInput = Schema.decodeUnknownSync(ProviderSessionStartInput);
 const decodeProviderSendTurnInput = Schema.decodeUnknownSync(ProviderSendTurnInput);
+const decodeProviderSession = Schema.decodeUnknownSync(ProviderSession);
+const decodeProviderEvent = Schema.decodeUnknownSync(ProviderEvent);
 
 describe("ProviderSessionStartInput", () => {
   it("accepts codex-compatible payloads", () => {
@@ -92,6 +99,24 @@ describe("ProviderSessionStartInput", () => {
     expect(parsed.providerInstanceId).toBe("cursor");
     expect(parsed.modelSelection?.instanceId).toBe("cursor");
   });
+
+  it("accepts fork-provided driver kinds as branded slugs", () => {
+    const parsed = decodeProviderSessionStartInput({
+      threadId: "thread-1",
+      provider: "ollama",
+      providerInstanceId: "ollama_local",
+      cwd: "/tmp/workspace",
+      modelSelection: {
+        instanceId: "ollama_local",
+        model: "llama3.3",
+      },
+      runtimeMode: "full-access",
+    });
+
+    expect(parsed.provider).toBe("ollama");
+    expect(parsed.providerInstanceId).toBe("ollama_local");
+    expect(parsed.modelSelection?.instanceId).toBe("ollama_local");
+  });
 });
 
 describe("ProviderSendTurnInput", () => {
@@ -126,5 +151,62 @@ describe("ProviderSendTurnInput", () => {
 
     expect(parsed.modelOptions?.claudeAgent?.effort).toBe("ultrathink");
     expect(parsed.modelOptions?.claudeAgent?.fastMode).toBe(true);
+  });
+});
+
+describe("providerInstanceId routing key", () => {
+  it("propagates providerInstanceId through ProviderSession decode", () => {
+    const session = decodeProviderSession({
+      provider: "codex",
+      providerInstanceId: "codex_work",
+      status: "ready",
+      runtimeMode: "full-access",
+      threadId: "thread-1",
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-01T00:00:00Z",
+    });
+
+    expect(session.providerInstanceId).toBe("codex_work");
+  });
+
+  it("decodes ProviderSession for fork-provided driver kinds", () => {
+    const session = decodeProviderSession({
+      provider: "ollama",
+      providerInstanceId: "ollama_local",
+      status: "ready",
+      runtimeMode: "full-access",
+      threadId: "thread-1",
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-01T00:00:00Z",
+    });
+
+    expect(session.provider).toBe("ollama");
+    expect(session.providerInstanceId).toBe("ollama_local");
+  });
+
+  it("decodes ProviderEvent carrying open provider drivers and instance routing", () => {
+    const event = decodeProviderEvent({
+      id: "event-1",
+      kind: "notification",
+      provider: "opencode",
+      providerInstanceId: "opencode",
+      threadId: "thread-1",
+      createdAt: "2024-01-01T00:00:00Z",
+      method: "session.created",
+    });
+
+    expect(event.provider).toBe("opencode");
+    expect(event.providerInstanceId).toBe("opencode");
+  });
+
+  it("rejects providerInstanceId values that fail the slug pattern", () => {
+    expect(() =>
+      decodeProviderSessionStartInput({
+        threadId: "thread-1",
+        provider: "codex",
+        providerInstanceId: "1bad",
+        runtimeMode: "full-access",
+      }),
+    ).toThrow();
   });
 });
