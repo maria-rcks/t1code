@@ -9,6 +9,7 @@ import { ServerConfig, type ServerConfigShape } from "../config";
 import { GitCommandError } from "../git/Errors";
 import { GitCore, type GitCoreShape } from "../git/Services/GitCore";
 import { GitHubCli, type GitHubCliShape } from "../git/Services/GitHubCli";
+import { GitLabCli, type GitLabCliShape } from "../git/Services/GitLabCli";
 import {
   SourceControlRepositoryService,
   SourceControlRepositoryServiceLive,
@@ -59,6 +60,7 @@ const serverConfigLayer = Layer.succeed(ServerConfig, {
 
 function makeLayer(input: {
   gitHubCli: Pick<GitHubCliShape, "getRepositoryCloneUrls"> & Partial<GitHubCliShape>;
+  gitLabCli?: Partial<GitLabCliShape>;
   gitCore?: Pick<GitCoreShape, "execute"> & Partial<GitCoreShape>;
 }) {
   return SourceControlRepositoryServiceLive.pipe(
@@ -71,6 +73,19 @@ function makeLayer(input: {
           input.gitHubCli.createRepository ??
           (() => Effect.die("GitHubCli.createRepository should not be called in this test")),
       } as GitHubCliShape),
+    ),
+    Layer.provideMerge(
+      Layer.succeed(GitLabCli, {
+        execute:
+          input.gitLabCli?.execute ??
+          (() => Effect.die("GitLabCli.execute should not be called in this test")),
+        getRepositoryCloneUrls:
+          input.gitLabCli?.getRepositoryCloneUrls ??
+          (() => Effect.die("GitLabCli.getRepositoryCloneUrls should not be called in this test")),
+        createRepository:
+          input.gitLabCli?.createRepository ??
+          (() => Effect.die("GitLabCli.createRepository should not be called in this test")),
+      } as GitLabCliShape),
     ),
     Layer.provideMerge(
       Layer.succeed(GitCore, {
@@ -119,6 +134,43 @@ describe("SourceControlRepositoryService", () => {
     });
   });
 
+  it("looks up GitLab repository clone URLs", async () => {
+    const getRepositoryCloneUrls = vi.fn<GitLabCliShape["getRepositoryCloneUrls"]>((input) =>
+      Effect.succeed({
+        nameWithOwner: input.repository,
+        url: `https://gitlab.com/${input.repository}`,
+        sshUrl: `git@gitlab.com:${input.repository}.git`,
+      }),
+    );
+    const layer = makeLayer({
+      gitHubCli: {
+        getRepositoryCloneUrls: () => Effect.die("GitHubCli should not be called"),
+      },
+      gitLabCli: { getRepositoryCloneUrls },
+    });
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* SourceControlRepositoryService;
+        return yield* service.lookupRepository({
+          provider: "gitlab",
+          repository: "group/project",
+        });
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(getRepositoryCloneUrls).toHaveBeenCalledWith({
+      cwd: "/workspace",
+      repository: "group/project",
+    });
+    expect(result).toEqual({
+      provider: "gitlab",
+      nameWithOwner: "group/project",
+      url: "https://gitlab.com/group/project",
+      sshUrl: "git@gitlab.com:group/project.git",
+    });
+  });
+
   it("rejects unsupported repository providers", async () => {
     const layer = makeLayer({
       gitHubCli: {
@@ -130,7 +182,7 @@ describe("SourceControlRepositoryService", () => {
       Effect.gen(function* () {
         const service = yield* SourceControlRepositoryService;
         return yield* service.lookupRepository({
-          provider: "gitlab",
+          provider: "bitbucket",
           repository: "group/project",
         });
       }).pipe(Effect.provide(layer)),
@@ -232,6 +284,62 @@ describe("SourceControlRepositoryService", () => {
       nameWithOwner: "octocat/hello-world",
       url: "https://github.com/octocat/hello-world",
       sshUrl: "git@github.com:octocat/hello-world.git",
+    });
+  });
+
+  it("resolves GitLab clone URLs before cloning provider repositories", async () => {
+    const parentDir = makeTempDir("t3code-source-control-clone-gitlab-");
+    const destinationPath = path.join(parentDir, "project");
+    const execute = vi.fn<GitCoreShape["execute"]>(() =>
+      Effect.succeed({
+        code: 0,
+        stdout: "",
+        stderr: "",
+      }),
+    );
+    const getRepositoryCloneUrls = vi.fn<GitLabCliShape["getRepositoryCloneUrls"]>((input) =>
+      Effect.succeed({
+        nameWithOwner: input.repository,
+        url: `https://gitlab.com/${input.repository}`,
+        sshUrl: `git@gitlab.com:${input.repository}.git`,
+      }),
+    );
+    const layer = makeLayer({
+      gitHubCli: {
+        getRepositoryCloneUrls: () => Effect.die("GitHubCli should not be called"),
+      },
+      gitLabCli: { getRepositoryCloneUrls },
+      gitCore: { execute },
+    });
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* SourceControlRepositoryService;
+        return yield* service.cloneRepository({
+          provider: "gitlab",
+          repository: "group/project",
+          destinationPath,
+          protocol: "https",
+        });
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(getRepositoryCloneUrls).toHaveBeenCalledWith({
+      cwd: parentDir,
+      repository: "group/project",
+    });
+    expect(execute).toHaveBeenCalledWith({
+      operation: "SourceControlRepositoryService.cloneRepository",
+      cwd: parentDir,
+      args: ["clone", "https://gitlab.com/group/project", "project"],
+      timeoutMs: 120_000,
+      maxOutputBytes: 256 * 1024,
+    });
+    expect(result.repository).toEqual({
+      provider: "gitlab",
+      nameWithOwner: "group/project",
+      url: "https://gitlab.com/group/project",
+      sshUrl: "git@gitlab.com:group/project.git",
     });
   });
 
@@ -424,6 +532,87 @@ describe("SourceControlRepositoryService", () => {
       remoteUrl: "git@github.com:octocat/empty.git",
       branch: "main",
       status: "remote_added",
+    });
+  });
+
+  it("publishes GitLab repositories", async () => {
+    const execute = vi.fn<GitCoreShape["execute"]>((input) =>
+      Effect.succeed({
+        code: 0,
+        stdout: input.args.includes("push") ? "pushed" : "",
+        stderr: "",
+      }),
+    );
+    const ensureRemote = vi.fn<GitCoreShape["ensureRemote"]>(() => Effect.succeed("origin"));
+    const statusDetails = vi.fn<GitCoreShape["statusDetails"]>(() =>
+      Effect.succeed({
+        branch: "feature/gitlab",
+        hasWorkingTreeChanges: false,
+        workingTree: {
+          files: [],
+          insertions: 0,
+          deletions: 0,
+        },
+        hasUpstream: false,
+        aheadCount: 1,
+        behindCount: 0,
+        upstreamRef: null,
+      }),
+    );
+    const createRepository = vi.fn<GitLabCliShape["createRepository"]>(() =>
+      Effect.succeed({
+        nameWithOwner: "group/project",
+        url: "https://gitlab.com/group/project",
+        sshUrl: "git@gitlab.com:group/project.git",
+      }),
+    );
+    const layer = makeLayer({
+      gitHubCli: {
+        getRepositoryCloneUrls: () => Effect.die("GitHubCli should not be called"),
+      },
+      gitLabCli: { createRepository },
+      gitCore: {
+        execute,
+        ensureRemote,
+        statusDetails,
+      },
+    });
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* SourceControlRepositoryService;
+        return yield* service.publishRepository({
+          cwd: "/workspace",
+          provider: "gitlab",
+          repository: "group/project",
+          visibility: "private",
+          protocol: "ssh",
+        });
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(createRepository).toHaveBeenCalledWith({
+      cwd: "/workspace",
+      repository: "group/project",
+      visibility: "private",
+    });
+    expect(ensureRemote).toHaveBeenCalledWith({
+      cwd: "/workspace",
+      preferredName: "origin",
+      url: "git@gitlab.com:group/project.git",
+    });
+    expect(result).toEqual({
+      repository: {
+        provider: "gitlab",
+        nameWithOwner: "group/project",
+        url: "https://gitlab.com/group/project",
+        sshUrl: "git@gitlab.com:group/project.git",
+      },
+      remoteName: "origin",
+      remoteUrl: "git@gitlab.com:group/project.git",
+      branch: "feature/gitlab",
+      upstreamBranch: "origin/feature/gitlab",
+      status: "pushed",
     });
   });
 });

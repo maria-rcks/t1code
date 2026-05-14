@@ -29,6 +29,19 @@ export class GitHubCliError extends Schema.TaggedErrorClass<GitHubCliError>()("G
 }
 
 /**
+ * GitLabCliError - GitLab CLI execution or authentication failed.
+ */
+export class GitLabCliError extends Schema.TaggedErrorClass<GitLabCliError>()("GitLabCliError", {
+  operation: Schema.String,
+  detail: Schema.String,
+  cause: Schema.optional(Schema.Defect),
+}) {
+  override get message(): string {
+    return `GitLab CLI failed in ${this.operation}: ${this.detail}`;
+  }
+}
+
+/**
  * TextGenerationError - Commit or PR text generation failed.
  */
 export class TextGenerationError extends Schema.TaggedErrorClass<TextGenerationError>()(
@@ -64,4 +77,5 @@ export type GitManagerServiceError =
   | GitManagerError
   | GitCommandError
   | GitHubCliError
+  | GitLabCliError
   | TextGenerationError;

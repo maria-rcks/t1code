@@ -15,6 +15,7 @@ import { Effect, FileSystem, Layer, Path, Schema, ServiceMap } from "effect";
 import { ServerConfig } from "../config";
 import { GitCore } from "../git/Services/GitCore";
 import { GitHubCli } from "../git/Services/GitHubCli";
+import { GitLabCli } from "../git/Services/GitLabCli";
 
 const isSourceControlRepositoryError = Schema.is(SourceControlRepositoryError);
 
@@ -78,7 +79,7 @@ function unsupportedProvider(provider: SourceControlProviderKind, operation: str
   return repositoryError({
     operation,
     provider,
-    detail: `Repository ${operation} is currently supported for GitHub only.`,
+    detail: `Repository ${operation} is currently supported for GitHub and GitLab only.`,
   });
 }
 
@@ -110,23 +111,23 @@ export const make = Effect.fn("makeSourceControlRepositoryService")(function* ()
   const fileSystem = yield* FileSystem.FileSystem;
   const git = yield* GitCore;
   const gitHubCli = yield* GitHubCli;
+  const gitLabCli = yield* GitLabCli;
   const path = yield* Path.Path;
 
   const lookupRepository = Effect.fn("SourceControlRepositoryService.lookupRepository")(function* (
     input: SourceControlRepositoryLookupInput,
   ) {
-    if (input.provider !== "github") {
-      return yield* unsupportedProvider(input.provider, "lookup");
-    }
-
     const repository = input.repository.trim();
-    const urls = yield* gitHubCli.getRepositoryCloneUrls({
-      cwd: input.cwd ?? config.cwd,
-      repository,
-    });
+    const cwd = input.cwd ?? config.cwd;
+    const urls =
+      input.provider === "github"
+        ? yield* gitHubCli.getRepositoryCloneUrls({ cwd, repository })
+        : input.provider === "gitlab"
+          ? yield* gitLabCli.getRepositoryCloneUrls({ cwd, repository })
+          : yield* unsupportedProvider(input.provider, "lookup");
 
     return {
-      provider: "github",
+      provider: input.provider,
       nameWithOwner: urls.nameWithOwner,
       url: urls.url,
       sshUrl: urls.sshUrl,
@@ -229,17 +230,23 @@ export const make = Effect.fn("makeSourceControlRepositoryService")(function* ()
 
   const publishRepository = Effect.fn("SourceControlRepositoryService.publishRepository")(
     function* (input: SourceControlPublishRepositoryInput) {
-      if (input.provider !== "github") {
-        return yield* unsupportedProvider(input.provider, "publish");
-      }
-
-      const urls = yield* gitHubCli.createRepository({
-        cwd: input.cwd,
-        repository: input.repository.trim(),
-        visibility: input.visibility,
-      });
+      const repositoryPath = input.repository.trim();
+      const urls =
+        input.provider === "github"
+          ? yield* gitHubCli.createRepository({
+              cwd: input.cwd,
+              repository: repositoryPath,
+              visibility: input.visibility,
+            })
+          : input.provider === "gitlab"
+            ? yield* gitLabCli.createRepository({
+                cwd: input.cwd,
+                repository: repositoryPath,
+                visibility: input.visibility,
+              })
+            : yield* unsupportedProvider(input.provider, "publish");
       const repository = {
-        provider: "github",
+        provider: input.provider,
         nameWithOwner: urls.nameWithOwner,
         url: urls.url,
         sshUrl: urls.sshUrl,

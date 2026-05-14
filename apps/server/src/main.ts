@@ -32,6 +32,7 @@ import { layer as SourceControlDiscoveryLive } from "./sourceControl/SourceContr
 import { SourceControlRepositoryServiceLive } from "./sourceControl/SourceControlRepositoryService";
 import { GitCoreLive } from "./git/Layers/GitCore";
 import { GitHubCliLive } from "./git/Layers/GitHubCli";
+import { GitLabCliLive } from "./git/Layers/GitLabCli";
 import { Server } from "./wsServer";
 import { ServerSettingsLive } from "./serverSettings";
 import { ServerLoggerLive } from "./serverLogger";
@@ -313,6 +314,7 @@ const LayerLive = (input: CliInput) =>
       SourceControlRepositoryServiceLive.pipe(
         Layer.provideMerge(GitCoreLive),
         Layer.provideMerge(GitHubCliLive),
+        Layer.provideMerge(GitLabCliLive),
       ),
     ),
     Layer.provideMerge(ProviderEventLoggersLive),
