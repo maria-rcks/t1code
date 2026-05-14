@@ -9,6 +9,7 @@ import {
   DEFAULT_PROVIDER_INTERACTION_MODE,
   EventId,
   MessageId,
+  ProviderDriverKind,
   ProviderInstanceId,
   ProjectId,
   ThreadId,
@@ -111,7 +112,7 @@ describe("ProviderCommandReactor", () => {
         typeof input === "object" &&
         input !== null &&
         "provider" in input &&
-        (input.provider === "codex" || input.provider === "claudeAgent")
+        typeof input.provider === "string"
           ? input.provider
           : "codex";
       const resumeCursor =
@@ -224,7 +225,29 @@ describe("ProviderCommandReactor", () => {
         Effect.succeed({
           sessionModelSwitch: provider === "codex" ? "in-session" : "in-session",
         }),
-      getInstanceInfo: () => unsupported(),
+      getInstanceInfo: (instanceId) =>
+        Effect.succeed({
+          instanceId,
+          driverKind: ProviderDriverKind.makeUnsafe(
+            instanceId === ProviderInstanceId.makeUnsafe("cursor")
+              ? "cursor"
+              : instanceId === ProviderInstanceId.makeUnsafe("claudeAgent")
+                ? "claudeAgent"
+                : "codex",
+          ),
+          displayName: undefined,
+          enabled: true,
+          continuationIdentity: {
+            driverKind: ProviderDriverKind.makeUnsafe(
+              instanceId === ProviderInstanceId.makeUnsafe("cursor")
+                ? "cursor"
+                : instanceId === ProviderInstanceId.makeUnsafe("claudeAgent")
+                  ? "claudeAgent"
+                  : "codex",
+            ),
+            continuationKey: `test:${instanceId}`,
+          },
+        }),
       rollbackConversation: () => unsupported(),
       streamEvents: Stream.fromPubSub(runtimeEventPubSub),
     };
@@ -458,6 +481,49 @@ describe("ProviderCommandReactor", () => {
         },
       },
     });
+  });
+
+  it("uses model selection instance info to choose the provider driver", async () => {
+    const harness = await createHarness();
+    const now = new Date().toISOString();
+    const cursorInstanceId = ProviderInstanceId.makeUnsafe("cursor");
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.makeUnsafe("cmd-turn-start-cursor-instance"),
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-cursor-instance"),
+          role: "user",
+          text: "hello cursor",
+          attachments: [],
+        },
+        provider: "codex",
+        modelSelection: {
+          instanceId: cursorInstanceId,
+          model: "auto",
+        },
+        model: "auto",
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.startSession.mock.calls.length === 1);
+    expect(harness.startSession.mock.calls[0]?.[1]).toMatchObject({
+      provider: "cursor",
+      providerInstanceId: cursorInstanceId,
+      modelSelection: {
+        instanceId: cursorInstanceId,
+        model: "auto",
+      },
+    });
+    const readModel = await Effect.runPromise(harness.engine.getReadModel());
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.makeUnsafe("thread-1"));
+    expect(thread?.session?.providerName).toBe("cursor");
+    expect(thread?.session?.providerInstanceId).toBe(cursorInstanceId);
   });
 
   it("forwards claude effort options through session start and turn send", async () => {
