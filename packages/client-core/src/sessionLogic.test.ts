@@ -1,9 +1,20 @@
 import { ApprovalRequestId } from "@t3tools/contracts";
 import { describe, expect, it } from "vitest";
 
-import { derivePendingApprovals, deriveTimelineEntries, hasUnseenCompletion } from "./sessionLogic";
+import {
+  PROVIDER_OPTIONS,
+  derivePendingApprovals,
+  deriveTimelineEntries,
+  hasUnseenCompletion,
+} from "./sessionLogic";
 
 describe("sessionLogic", () => {
+  it("exposes unavailable provider picker options from shared metadata", () => {
+    expect(
+      PROVIDER_OPTIONS.filter((option) => !option.available).map((option) => option.value),
+    ).toEqual(["cursor", "opencode"]);
+  });
+
   it("detects unseen completion when the latest turn finished after the last visit", () => {
     expect(
       hasUnseenCompletion({

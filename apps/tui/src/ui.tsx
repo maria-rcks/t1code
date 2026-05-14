@@ -2461,7 +2461,6 @@ const COMING_SOON_MODEL_PROVIDER_OPTIONS = [
     id: option.value,
     label: option.label,
   })),
-  { id: "opencode", label: "OpenCode" },
   { id: "gemini", label: "Gemini" },
 ] as const;
 
