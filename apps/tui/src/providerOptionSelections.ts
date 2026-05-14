@@ -4,6 +4,11 @@ import type {
   ProviderOptionDescriptor,
   ProviderOptionSelection,
 } from "@t3tools/contracts";
+import {
+  getProviderOptionCurrentLabel,
+  getProviderOptionCurrentValue,
+  isClaudeUltrathinkPrompt,
+} from "@t3tools/shared/model";
 
 export function mergeProviderOptionSelections(
   base: ReadonlyArray<ProviderOptionSelection> | null | undefined,
@@ -63,4 +68,67 @@ export function modelOptionsToProviderOptionSelections(
     }
   }
   return selections.length > 0 ? selections : undefined;
+}
+
+function getOptionDefaultValue(descriptor: ProviderOptionDescriptor): string | boolean | undefined {
+  if (descriptor.type === "boolean") return false;
+  return descriptor.options.find((option) => option.isDefault)?.id;
+}
+
+function getSelectOptionLabel(
+  descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>,
+  value: string,
+): string {
+  return descriptor.options.find((option) => option.id === value)?.label ?? value;
+}
+
+export function selectedContextWindowLabel(
+  descriptors: ReadonlyArray<ProviderOptionDescriptor>,
+): string | null {
+  const descriptor = descriptors.find(
+    (candidate) => candidate.type === "select" && candidate.id === "contextWindow",
+  );
+  if (!descriptor || descriptor.type !== "select") return null;
+  const currentValue = getProviderOptionCurrentValue(descriptor);
+  if (typeof currentValue !== "string" || currentValue === getOptionDefaultValue(descriptor)) {
+    return null;
+  }
+  return getProviderOptionCurrentLabel(descriptor) ?? currentValue;
+}
+
+export function providerOptionTraitsLabel(
+  descriptors: ReadonlyArray<ProviderOptionDescriptor>,
+  prompt: string,
+): string | null {
+  if (descriptors.length === 0) return null;
+  const labels: string[] = [];
+  const effortDescriptor = descriptors.find(
+    (descriptor) => descriptor.type === "select" && descriptor.id === "effort",
+  );
+  if (effortDescriptor?.type === "select") {
+    const promptInjectedEffort =
+      (effortDescriptor.promptInjectedValues?.length ?? 0) > 0 && isClaudeUltrathinkPrompt(prompt)
+        ? "ultrathink"
+        : null;
+    const effortValue = promptInjectedEffort ?? getProviderOptionCurrentValue(effortDescriptor);
+    if (typeof effortValue === "string") {
+      labels.push(getSelectOptionLabel(effortDescriptor, effortValue));
+    }
+  }
+
+  for (const descriptor of descriptors) {
+    if (descriptor.type !== "boolean") continue;
+    if (descriptor.id === "fastMode" && descriptor.currentValue === true) {
+      labels.push("Fast");
+    } else if (descriptor.id === "thinking" && typeof descriptor.currentValue === "boolean") {
+      labels.push(`Thinking ${descriptor.currentValue ? "On" : "Off"}`);
+    }
+  }
+
+  const contextLabel = selectedContextWindowLabel(descriptors);
+  if (contextLabel) {
+    labels.push(`${contextLabel} ctx`);
+  }
+
+  return labels.length > 0 ? labels.join(" · ") : null;
 }

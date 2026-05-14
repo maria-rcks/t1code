@@ -3,6 +3,8 @@ import {
   filterProviderOptionSelectionsForDescriptors,
   mergeProviderOptionSelections,
   modelOptionsToProviderOptionSelections,
+  providerOptionTraitsLabel,
+  selectedContextWindowLabel,
   setProviderOptionSelection,
 } from "./providerOptionSelections";
 
@@ -64,5 +66,43 @@ describe("provider option selections", () => {
       { id: "effort", value: "high" },
       { id: "fastMode", value: true },
     ]);
+  });
+
+  it("labels descriptor-backed effort values outside legacy Claude options", () => {
+    expect(
+      providerOptionTraitsLabel(
+        [
+          {
+            id: "effort",
+            label: "Reasoning",
+            type: "select",
+            currentValue: "xhigh",
+            options: [
+              { id: "high", label: "High" },
+              { id: "xhigh", label: "Extra High", isDefault: true },
+            ],
+          },
+        ],
+        "",
+      ),
+    ).toBe("Extra High");
+  });
+
+  it("includes non-default context window labels", () => {
+    const descriptors = [
+      {
+        id: "contextWindow",
+        label: "Context Window",
+        type: "select" as const,
+        currentValue: "1m",
+        options: [
+          { id: "200k", label: "200k", isDefault: true },
+          { id: "1m", label: "1M" },
+        ],
+      },
+    ];
+
+    expect(selectedContextWindowLabel(descriptors)).toBe("1M");
+    expect(providerOptionTraitsLabel(descriptors, "")).toBe("1M ctx");
   });
 });

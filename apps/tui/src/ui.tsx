@@ -127,7 +127,6 @@ import {
   createModelSelection,
   getDefaultReasoningEffort,
   getModelOptions,
-  getProviderOptionCurrentLabel,
   getProviderOptionCurrentValue,
   getProviderOptionDescriptors,
   getReasoningEffortOptions,
@@ -207,6 +206,7 @@ import {
   filterProviderOptionSelectionsForDescriptors,
   mergeProviderOptionSelections,
   modelOptionsToProviderOptionSelections,
+  providerOptionTraitsLabel,
   setProviderOptionSelection,
 } from "./providerOptionSelections";
 import {
@@ -1268,23 +1268,6 @@ function modelOptionSelectionsForDispatch(
     return merged;
   }
   return filterProviderOptionSelectionsForDescriptors(merged, descriptors);
-}
-
-function getOptionDefaultValue(descriptor: ProviderOptionDescriptor): string | boolean | undefined {
-  if (descriptor.type === "boolean") return false;
-  return descriptor.options.find((option) => option.isDefault)?.id;
-}
-
-function selectedContextWindowLabel(
-  descriptors: ReadonlyArray<ProviderOptionDescriptor>,
-): string | null {
-  const descriptor = descriptors.find(
-    (candidate) => candidate.type === "select" && candidate.id === "contextWindow",
-  );
-  if (!descriptor) return null;
-  const currentValue = getProviderOptionCurrentValue(descriptor);
-  if (!currentValue || currentValue === getOptionDefaultValue(descriptor)) return null;
-  return getProviderOptionCurrentLabel(descriptor) ?? String(currentValue);
 }
 
 function resolveModelName(
@@ -4597,7 +4580,6 @@ export function App({
         : [],
     [draftModelCapabilities, draftModelOptions, draftProvider, draftProviderOptionSelections],
   );
-  const selectedContextWindow = selectedContextWindowLabel(draftProviderOptionDescriptors);
   const providerOptionsForDispatch = useMemo(
     () => getProviderStartOptions(appSettings),
     [appSettings],
@@ -9535,18 +9517,14 @@ export function App({
     activeThreadIsRunning,
     hasSendableContent: composerHasSendableContent,
   });
-  const legacyComposerTraits = composerTraitsLabel(
-    draftProvider,
-    draftModel,
+  const descriptorComposerTraits = providerOptionTraitsLabel(
+    draftProviderOptionDescriptors,
     composer,
-    draftModelOptions,
   );
-  const composerTraits = [
-    legacyComposerTraits,
-    selectedContextWindow ? `${selectedContextWindow} ctx` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const composerTraits =
+    descriptorComposerTraits ??
+    composerTraitsLabel(draftProvider, draftModel, composer, draftModelOptions) ??
+    "";
   const composerPlaceholder = imagePasteInFlight
     ? "Attaching clipboard image..."
     : activePendingApproval
@@ -9647,8 +9625,42 @@ export function App({
     } = getClaudeTraits(draftModel, composer, draftModelOptions);
     const defaultReasoningEffort = getDefaultReasoningEffort("claudeAgent");
     const items: TraitsMenuItem[] = [];
+    const effortDescriptor = draftProviderOptionDescriptors.find(
+      (descriptor) => descriptor.type === "select" && descriptor.id === "effort",
+    );
 
-    if (effort) {
+    if (effortDescriptor?.type === "select") {
+      const currentEffort = getProviderOptionCurrentValue(effortDescriptor);
+      const promptControlled =
+        (effortDescriptor.promptInjectedValues?.length ?? 0) > 0 &&
+        isClaudeUltrathinkPrompt(composer);
+      for (const option of effortDescriptor.options) {
+        items.push({
+          id: `claude-effort-${option.id}`,
+          section: effortDescriptor.label,
+          label: `${option.label}${option.isDefault ? " (default)" : ""}`,
+          selected: promptControlled ? option.id === "ultrathink" : currentEffort === option.id,
+          onSelect: () => {
+            if (promptControlled) {
+              return;
+            }
+            if (effortDescriptor.promptInjectedValues?.includes(option.id)) {
+              const nextPrompt =
+                composer.trim().length === 0
+                  ? "Ultrathink:\n"
+                  : applyClaudePromptEffortPrefix(composer, option.id);
+              resetComposerTextarea(nextPrompt);
+              setStatus("traits");
+              return;
+            }
+            updateDraftProviderOptionSelection({
+              id: effortDescriptor.id,
+              value: option.id,
+            });
+          },
+        });
+      }
+    } else if (effort) {
       for (const option of options) {
         items.push({
           id: `claude-effort-${option}`,
