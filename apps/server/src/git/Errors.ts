@@ -42,6 +42,22 @@ export class GitLabCliError extends Schema.TaggedErrorClass<GitLabCliError>()("G
 }
 
 /**
+ * AzureDevOpsCliError - Azure DevOps CLI execution or authentication failed.
+ */
+export class AzureDevOpsCliError extends Schema.TaggedErrorClass<AzureDevOpsCliError>()(
+  "AzureDevOpsCliError",
+  {
+    operation: Schema.String,
+    detail: Schema.String,
+    cause: Schema.optional(Schema.Defect),
+  },
+) {
+  override get message(): string {
+    return `Azure DevOps CLI failed in ${this.operation}: ${this.detail}`;
+  }
+}
+
+/**
  * TextGenerationError - Commit or PR text generation failed.
  */
 export class TextGenerationError extends Schema.TaggedErrorClass<TextGenerationError>()(
@@ -78,4 +94,5 @@ export type GitManagerServiceError =
   | GitCommandError
   | GitHubCliError
   | GitLabCliError
+  | AzureDevOpsCliError
   | TextGenerationError;

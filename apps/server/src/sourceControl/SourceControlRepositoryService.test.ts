@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ServerConfig, type ServerConfigShape } from "../config";
 import { GitCommandError } from "../git/Errors";
+import { AzureDevOpsCli, type AzureDevOpsCliShape } from "../git/Services/AzureDevOpsCli";
 import { GitCore, type GitCoreShape } from "../git/Services/GitCore";
 import { GitHubCli, type GitHubCliShape } from "../git/Services/GitHubCli";
 import { GitLabCli, type GitLabCliShape } from "../git/Services/GitLabCli";
@@ -59,6 +60,7 @@ const serverConfigLayer = Layer.succeed(ServerConfig, {
 } satisfies ServerConfigShape);
 
 function makeLayer(input: {
+  azureDevOpsCli?: Partial<AzureDevOpsCliShape>;
   gitHubCli: Pick<GitHubCliShape, "getRepositoryCloneUrls"> & Partial<GitHubCliShape>;
   gitLabCli?: Partial<GitLabCliShape>;
   gitCore?: Pick<GitCoreShape, "execute"> & Partial<GitCoreShape>;
@@ -66,6 +68,20 @@ function makeLayer(input: {
   return SourceControlRepositoryServiceLive.pipe(
     Layer.provideMerge(serverConfigLayer),
     Layer.provideMerge(NodeServices.layer),
+    Layer.provideMerge(
+      Layer.succeed(AzureDevOpsCli, {
+        execute:
+          input.azureDevOpsCli?.execute ??
+          (() => Effect.die("AzureDevOpsCli.execute should not be called in this test")),
+        getRepositoryCloneUrls:
+          input.azureDevOpsCli?.getRepositoryCloneUrls ??
+          (() =>
+            Effect.die("AzureDevOpsCli.getRepositoryCloneUrls should not be called in this test")),
+        createRepository:
+          input.azureDevOpsCli?.createRepository ??
+          (() => Effect.die("AzureDevOpsCli.createRepository should not be called in this test")),
+      } as AzureDevOpsCliShape),
+    ),
     Layer.provideMerge(
       Layer.succeed(GitHubCli, {
         getRepositoryCloneUrls: input.gitHubCli.getRepositoryCloneUrls,
@@ -168,6 +184,43 @@ describe("SourceControlRepositoryService", () => {
       nameWithOwner: "group/project",
       url: "https://gitlab.com/group/project",
       sshUrl: "git@gitlab.com:group/project.git",
+    });
+  });
+
+  it("looks up Azure DevOps repository clone URLs", async () => {
+    const getRepositoryCloneUrls = vi.fn<AzureDevOpsCliShape["getRepositoryCloneUrls"]>((input) =>
+      Effect.succeed({
+        nameWithOwner: input.repository,
+        url: `https://dev.azure.com/acme/${input.repository.replace("/", "/_git/")}`,
+        sshUrl: `git@ssh.dev.azure.com:v3/acme/${input.repository}`,
+      }),
+    );
+    const layer = makeLayer({
+      azureDevOpsCli: { getRepositoryCloneUrls },
+      gitHubCli: {
+        getRepositoryCloneUrls: () => Effect.die("GitHubCli should not be called"),
+      },
+    });
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* SourceControlRepositoryService;
+        return yield* service.lookupRepository({
+          provider: "azure-devops",
+          repository: "project/repo",
+        });
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(getRepositoryCloneUrls).toHaveBeenCalledWith({
+      cwd: "/workspace",
+      repository: "project/repo",
+    });
+    expect(result).toEqual({
+      provider: "azure-devops",
+      nameWithOwner: "project/repo",
+      url: "https://dev.azure.com/acme/project/_git/repo",
+      sshUrl: "git@ssh.dev.azure.com:v3/acme/project/repo",
     });
   });
 
@@ -340,6 +393,62 @@ describe("SourceControlRepositoryService", () => {
       nameWithOwner: "group/project",
       url: "https://gitlab.com/group/project",
       sshUrl: "git@gitlab.com:group/project.git",
+    });
+  });
+
+  it("resolves Azure DevOps clone URLs before cloning provider repositories", async () => {
+    const parentDir = makeTempDir("t3code-source-control-clone-azure-");
+    const destinationPath = path.join(parentDir, "repo");
+    const execute = vi.fn<GitCoreShape["execute"]>(() =>
+      Effect.succeed({
+        code: 0,
+        stdout: "",
+        stderr: "",
+      }),
+    );
+    const getRepositoryCloneUrls = vi.fn<AzureDevOpsCliShape["getRepositoryCloneUrls"]>((input) =>
+      Effect.succeed({
+        nameWithOwner: input.repository,
+        url: `https://dev.azure.com/acme/${input.repository.replace("/", "/_git/")}`,
+        sshUrl: `git@ssh.dev.azure.com:v3/acme/${input.repository}`,
+      }),
+    );
+    const layer = makeLayer({
+      azureDevOpsCli: { getRepositoryCloneUrls },
+      gitHubCli: {
+        getRepositoryCloneUrls: () => Effect.die("GitHubCli should not be called"),
+      },
+      gitCore: { execute },
+    });
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* SourceControlRepositoryService;
+        return yield* service.cloneRepository({
+          provider: "azure-devops",
+          repository: "project/repo",
+          destinationPath,
+          protocol: "https",
+        });
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(getRepositoryCloneUrls).toHaveBeenCalledWith({
+      cwd: parentDir,
+      repository: "project/repo",
+    });
+    expect(execute).toHaveBeenCalledWith({
+      operation: "SourceControlRepositoryService.cloneRepository",
+      cwd: parentDir,
+      args: ["clone", "https://dev.azure.com/acme/project/_git/repo", "repo"],
+      timeoutMs: 120_000,
+      maxOutputBytes: 256 * 1024,
+    });
+    expect(result.repository).toEqual({
+      provider: "azure-devops",
+      nameWithOwner: "project/repo",
+      url: "https://dev.azure.com/acme/project/_git/repo",
+      sshUrl: "git@ssh.dev.azure.com:v3/acme/project/repo",
     });
   });
 
@@ -612,6 +721,87 @@ describe("SourceControlRepositoryService", () => {
       remoteUrl: "git@gitlab.com:group/project.git",
       branch: "feature/gitlab",
       upstreamBranch: "origin/feature/gitlab",
+      status: "pushed",
+    });
+  });
+
+  it("publishes Azure DevOps repositories", async () => {
+    const execute = vi.fn<GitCoreShape["execute"]>((input) =>
+      Effect.succeed({
+        code: 0,
+        stdout: input.args.includes("push") ? "pushed" : "",
+        stderr: "",
+      }),
+    );
+    const ensureRemote = vi.fn<GitCoreShape["ensureRemote"]>(() => Effect.succeed("origin"));
+    const statusDetails = vi.fn<GitCoreShape["statusDetails"]>(() =>
+      Effect.succeed({
+        branch: "feature/azure",
+        hasWorkingTreeChanges: false,
+        workingTree: {
+          files: [],
+          insertions: 0,
+          deletions: 0,
+        },
+        hasUpstream: false,
+        aheadCount: 1,
+        behindCount: 0,
+        upstreamRef: null,
+      }),
+    );
+    const createRepository = vi.fn<AzureDevOpsCliShape["createRepository"]>(() =>
+      Effect.succeed({
+        nameWithOwner: "project/repo",
+        url: "https://dev.azure.com/acme/project/_git/repo",
+        sshUrl: "git@ssh.dev.azure.com:v3/acme/project/repo",
+      }),
+    );
+    const layer = makeLayer({
+      azureDevOpsCli: { createRepository },
+      gitHubCli: {
+        getRepositoryCloneUrls: () => Effect.die("GitHubCli should not be called"),
+      },
+      gitCore: {
+        execute,
+        ensureRemote,
+        statusDetails,
+      },
+    });
+
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const service = yield* SourceControlRepositoryService;
+        return yield* service.publishRepository({
+          cwd: "/workspace",
+          provider: "azure-devops",
+          repository: "project/repo",
+          visibility: "private",
+          protocol: "ssh",
+        });
+      }).pipe(Effect.provide(layer)),
+    );
+
+    expect(createRepository).toHaveBeenCalledWith({
+      cwd: "/workspace",
+      repository: "project/repo",
+      visibility: "private",
+    });
+    expect(ensureRemote).toHaveBeenCalledWith({
+      cwd: "/workspace",
+      preferredName: "origin",
+      url: "git@ssh.dev.azure.com:v3/acme/project/repo",
+    });
+    expect(result).toEqual({
+      repository: {
+        provider: "azure-devops",
+        nameWithOwner: "project/repo",
+        url: "https://dev.azure.com/acme/project/_git/repo",
+        sshUrl: "git@ssh.dev.azure.com:v3/acme/project/repo",
+      },
+      remoteName: "origin",
+      remoteUrl: "git@ssh.dev.azure.com:v3/acme/project/repo",
+      branch: "feature/azure",
+      upstreamBranch: "origin/feature/azure",
       status: "pushed",
     });
   });

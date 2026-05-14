@@ -13,6 +13,7 @@ import {
 import { Effect, FileSystem, Layer, Path, Schema, ServiceMap } from "effect";
 
 import { ServerConfig } from "../config";
+import { AzureDevOpsCli } from "../git/Services/AzureDevOpsCli";
 import { GitCore } from "../git/Services/GitCore";
 import { GitHubCli } from "../git/Services/GitHubCli";
 import { GitLabCli } from "../git/Services/GitLabCli";
@@ -79,7 +80,7 @@ function unsupportedProvider(provider: SourceControlProviderKind, operation: str
   return repositoryError({
     operation,
     provider,
-    detail: `Repository ${operation} is currently supported for GitHub and GitLab only.`,
+    detail: `Repository ${operation} is currently supported for GitHub, GitLab, and Azure DevOps only.`,
   });
 }
 
@@ -108,6 +109,7 @@ function expandHomePath(input: string, path: Path.Path): string {
 
 export const make = Effect.fn("makeSourceControlRepositoryService")(function* () {
   const config = yield* ServerConfig;
+  const azureDevOpsCli = yield* AzureDevOpsCli;
   const fileSystem = yield* FileSystem.FileSystem;
   const git = yield* GitCore;
   const gitHubCli = yield* GitHubCli;
@@ -124,7 +126,9 @@ export const make = Effect.fn("makeSourceControlRepositoryService")(function* ()
         ? yield* gitHubCli.getRepositoryCloneUrls({ cwd, repository })
         : input.provider === "gitlab"
           ? yield* gitLabCli.getRepositoryCloneUrls({ cwd, repository })
-          : yield* unsupportedProvider(input.provider, "lookup");
+          : input.provider === "azure-devops"
+            ? yield* azureDevOpsCli.getRepositoryCloneUrls({ cwd, repository })
+            : yield* unsupportedProvider(input.provider, "lookup");
 
     return {
       provider: input.provider,
@@ -244,7 +248,13 @@ export const make = Effect.fn("makeSourceControlRepositoryService")(function* ()
                 repository: repositoryPath,
                 visibility: input.visibility,
               })
-            : yield* unsupportedProvider(input.provider, "publish");
+            : input.provider === "azure-devops"
+              ? yield* azureDevOpsCli.createRepository({
+                  cwd: input.cwd,
+                  repository: repositoryPath,
+                  visibility: input.visibility,
+                })
+              : yield* unsupportedProvider(input.provider, "publish");
       const repository = {
         provider: input.provider,
         nameWithOwner: urls.nameWithOwner,
