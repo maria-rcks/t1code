@@ -492,7 +492,7 @@ export function normalizeClaudeModelOptions(
 
 export function applyClaudePromptEffortPrefix(
   text: string,
-  effort: ClaudeCodeEffort | null | undefined,
+  effort: string | null | undefined,
 ): string {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -505,6 +505,27 @@ export function applyClaudePromptEffortPrefix(
     return trimmed;
   }
   return `Ultrathink:\n${trimmed}`;
+}
+
+/**
+ * Returns the effort value if it is a prompt-injected value according to
+ * any select descriptor in the given capabilities, or null otherwise.
+ */
+export function resolvePromptInjectedEffort(
+  caps: ModelCapabilities,
+  rawEffort: string | null | undefined,
+): string | null {
+  const trimmed = trimOrNull(rawEffort);
+  if (!trimmed) {
+    return null;
+  }
+  const descriptors = getProviderOptionDescriptors({ caps });
+  for (const descriptor of descriptors) {
+    if (descriptor.type === "select" && descriptor.promptInjectedValues?.includes(trimmed)) {
+      return trimmed;
+    }
+  }
+  return null;
 }
 
 export function createModelSelection(

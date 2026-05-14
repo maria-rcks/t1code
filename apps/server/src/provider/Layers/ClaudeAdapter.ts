@@ -44,11 +44,10 @@ import {
 } from "@t3tools/contracts";
 import {
   applyClaudePromptEffortPrefix,
-  getEffectiveClaudeCodeEffort,
-  getReasoningEffortOptions,
-  resolveReasoningEffortForProvider,
-  supportsClaudeFastMode,
-  supportsClaudeThinkingToggle,
+  getModelSelectionBooleanOptionValue,
+  getModelSelectionStringOptionValue,
+  getProviderOptionDescriptors,
+  resolvePromptInjectedEffort,
   supportsClaudeUltrathinkKeyword,
 } from "@t3tools/shared/model";
 import {
@@ -72,6 +71,12 @@ import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
 import {
+  getClaudeModelCapabilities,
+  normalizeClaudeCliEffort,
+  resolveClaudeApiModelId,
+  resolveClaudeEffort,
+} from "./ClaudeProvider.ts";
+import {
   ProviderAdapterProcessError,
   ProviderAdapterRequestError,
   ProviderAdapterSessionClosedError,
@@ -84,6 +89,7 @@ import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogg
 
 const PROVIDER = "claudeAgent" as const;
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
+const decodeProviderInstanceId = Schema.decodeUnknownSync(ProviderInstanceId);
 type ClaudeTextStreamKind = Extract<RuntimeContentStreamKind, "assistant_text" | "reasoning_text">;
 type ClaudeToolResultStreamKind = Extract<
   RuntimeContentStreamKind,
@@ -277,6 +283,13 @@ function isInterruptedResult(result: SDKResultMessage): boolean {
       errors.includes("interrupted by user") ||
       errors.includes("aborted"))
   );
+}
+
+function getEffectiveClaudeAgentEffort(
+  effort: string | null | undefined,
+): ClaudeQueryOptions["effort"] | null {
+  const normalized = normalizeClaudeCliEffort(effort);
+  return normalized ? (normalized as NonNullable<ClaudeQueryOptions["effort"]>) : null;
 }
 
 function maxClaudeContextWindowFromModelUsage(
@@ -530,18 +543,21 @@ const CLAUDE_SETTING_SOURCES = [
   "local",
 ] as const satisfies ReadonlyArray<SettingSource>;
 
-function buildPromptText(input: ProviderSendTurnInput): string {
-  const requestedEffort = resolveReasoningEffortForProvider(
-    "claudeAgent",
-    input.modelOptions?.claudeAgent?.effort ?? null,
-  );
-  const supportedEffortOptions = getReasoningEffortOptions("claudeAgent", input.model);
+function buildPromptText(
+  input: ProviderSendTurnInput,
+  boundInstanceId: ProviderInstanceId,
+): string {
+  const modelSelection =
+    input.modelSelection?.instanceId === boundInstanceId ? input.modelSelection : undefined;
+  const selectionEffort = getModelSelectionStringOptionValue(modelSelection, "effort");
+  const legacyEffort = input.modelOptions?.claudeAgent?.effort ?? null;
+  const selectedModel = modelSelection?.model ?? input.model;
+  const caps = getClaudeModelCapabilities(selectedModel);
   const promptEffort =
-    requestedEffort === "ultrathink" && supportsClaudeUltrathinkKeyword(input.model)
+    resolvePromptInjectedEffort(caps, selectionEffort) ??
+    (legacyEffort === "ultrathink" && supportsClaudeUltrathinkKeyword(selectedModel)
       ? "ultrathink"
-      : requestedEffort && supportedEffortOptions.includes(requestedEffort)
-        ? requestedEffort
-        : null;
+      : null);
   return applyClaudePromptEffortPrefix(input.input?.trim() ?? "", promptEffort);
 }
 
@@ -575,13 +591,14 @@ function buildClaudeImageContentBlock(input: {
 
 function buildUserMessageEffect(
   input: ProviderSendTurnInput,
+  boundInstanceId: ProviderInstanceId,
   dependencies: {
     readonly fileSystem: FileSystem.FileSystem;
     readonly attachmentsDir: string;
   },
 ): Effect.Effect<SDKUserMessage, ProviderAdapterRequestError> {
   return Effect.gen(function* () {
-    const text = buildPromptText(input);
+    const text = buildPromptText(input, boundInstanceId);
     const sdkContent: Array<Record<string, unknown>> = [];
 
     if (text.length > 0) {
@@ -936,6 +953,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   claudeSettings: ClaudeSettings = decodeClaudeSettings({}),
   options?: ClaudeAdapterLiveOptions,
 ) {
+  const boundInstanceId = options?.instanceId ?? decodeProviderInstanceId("claudeAgent");
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const serverConfig = yield* ServerConfig;
@@ -2738,23 +2756,31 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
 
       const providerOptions = input.providerOptions?.claudeAgent;
       const claudeBinaryPath = providerOptions?.binaryPath ?? claudeSettings.binaryPath;
-      const requestedEffort = resolveReasoningEffortForProvider(
-        "claudeAgent",
-        input.modelOptions?.claudeAgent?.effort ?? null,
+      const modelSelection =
+        input.modelSelection?.instanceId === boundInstanceId ? input.modelSelection : undefined;
+      const selectedModel = modelSelection?.model ?? input.model;
+      const caps = getClaudeModelCapabilities(selectedModel);
+      const descriptors = getProviderOptionDescriptors({ caps });
+      const apiModelId = modelSelection ? resolveClaudeApiModelId(modelSelection) : selectedModel;
+      const rawEffort =
+        getModelSelectionStringOptionValue(modelSelection, "effort") ??
+        input.modelOptions?.claudeAgent?.effort ??
+        null;
+      const effort = resolveClaudeEffort(caps, rawEffort) ?? null;
+      const fastModeSupported = descriptors.some(
+        (descriptor) => descriptor.type === "boolean" && descriptor.id === "fastMode",
       );
-      const supportedEffortOptions = getReasoningEffortOptions("claudeAgent", input.model);
-      const effort =
-        requestedEffort && supportedEffortOptions.includes(requestedEffort)
-          ? requestedEffort
-          : null;
+      const thinkingSupported = descriptors.some(
+        (descriptor) => descriptor.type === "boolean" && descriptor.id === "thinking",
+      );
       const fastMode =
-        input.modelOptions?.claudeAgent?.fastMode === true && supportsClaudeFastMode(input.model);
-      const thinking =
-        typeof input.modelOptions?.claudeAgent?.thinking === "boolean" &&
-        supportsClaudeThinkingToggle(input.model)
-          ? input.modelOptions.claudeAgent.thinking
-          : undefined;
-      const effectiveEffort = getEffectiveClaudeCodeEffort(effort);
+        (getModelSelectionBooleanOptionValue(modelSelection, "fastMode") ??
+          input.modelOptions?.claudeAgent?.fastMode) === true && fastModeSupported;
+      const thinking = thinkingSupported
+        ? (getModelSelectionBooleanOptionValue(modelSelection, "thinking") ??
+          input.modelOptions?.claudeAgent?.thinking)
+        : undefined;
+      const effectiveEffort = getEffectiveClaudeAgentEffort(effort);
       const permissionMode =
         toPermissionMode(providerOptions?.permissionMode) ??
         (input.runtimeMode === "full-access" ? "bypassPermissions" : undefined);
@@ -2765,7 +2791,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
 
       const queryOptions: ClaudeQueryOptions = {
         ...(input.cwd ? { cwd: input.cwd } : {}),
-        ...(input.model ? { model: input.model } : {}),
+        ...(apiModelId ? { model: apiModelId } : {}),
         pathToClaudeCodeExecutable: claudeBinaryPath,
         systemPrompt: { type: "preset", preset: "claude_code" },
         settingSources: [...CLAUDE_SETTING_SOURCES],
@@ -2807,7 +2833,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         status: "ready",
         runtimeMode: input.runtimeMode,
         ...(input.cwd ? { cwd: input.cwd } : {}),
-        ...(input.model ? { model: input.model } : {}),
+        ...(selectedModel ? { model: selectedModel } : {}),
         ...(threadId ? { threadId } : {}),
         resumeCursor: {
           ...(threadId ? { threadId } : {}),
@@ -2826,7 +2852,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         streamFiber: undefined,
         startedAt,
         basePermissionMode: permissionMode,
-        currentApiModelId: input.model,
+        currentApiModelId: apiModelId,
         resumeSessionId: sessionId,
         pendingApprovals,
         pendingUserInputs,
@@ -2862,7 +2888,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         threadId,
         payload: {
           config: {
-            ...(input.model ? { model: input.model } : {}),
+            ...(selectedModel ? { model: selectedModel } : {}),
             ...(input.cwd ? { cwd: input.cwd } : {}),
             ...(effectiveEffort ? { effort: effectiveEffort } : {}),
             ...(permissionMode ? { permissionMode } : {}),
@@ -2917,6 +2943,10 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   const sendTurn: ClaudeAdapterShape["sendTurn"] = (input) =>
     Effect.gen(function* () {
       const context = yield* requireSession(input.threadId);
+      const modelSelection =
+        input.modelSelection !== undefined && input.modelSelection.instanceId === boundInstanceId
+          ? input.modelSelection
+          : undefined;
 
       if (context.turnState) {
         // Auto-close a stale synthetic turn (from background agent responses
@@ -2924,7 +2954,20 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         yield* completeTurn(context, "completed");
       }
 
-      if (input.model) {
+      if (modelSelection?.model) {
+        const apiModelId = resolveClaudeApiModelId(modelSelection);
+        if (context.currentApiModelId !== apiModelId) {
+          yield* Effect.tryPromise({
+            try: () => context.query.setModel(apiModelId),
+            catch: (cause) => toRequestError(input.threadId, "turn/setModel", cause),
+          });
+          context.currentApiModelId = apiModelId;
+        }
+        context.session = {
+          ...context.session,
+          model: modelSelection.model,
+        };
+      } else if (input.model) {
         if (context.currentApiModelId !== input.model) {
           yield* Effect.tryPromise({
             try: () => context.query.setModel(input.model),
@@ -2983,11 +3026,15 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         createdAt: turnStartedStamp.createdAt,
         threadId: context.session.threadId,
         turnId,
-        payload: input.model ? { model: input.model } : {},
+        payload: modelSelection?.model
+          ? { model: modelSelection.model }
+          : input.model
+            ? { model: input.model }
+            : {},
         providerRefs: {},
       });
 
-      const message = yield* buildUserMessageEffect(input, {
+      const message = yield* buildUserMessageEffect(input, boundInstanceId, {
         fileSystem,
         attachmentsDir: serverConfig.attachmentsDir,
       });

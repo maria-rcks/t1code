@@ -12,10 +12,12 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk";
 import {
   ApprovalRequestId,
+  ProviderInstanceId,
   ProviderItemId,
   ProviderRuntimeEvent,
   ThreadId,
 } from "@t3tools/contracts";
+import { createModelSelection } from "@t3tools/shared/model";
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Fiber, Layer, Random, Stream } from "effect";
 
@@ -353,7 +355,7 @@ describe("ClaudeAdapterLive", () => {
     );
   });
 
-  it.effect("ignores unsupported max effort for Sonnet 4.6", () => {
+  it.effect("falls back to default effort when unsupported max is requested for Sonnet 4.6", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
@@ -370,7 +372,7 @@ describe("ClaudeAdapterLive", () => {
       });
 
       const createInput = harness.getLastCreateQueryInput();
-      assert.equal(createInput?.options.effort, undefined);
+      assert.equal(createInput?.options.effort, "high");
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),
@@ -477,6 +479,37 @@ describe("ClaudeAdapterLive", () => {
     );
   });
 
+  it.effect("forwards Claude model selection options into SDK query options", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: "claudeAgent",
+        modelSelection: createModelSelection(
+          ProviderInstanceId.makeUnsafe("claudeAgent"),
+          "claude-opus-4-6",
+          [
+            { id: "effort", value: "max" },
+            { id: "fastMode", value: true },
+            { id: "contextWindow", value: "1m" },
+          ],
+        ),
+        runtimeMode: "full-access",
+      });
+
+      const createInput = harness.getLastCreateQueryInput();
+      assert.equal(createInput?.options.model, "claude-opus-4-6[1m]");
+      assert.equal(createInput?.options.effort, "max");
+      assert.deepEqual(createInput?.options.settings, {
+        fastMode: true,
+      });
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
   it.effect("ignores claude fast mode for non-opus models", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {
@@ -530,7 +563,40 @@ describe("ClaudeAdapterLive", () => {
       });
 
       const createInput = harness.getLastCreateQueryInput();
-      assert.equal(createInput?.options.effort, undefined);
+      assert.equal(createInput?.options.effort, "high");
+      const promptText = yield* Effect.promise(() => readFirstPromptText(createInput));
+      assert.equal(promptText, "Ultrathink:\nInvestigate the edge cases");
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("treats ultrathink model selection as a prompt keyword", () => {
+    const harness = makeHarness();
+    const modelSelection = createModelSelection(
+      ProviderInstanceId.makeUnsafe("claudeAgent"),
+      "claude-sonnet-4-6",
+      [{ id: "effort", value: "ultrathink" }],
+    );
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: "claudeAgent",
+        modelSelection,
+        runtimeMode: "full-access",
+      });
+
+      yield* adapter.sendTurn({
+        threadId: session.threadId,
+        input: "Investigate the edge cases",
+        attachments: [],
+        modelSelection,
+      });
+
+      const createInput = harness.getLastCreateQueryInput();
+      assert.equal(createInput?.options.effort, "high");
       const promptText = yield* Effect.promise(() => readFirstPromptText(createInput));
       assert.equal(promptText, "Ultrathink:\nInvestigate the edge cases");
     }).pipe(
@@ -2653,6 +2719,43 @@ describe("ClaudeAdapterLive", () => {
       });
 
       assert.deepEqual(harness.query.setModelCalls, ["claude-sonnet-4-6"]);
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("re-sets the Claude model when the effective API model changes", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: "claudeAgent",
+        runtimeMode: "full-access",
+      });
+      yield* adapter.sendTurn({
+        threadId: session.threadId,
+        input: "hello",
+        modelSelection: createModelSelection(
+          ProviderInstanceId.makeUnsafe("claudeAgent"),
+          "claude-opus-4-6",
+          [{ id: "contextWindow", value: "1m" }],
+        ),
+        attachments: [],
+      });
+      yield* adapter.sendTurn({
+        threadId: session.threadId,
+        input: "hello again",
+        modelSelection: {
+          instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
+          model: "claude-opus-4-6",
+        },
+        attachments: [],
+      });
+
+      assert.deepEqual(harness.query.setModelCalls, ["claude-opus-4-6[1m]", "claude-opus-4-6"]);
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),

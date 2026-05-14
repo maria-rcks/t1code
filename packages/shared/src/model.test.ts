@@ -33,6 +33,7 @@ import {
   normalizeCodexModelOptions,
   normalizeModelSlug,
   resolveReasoningEffortForProvider,
+  resolvePromptInjectedEffort,
   resolveSelectableModel,
   resolveModelSlug,
   resolveModelSlugForProvider,
@@ -149,8 +150,9 @@ describe("provider option descriptors", () => {
           { id: "low", label: "Low" },
           { id: "high", label: "High", isDefault: true },
           { id: "ultrathink", label: "Ultrathink" },
+          { id: "xhigh", label: "Extra High" },
         ],
-        promptInjectedValues: ["ultrathink"],
+        promptInjectedValues: ["ultrathink", "xhigh"],
       },
       {
         id: "fastMode",
@@ -203,6 +205,37 @@ describe("provider option descriptors", () => {
       { id: "effort", currentValue: "high" },
       { id: "fastMode", currentValue: true },
     ]);
+  });
+});
+
+describe("resolvePromptInjectedEffort", () => {
+  const caps = createModelCapabilities({
+    optionDescriptors: [
+      {
+        id: "effort",
+        label: "Reasoning",
+        type: "select",
+        options: [
+          { id: "high", label: "High", isDefault: true },
+          { id: "ultrathink", label: "Ultrathink" },
+          { id: "xhigh", label: "Extra High" },
+        ],
+        promptInjectedValues: ["ultrathink", "xhigh"],
+      },
+    ],
+  });
+
+  it("returns Claude effort values that should be injected into the prompt", () => {
+    expect(resolvePromptInjectedEffort(caps, "ultrathink")).toBe("ultrathink");
+  });
+
+  it("uses descriptor values rather than provider effort enums", () => {
+    expect(resolvePromptInjectedEffort(caps, "xhigh")).toBe("xhigh");
+  });
+
+  it("ignores normal provider efforts and unknown values", () => {
+    expect(resolvePromptInjectedEffort(caps, "high")).toBeNull();
+    expect(resolvePromptInjectedEffort(caps, "unknown")).toBeNull();
   });
 });
 
