@@ -1692,7 +1692,10 @@ describe("WebSocket Server", () => {
 
   it("bootstraps default keybindings file when missing", async () => {
     const baseDir = makeTempDir("t3code-state-bootstrap-keybindings-");
-    const { keybindingsConfigPath: keybindingsPath } = deriveServerPathsSync(baseDir, undefined);
+    const { keybindingsConfigPath: keybindingsPath, logsDir } = deriveServerPathsSync(
+      baseDir,
+      undefined,
+    );
     expect(fs.existsSync(keybindingsPath)).toBe(false);
 
     server = await createTestServer({ cwd: "/my/workspace", baseDir });
@@ -1712,6 +1715,12 @@ describe("WebSocket Server", () => {
       providers: defaultProviderStatuses,
       providerInstances: expect.any(Array),
       availableEditors: expect.any(Array),
+      observability: {
+        logsDirectoryPath: logsDir,
+        localTracingEnabled: true,
+        otlpTracesEnabled: false,
+        otlpMetricsEnabled: false,
+      },
     });
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
 
@@ -1723,7 +1732,10 @@ describe("WebSocket Server", () => {
 
   it("falls back to defaults and reports malformed keybindings config issues", async () => {
     const baseDir = makeTempDir("t3code-state-malformed-keybindings-");
-    const { keybindingsConfigPath: keybindingsPath } = deriveServerPathsSync(baseDir, undefined);
+    const { keybindingsConfigPath: keybindingsPath, logsDir } = deriveServerPathsSync(
+      baseDir,
+      undefined,
+    );
     ensureParentDir(keybindingsPath);
     fs.writeFileSync(keybindingsPath, "{ not-json", "utf8");
 
@@ -1749,6 +1761,12 @@ describe("WebSocket Server", () => {
       providers: defaultProviderStatuses,
       providerInstances: expect.any(Array),
       availableEditors: expect.any(Array),
+      observability: {
+        logsDirectoryPath: logsDir,
+        localTracingEnabled: true,
+        otlpTracesEnabled: false,
+        otlpMetricsEnabled: false,
+      },
     });
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
     expect(fs.readFileSync(keybindingsPath, "utf8")).toBe("{ not-json");
@@ -1876,7 +1894,10 @@ describe("WebSocket Server", () => {
 
   it("reads keybindings from the configured state directory", async () => {
     const baseDir = makeTempDir("t3code-state-keybindings-");
-    const { keybindingsConfigPath: keybindingsPath } = deriveServerPathsSync(baseDir, undefined);
+    const { keybindingsConfigPath: keybindingsPath, logsDir } = deriveServerPathsSync(
+      baseDir,
+      undefined,
+    );
     ensureParentDir(keybindingsPath);
     fs.writeFileSync(
       keybindingsPath,
@@ -1907,13 +1928,22 @@ describe("WebSocket Server", () => {
       providers: defaultProviderStatuses,
       providerInstances: expect.any(Array),
       availableEditors: expect.any(Array),
+      observability: {
+        logsDirectoryPath: logsDir,
+        localTracingEnabled: true,
+        otlpTracesEnabled: false,
+        otlpMetricsEnabled: false,
+      },
     });
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
   });
 
   it("upserts keybinding rules and updates cached server config", async () => {
     const baseDir = makeTempDir("t3code-state-upsert-keybinding-");
-    const { keybindingsConfigPath: keybindingsPath } = deriveServerPathsSync(baseDir, undefined);
+    const { keybindingsConfigPath: keybindingsPath, logsDir } = deriveServerPathsSync(
+      baseDir,
+      undefined,
+    );
     ensureParentDir(keybindingsPath);
     fs.writeFileSync(
       keybindingsPath,
@@ -1956,6 +1986,12 @@ describe("WebSocket Server", () => {
       providers: defaultProviderStatuses,
       providerInstances: expect.any(Array),
       availableEditors: expect.any(Array),
+      observability: {
+        logsDirectoryPath: logsDir,
+        localTracingEnabled: true,
+        otlpTracesEnabled: false,
+        otlpMetricsEnabled: false,
+      },
     });
     expectAvailableEditors(
       (configResponse.result as { availableEditors: unknown }).availableEditors,
