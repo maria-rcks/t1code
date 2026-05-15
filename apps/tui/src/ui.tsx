@@ -153,6 +153,7 @@ import {
   invalidateDeferredComposerSync,
   scheduleDeferredComposerSync,
 } from "./composerSync";
+import { durationToSeconds } from "./duration";
 import {
   getProviderUpdateNoticeView,
   type ProviderUpdateNoticeView,
@@ -672,10 +673,6 @@ function readProviderInstanceConfigValue(
     return "";
   }
   return String((config as Record<string, unknown>)[field] ?? "");
-}
-
-function durationToSeconds(duration: Duration.Duration): number {
-  return Math.round(Duration.toMillis(duration) / 1_000);
 }
 
 function normalizeFetchIntervalSeconds(value: number): number {
