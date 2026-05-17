@@ -38,6 +38,7 @@
   "dependencies": {
     "@opentui/core": "^0.2.7",
     "@opentui/react": "^0.2.7",
+    "effect": "catalog:",
     "react": "^19.0.0",
     "react-devtools-core": "^7.0.1",
     "web-tree-sitter": "0.25.10",
