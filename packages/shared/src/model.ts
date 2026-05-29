@@ -27,6 +27,8 @@ const MODEL_SLUG_SET_BY_PROVIDER: Record<ProviderKind, ReadonlySet<ModelSlug>> =
   codex: new Set(MODEL_OPTIONS_BY_PROVIDER.codex.map((option) => option.slug)),
 };
 
+const CLAUDE_OPUS_4_8_MODEL = "claude-opus-4-8";
+const CLAUDE_OPUS_4_7_MODEL = "claude-opus-4-7";
 const CLAUDE_OPUS_4_6_MODEL = "claude-opus-4-6";
 const CLAUDE_SONNET_4_6_MODEL = "claude-sonnet-4-6";
 const CLAUDE_HAIKU_4_5_MODEL = "claude-haiku-4-5";
@@ -318,11 +320,31 @@ export function supportsClaudeFastMode(model: string | null | undefined): boolea
 
 export function supportsClaudeAdaptiveReasoning(model: string | null | undefined): boolean {
   const normalized = normalizeModelSlug(model, "claudeAgent");
-  return normalized === CLAUDE_OPUS_4_6_MODEL || normalized === CLAUDE_SONNET_4_6_MODEL;
+  return (
+    normalized === CLAUDE_OPUS_4_8_MODEL ||
+    normalized === CLAUDE_OPUS_4_7_MODEL ||
+    normalized === CLAUDE_OPUS_4_6_MODEL ||
+    normalized === CLAUDE_SONNET_4_6_MODEL
+  );
+}
+
+export function supportsClaudeExtraHighEffort(model: string | null | undefined): boolean {
+  const normalized = normalizeModelSlug(model, "claudeAgent");
+  return normalized === CLAUDE_OPUS_4_8_MODEL || normalized === CLAUDE_OPUS_4_7_MODEL;
+}
+
+export function supportsClaudeUltracodeEffort(model: string | null | undefined): boolean {
+  return normalizeModelSlug(model, "claudeAgent") === CLAUDE_OPUS_4_8_MODEL;
 }
 
 export function supportsClaudeMaxEffort(model: string | null | undefined): boolean {
-  return normalizeModelSlug(model, "claudeAgent") === CLAUDE_OPUS_4_6_MODEL;
+  const normalized = normalizeModelSlug(model, "claudeAgent");
+  return (
+    normalized === CLAUDE_OPUS_4_8_MODEL ||
+    normalized === CLAUDE_OPUS_4_7_MODEL ||
+    normalized === CLAUDE_OPUS_4_6_MODEL ||
+    normalized === CLAUDE_SONNET_4_6_MODEL
+  );
 }
 
 export function supportsClaudeUltrathinkKeyword(model: string | null | undefined): boolean {
@@ -451,6 +473,12 @@ export function getReasoningEffortOptions(
   model?: string | null | undefined,
 ): ReadonlyArray<ProviderReasoningEffort> {
   if (provider === "claudeAgent") {
+    if (supportsClaudeUltracodeEffort(model)) {
+      return ["low", "medium", "high", "xhigh", "max", "ultracode", "ultrathink"];
+    }
+    if (supportsClaudeExtraHighEffort(model)) {
+      return ["low", "medium", "high", "xhigh", "max", "ultrathink"];
+    }
     if (supportsClaudeMaxEffort(model)) {
       return ["low", "medium", "high", "max", "ultrathink"];
     }

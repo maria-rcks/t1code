@@ -16,13 +16,19 @@ const decodeProviderInstanceId = Schema.decodeUnknownSync(ProviderInstanceId);
 
 describe("ClaudeProvider", () => {
   it("resolves Claude option capabilities and effort values", () => {
-    const caps = getClaudeModelCapabilities("claude-opus-4-7");
+    const opus48Caps = getClaudeModelCapabilities("claude-opus-4-8");
+    const opus47Caps = getClaudeModelCapabilities("claude-opus-4-7");
 
-    assert.equal(resolveClaudeEffort(caps, undefined), "xhigh");
-    assert.equal(resolveClaudeEffort(caps, "low"), "low");
-    assert.equal(resolveClaudeEffort(caps, "ultrathink"), "xhigh");
-    assert.equal(normalizeClaudeCliEffort("xhigh"), "max");
-    assert.equal(normalizeClaudeCliEffort("ultrathink"), undefined);
+    assert.equal(resolveClaudeEffort(opus48Caps, undefined), "high");
+    assert.equal(resolveClaudeEffort(opus48Caps, "ultracode"), "ultracode");
+    assert.equal(resolveClaudeEffort(opus47Caps, undefined), "xhigh");
+    assert.equal(resolveClaudeEffort(opus47Caps, "low"), "low");
+    assert.equal(resolveClaudeEffort(opus47Caps, "ultrathink"), "xhigh");
+    assert.equal(normalizeClaudeCliEffort("xhigh", "claude-opus-4-8"), "xhigh");
+    assert.equal(normalizeClaudeCliEffort("xhigh", "claude-opus-4-7"), "max");
+    assert.equal(normalizeClaudeCliEffort("ultracode", "claude-opus-4-8"), "xhigh");
+    assert.equal(normalizeClaudeCliEffort("max", "claude-sonnet-4-6"), "high");
+    assert.equal(normalizeClaudeCliEffort("ultrathink", "claude-opus-4-8"), undefined);
   });
 
   it("adds 1m context suffix to Claude API model ids", () => {
