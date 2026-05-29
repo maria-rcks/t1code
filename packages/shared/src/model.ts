@@ -339,12 +339,7 @@ export function supportsClaudeUltracodeEffort(model: string | null | undefined):
 
 export function supportsClaudeMaxEffort(model: string | null | undefined): boolean {
   const normalized = normalizeModelSlug(model, "claudeAgent");
-  return (
-    normalized === CLAUDE_OPUS_4_8_MODEL ||
-    normalized === CLAUDE_OPUS_4_7_MODEL ||
-    normalized === CLAUDE_OPUS_4_6_MODEL ||
-    normalized === CLAUDE_SONNET_4_6_MODEL
-  );
+  return normalized === CLAUDE_OPUS_4_8_MODEL || normalized === CLAUDE_OPUS_4_6_MODEL;
 }
 
 export function supportsClaudeUltrathinkKeyword(model: string | null | undefined): boolean {
@@ -477,7 +472,7 @@ export function getReasoningEffortOptions(
       return ["low", "medium", "high", "xhigh", "max", "ultracode", "ultrathink"];
     }
     if (supportsClaudeExtraHighEffort(model)) {
-      return ["low", "medium", "high", "xhigh", "max", "ultrathink"];
+      return ["low", "medium", "high", "xhigh", "ultrathink"];
     }
     if (supportsClaudeMaxEffort(model)) {
       return ["low", "medium", "high", "max", "ultrathink"];

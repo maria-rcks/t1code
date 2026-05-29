@@ -64,7 +64,6 @@ const CLAUDE_EFFORT_OPTIONS = {
     { value: "medium", label: "Medium" },
     { value: "high", label: "High" },
     { value: "xhigh", label: "Extra High", isDefault: true },
-    { value: "max", label: "Max" },
     { value: "ultrathink", label: "Ultrathink" },
   ],
   opus46: [
@@ -78,7 +77,6 @@ const CLAUDE_EFFORT_OPTIONS = {
     { value: "low", label: "Low" },
     { value: "medium", label: "Medium" },
     { value: "high", label: "High", isDefault: true },
-    { value: "max", label: "Max" },
     { value: "ultrathink", label: "Ultrathink" },
   ],
 } as const;
@@ -260,9 +258,6 @@ export function normalizeClaudeCliEffort(
   }
   if (effort === "xhigh" && model !== "claude-opus-4-8") {
     return "max";
-  }
-  if (effort === "max" && model === "claude-sonnet-4-6") {
-    return "high";
   }
   return effort;
 }
