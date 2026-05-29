@@ -49,7 +49,6 @@ import {
   getModelSelectionStringOptionValue,
   getProviderOptionDescriptors,
   resolvePromptInjectedEffort,
-  supportsClaudeUltrathinkKeyword,
 } from "@t3tools/shared/model";
 import {
   Cause,
@@ -73,6 +72,7 @@ import { ServerConfig } from "../../config.ts";
 import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
 import {
   getClaudeModelCapabilities,
+  isClaudeUltracodeEffort,
   normalizeClaudeCliEffort,
   resolveClaudeApiModelId,
   resolveClaudeEffort,
@@ -288,8 +288,9 @@ function isInterruptedResult(result: SDKResultMessage): boolean {
 
 function getEffectiveClaudeAgentEffort(
   effort: string | null | undefined,
+  model: string | null | undefined,
 ): ClaudeQueryOptions["effort"] | null {
-  const normalized = normalizeClaudeCliEffort(effort);
+  const normalized = normalizeClaudeCliEffort(effort, model);
   return normalized ? (normalized as NonNullable<ClaudeQueryOptions["effort"]>) : null;
 }
 
@@ -556,9 +557,7 @@ function buildPromptText(
   const caps = getClaudeModelCapabilities(selectedModel);
   const promptEffort =
     resolvePromptInjectedEffort(caps, selectionEffort) ??
-    (legacyEffort === "ultrathink" && supportsClaudeUltrathinkKeyword(selectedModel)
-      ? "ultrathink"
-      : null);
+    resolvePromptInjectedEffort(caps, legacyEffort);
   return applyClaudePromptEffortPrefix(input.input?.trim() ?? "", promptEffort);
 }
 
@@ -571,7 +570,7 @@ function buildUserMessage(input: {
     parent_tool_use_id: null,
     message: {
       role: "user",
-      content: input.sdkContent,
+      content: input.sdkContent as unknown as SDKUserMessage["message"]["content"],
     },
   } as SDKUserMessage;
 }
@@ -2781,13 +2780,18 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ? (getModelSelectionBooleanOptionValue(modelSelection, "thinking") ??
           input.modelOptions?.claudeAgent?.thinking)
         : undefined;
-      const effectiveEffort = getEffectiveClaudeAgentEffort(effort);
+      const ultracode = isClaudeUltracodeEffort(effort);
+      const effectiveEffort = getEffectiveClaudeAgentEffort(
+        effort,
+        modelSelection?.model ?? selectedModel,
+      );
       const permissionMode =
         toPermissionMode(providerOptions?.permissionMode) ??
         (input.runtimeMode === "full-access" ? "bypassPermissions" : undefined);
       const settings = {
         ...(typeof thinking === "boolean" ? { alwaysThinkingEnabled: thinking } : {}),
         ...(fastMode ? { fastMode: true } : {}),
+        ...(ultracode ? { ultracode: true } : {}),
       };
 
       const queryOptions: ClaudeQueryOptions = {
