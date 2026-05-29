@@ -293,7 +293,9 @@ describe("resolveModelSlug", () => {
     expect(resolveModelSlugForProvider("claudeAgent", undefined)).toBe(
       DEFAULT_MODEL_BY_PROVIDER.claudeAgent,
     );
+    expect(resolveModelSlugForProvider("claudeAgent", "opus")).toBe("claude-opus-4-6");
     expect(resolveModelSlugForProvider("claudeAgent", "sonnet")).toBe("claude-sonnet-4-6");
+    expect(resolveModelSlugForProvider("claudeAgent", "opus-4.8")).toBe("claude-opus-4-8");
     expect(resolveModelSlugForProvider("claudeAgent", "gpt-5.3-codex")).toBe(
       DEFAULT_MODEL_BY_PROVIDER.claudeAgent,
     );
@@ -399,7 +401,6 @@ describe("getReasoningEffortOptions", () => {
       "medium",
       "high",
       "xhigh",
-      "max",
       "ultrathink",
     ]);
   });
@@ -419,7 +420,6 @@ describe("getReasoningEffortOptions", () => {
       "low",
       "medium",
       "high",
-      "max",
       "ultrathink",
     ]);
   });
@@ -511,13 +511,13 @@ describe("normalizeCodexModelOptions", () => {
 });
 
 describe("normalizeClaudeModelOptions", () => {
-  it("drops unsupported fast mode and preserves supported max effort for Sonnet", () => {
+  it("drops unsupported fast mode and max effort for Sonnet", () => {
     expect(
       normalizeClaudeModelOptions("claude-sonnet-4-6", {
         effort: "max",
         fastMode: true,
       }),
-    ).toEqual({ effort: "max" });
+    ).toBeUndefined();
   });
 
   it("keeps the Haiku thinking toggle and removes unsupported effort", () => {
@@ -544,11 +544,11 @@ describe("supportsClaudeAdaptiveReasoning", () => {
 });
 
 describe("supportsClaudeMaxEffort", () => {
-  it("enables max effort for supported Opus and Sonnet models", () => {
+  it("enables max effort only for models whose CLI mapping is distinct", () => {
     expect(supportsClaudeMaxEffort("claude-opus-4-8")).toBe(true);
-    expect(supportsClaudeMaxEffort("claude-opus-4-7")).toBe(true);
+    expect(supportsClaudeMaxEffort("claude-opus-4-7")).toBe(false);
     expect(supportsClaudeMaxEffort("claude-opus-4-6")).toBe(true);
-    expect(supportsClaudeMaxEffort("claude-sonnet-4-6")).toBe(true);
+    expect(supportsClaudeMaxEffort("claude-sonnet-4-6")).toBe(false);
     expect(supportsClaudeMaxEffort("claude-haiku-4-5")).toBe(false);
     expect(supportsClaudeMaxEffort(undefined)).toBe(false);
   });

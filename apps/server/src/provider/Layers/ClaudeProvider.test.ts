@@ -27,7 +27,7 @@ describe("ClaudeProvider", () => {
     assert.equal(normalizeClaudeCliEffort("xhigh", "claude-opus-4-8"), "xhigh");
     assert.equal(normalizeClaudeCliEffort("xhigh", "claude-opus-4-7"), "max");
     assert.equal(normalizeClaudeCliEffort("ultracode", "claude-opus-4-8"), "xhigh");
-    assert.equal(normalizeClaudeCliEffort("max", "claude-sonnet-4-6"), "high");
+    assert.equal(normalizeClaudeCliEffort("max", "claude-opus-4-6"), "max");
     assert.equal(normalizeClaudeCliEffort("ultrathink", "claude-opus-4-8"), undefined);
   });
 
