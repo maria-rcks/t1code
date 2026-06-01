@@ -281,7 +281,15 @@ type FocusArea =
   | "timeline"
   | "diff"
   | "settings";
-type MainView = "thread" | "settings" | "keybindings" | "archive";
+type MainView =
+  | "thread"
+  | "settings"
+  | "keybindings"
+  | "providers"
+  | "source-control"
+  | "connections"
+  | "diagnostics"
+  | "archive";
 type ThreadEnvMode = "local" | "worktree";
 type OverlayMenu =
   | null
@@ -404,8 +412,26 @@ const SELECTION_COPY_TOAST_MESSAGE = "Copied to clipboard";
 const MAIN_VIEW_TITLES: Record<MainViewNavigationTarget, string> = {
   settings: "Settings",
   keybindings: "Keybindings",
+  providers: "Providers",
+  "source-control": "Source Control",
+  connections: "Connections",
+  diagnostics: "Diagnostics",
   archive: "Archive",
 };
+
+const SETTINGS_NAV_ITEMS = [
+  { view: "settings", icon: "󰒓", label: "General" },
+  { view: "keybindings", icon: "󰌌", label: "Keybindings" },
+  { view: "providers", icon: "󱚣", label: "Providers" },
+  { view: "source-control", icon: "", label: "Source Control" },
+  { view: "connections", icon: "󰌘", label: "Connections" },
+  { view: "diagnostics", icon: "󰒡", label: "Diagnostics" },
+  { view: "archive", icon: "󰉖", label: "Archive" },
+] as const satisfies ReadonlyArray<{
+  readonly view: MainViewNavigationTarget;
+  readonly icon: string;
+  readonly label: string;
+}>;
 
 type ComposerPathTrigger = {
   query: string;
@@ -4077,6 +4103,10 @@ export function App({
         if (
           prefs.mainView === "settings" ||
           prefs.mainView === "keybindings" ||
+          prefs.mainView === "providers" ||
+          prefs.mainView === "source-control" ||
+          prefs.mainView === "connections" ||
+          prefs.mainView === "diagnostics" ||
           prefs.mainView === "archive"
         ) {
           setMainView(prefs.mainView);
@@ -10543,8 +10573,7 @@ export function App({
             <ProviderUpdateNoticeCard
               view={providerUpdateNotice}
               onOpenSettings={() => {
-                setMainView("settings");
-                setFocusArea("settings");
+                openMainView("providers");
               }}
               onDismiss={dismissProviderUpdateNotice}
             />
@@ -10824,72 +10853,37 @@ export function App({
               paddingBottom: 1,
             }}
           >
-            <SidebarRow
-              suppressHighlight
-              onPress={() => {
-                if (mainView === "settings") {
-                  returnToThreadView();
-                  return;
-                }
-                openMainView("settings");
-              }}
-            >
-              <text
-                content="󰒓"
-                style={{
-                  fg: mainView === "settings" ? PALETTE.text : PALETTE.muted,
-                  marginRight: 1,
-                }}
-              />
-              <text
-                content="Settings"
-                style={{ fg: mainView === "settings" ? PALETTE.text : PALETTE.muted }}
-              />
-            </SidebarRow>
-            <SidebarRow
-              suppressHighlight
-              onPress={() => {
-                if (mainView === "archive") {
-                  returnToThreadView();
-                  return;
-                }
-                openMainView("archive");
-              }}
-            >
-              <text
-                content="󰉖"
-                style={{
-                  fg: mainView === "archive" ? PALETTE.text : PALETTE.muted,
-                  marginRight: 1,
-                }}
-              />
-              <text
-                content={`Archive${archivedThreads.length > 0 ? ` (${archivedThreads.length})` : ""}`}
-                style={{ fg: mainView === "archive" ? PALETTE.text : PALETTE.muted }}
-              />
-            </SidebarRow>
-            <SidebarRow
-              suppressHighlight
-              onPress={() => {
-                if (mainView === "keybindings") {
-                  returnToThreadView();
-                  return;
-                }
-                openMainView("keybindings");
-              }}
-            >
-              <text
-                content="󰌌"
-                style={{
-                  fg: mainView === "keybindings" ? PALETTE.text : PALETTE.muted,
-                  marginRight: 1,
-                }}
-              />
-              <text
-                content="Keybindings"
-                style={{ fg: mainView === "keybindings" ? PALETTE.text : PALETTE.muted }}
-              />
-            </SidebarRow>
+            {SETTINGS_NAV_ITEMS.map((item) => {
+              const label =
+                item.view === "archive" && archivedThreads.length > 0
+                  ? `${item.label} (${archivedThreads.length})`
+                  : item.label;
+              return (
+                <SidebarRow
+                  key={item.view}
+                  suppressHighlight
+                  onPress={() => {
+                    if (mainView === item.view) {
+                      returnToThreadView();
+                      return;
+                    }
+                    openMainView(item.view);
+                  }}
+                >
+                  <text
+                    content={item.icon}
+                    style={{
+                      fg: mainView === item.view ? PALETTE.text : PALETTE.muted,
+                      marginRight: 1,
+                    }}
+                  />
+                  <text
+                    content={label}
+                    style={{ fg: mainView === item.view ? PALETTE.text : PALETTE.muted }}
+                  />
+                </SidebarRow>
+              );
+            })}
           </box>
         </box>
       ) : null}
@@ -11022,459 +11016,645 @@ export function App({
                 }}
               >
                 <box style={{ maxWidth: 104, width: "100%", flexDirection: "column" }}>
-                  {mainView === "settings" ? (
+                  {mainView !== "archive" && mainView !== "keybindings" ? (
                     <>
-                      <SettingsSection title="Archive">
-                        <SettingsRow
-                          title="Archived threads"
-                          description="View and restore threads hidden from the project sidebar."
-                          status={`${archivedThreads.length} archived`}
-                          control={
-                            <ToolbarButton
-                              label="Open archive"
-                              onPress={() => openMainView("archive")}
-                            />
-                          }
-                        />
-                      </SettingsSection>
-                      <SettingsSection title="General">
-                        <SettingsRow
-                          title="Theme"
-                          description="Choose how T3 Code looks across the app."
-                          resetAction={
-                            appSettings.theme !== DEFAULT_APP_THEME ? (
-                              <SettingResetButton
-                                onPress={() => updateAppSettings({ theme: DEFAULT_APP_THEME })}
-                              />
-                            ) : null
-                          }
-                          control={
-                            <ToolbarButton
-                              label={`${selectedThemeLabel} ▾`}
-                              surface="inset"
-                              active={
-                                overlayMenu === "settings-select" && settingsSelectKind === "theme"
-                              }
-                              onPress={(event) => openSettingsSelectMenu("theme", event)}
-                            />
-                          }
-                        />
-                        <SettingsRow
-                          title="Archive confirmation"
-                          description="Ask before moving a thread into Archive."
-                          status={appSettings.confirmThreadArchive ? "Enabled" : "Disabled"}
-                          resetAction={
-                            appSettings.confirmThreadArchive !==
-                            DEFAULT_APP_SETTINGS.confirmThreadArchive ? (
-                              <SettingResetButton
-                                onPress={() =>
-                                  updateAppSettings({
-                                    confirmThreadArchive: DEFAULT_APP_SETTINGS.confirmThreadArchive,
-                                  })
-                                }
-                              />
-                            ) : null
-                          }
-                          control={
-                            <TogglePill
-                              checked={appSettings.confirmThreadArchive}
-                              onPress={() =>
-                                updateAppSettings({
-                                  confirmThreadArchive: !appSettings.confirmThreadArchive,
-                                })
-                              }
-                            />
-                          }
-                        />
-                        <SettingsRow
-                          title="Theme preset"
-                          description="Default uses the built-in palette. Terminal Match derives colors from your terminal palette."
-                          resetAction={
-                            tuiThemeId !== DEFAULT_TUI_THEME_ID ? (
-                              <SettingResetButton
-                                onPress={() => setTuiThemeId(DEFAULT_TUI_THEME_ID)}
-                              />
-                            ) : null
-                          }
-                          control={
-                            <ToolbarButton
-                              label={`${selectedTuiThemeLabel} ▾`}
-                              surface="inset"
-                              active={
-                                overlayMenu === "settings-select" &&
-                                settingsSelectKind === "theme-preset"
-                              }
-                              onPress={(event) => openSettingsSelectMenu("theme-preset", event)}
-                            />
-                          }
-                        />
-                        <SettingsRow
-                          title="Time format"
-                          description="System default follows your browser or OS clock preference."
-                          resetAction={
-                            appSettings.timestampFormat !== DEFAULT_TIMESTAMP_FORMAT ? (
-                              <SettingResetButton
-                                onPress={() =>
-                                  updateAppSettings({
-                                    timestampFormat: DEFAULT_TIMESTAMP_FORMAT,
-                                  })
-                                }
-                              />
-                            ) : null
-                          }
-                          control={
-                            <ToolbarButton
-                              label={`${TIMESTAMP_FORMAT_LABELS[appSettings.timestampFormat]} ▾`}
-                              surface="inset"
-                              active={
-                                overlayMenu === "settings-select" &&
-                                settingsSelectKind === "timestamp-format"
-                              }
-                              onPress={(event) => openSettingsSelectMenu("timestamp-format", event)}
-                            />
-                          }
-                        />
-                        <SettingsRow
-                          title="Diff line wrapping"
-                          description="Set whether the diff panel wraps long lines by default."
-                          status={appSettings.diffWordWrap ? "Wrapped" : "Unwrapped"}
-                          resetAction={
-                            appSettings.diffWordWrap !== DEFAULT_DIFF_WORD_WRAP ? (
-                              <SettingResetButton
-                                onPress={() =>
-                                  updateAppSettings({
-                                    diffWordWrap: DEFAULT_DIFF_WORD_WRAP,
-                                  })
-                                }
-                              />
-                            ) : null
-                          }
-                          control={
-                            <TogglePill
-                              checked={appSettings.diffWordWrap}
-                              onPress={() =>
-                                updateAppSettings({
-                                  diffWordWrap: !appSettings.diffWordWrap,
-                                })
-                              }
-                            />
-                          }
-                        />
-                        <SettingsRow
-                          title="Hide whitespace changes"
-                          description="Set whether the diff panel ignores whitespace-only edits by default."
-                          status={appSettings.diffIgnoreWhitespace ? "Hidden" : "Shown"}
-                          resetAction={
-                            appSettings.diffIgnoreWhitespace !==
-                            DEFAULT_APP_SETTINGS.diffIgnoreWhitespace ? (
-                              <SettingResetButton
-                                onPress={() =>
-                                  updateAppSettings({
-                                    diffIgnoreWhitespace: DEFAULT_APP_SETTINGS.diffIgnoreWhitespace,
-                                  })
-                                }
-                              />
-                            ) : null
-                          }
-                          control={
-                            <TogglePill
-                              checked={appSettings.diffIgnoreWhitespace}
-                              onPress={() =>
-                                updateAppSettings({
-                                  diffIgnoreWhitespace: !appSettings.diffIgnoreWhitespace,
-                                })
-                              }
-                            />
-                          }
-                        />
-                        <SettingsRow
-                          title="Visible threads"
-                          description="Limit how many threads are shown for each expanded project."
-                          status={`${sidebarThreadPreviewCount} per project`}
-                          resetAction={
-                            sidebarThreadPreviewCount !== DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT ? (
-                              <SettingResetButton
-                                onPress={() =>
-                                  updateAppSettings({
-                                    sidebarThreadPreviewCount: DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT,
-                                  })
-                                }
-                              />
-                            ) : null
-                          }
-                          control={
-                            <box style={{ flexDirection: "row", alignItems: "center" }}>
+                      {mainView === "settings" ? (
+                        <SettingsSection title="General">
+                          <SettingsRow
+                            title="Theme"
+                            description="Choose how T3 Code looks across the app."
+                            resetAction={
+                              appSettings.theme !== DEFAULT_APP_THEME ? (
+                                <SettingResetButton
+                                  onPress={() => updateAppSettings({ theme: DEFAULT_APP_THEME })}
+                                />
+                              ) : null
+                            }
+                            control={
                               <ToolbarButton
-                                label="-"
-                                disabled={
-                                  sidebarThreadPreviewCount <= MIN_SIDEBAR_THREAD_PREVIEW_COUNT
-                                }
-                                onPress={() => updateSidebarThreadPreviewCount(-1)}
-                              />
-                              <text
-                                content={String(sidebarThreadPreviewCount)}
-                                style={{ fg: PALETTE.text, marginLeft: 1, marginRight: 1 }}
-                              />
-                              <ToolbarButton
-                                label="+"
-                                disabled={
-                                  sidebarThreadPreviewCount >= MAX_SIDEBAR_THREAD_PREVIEW_COUNT
-                                }
-                                onPress={() => updateSidebarThreadPreviewCount(1)}
-                              />
-                            </box>
-                          }
-                        />
-                        <SettingsRow
-                          title="Assistant output"
-                          description="Show token-by-token output while a response is in progress."
-                          status={assistantStreamingEnabled ? "Streaming" : "Buffered"}
-                          resetAction={
-                            assistantStreamingEnabled !==
-                            DEFAULT_SERVER_SETTINGS.enableAssistantStreaming ? (
-                              <SettingResetButton
-                                onPress={() =>
-                                  updateAssistantStreamingSetting(
-                                    DEFAULT_SERVER_SETTINGS.enableAssistantStreaming,
-                                  )
-                                }
-                              />
-                            ) : null
-                          }
-                          control={
-                            <TogglePill
-                              checked={assistantStreamingEnabled}
-                              onPress={() =>
-                                updateAssistantStreamingSetting(!assistantStreamingEnabled)
-                              }
-                            />
-                          }
-                        />
-                        <SettingsRow
-                          title="Git fetch interval"
-                          description="Refresh remote branch status in the background. Set to 0 seconds to only fetch during explicit Git actions."
-                          status={`${automaticGitFetchIntervalSeconds}s`}
-                          resetAction={
-                            automaticGitFetchIntervalSeconds !==
-                            defaultAutomaticGitFetchIntervalSeconds ? (
-                              <SettingResetButton
-                                onPress={() =>
-                                  updateAutomaticGitFetchInterval(
-                                    defaultAutomaticGitFetchIntervalSeconds,
-                                  )
-                                }
-                              />
-                            ) : null
-                          }
-                          control={
-                            <box style={{ flexDirection: "row", alignItems: "center" }}>
-                              <ToolbarButton
-                                label="-"
-                                disabled={automaticGitFetchIntervalSeconds <= 0}
-                                onPress={() =>
-                                  updateAutomaticGitFetchIntervalBy(
-                                    -GIT_FETCH_INTERVAL_STEP_SECONDS,
-                                  )
-                                }
-                              />
-                              <text
-                                content={`${automaticGitFetchIntervalSeconds}s`}
-                                style={{ fg: PALETTE.text, marginLeft: 1, marginRight: 1 }}
-                              />
-                              <ToolbarButton
-                                label="+"
-                                onPress={() =>
-                                  updateAutomaticGitFetchIntervalBy(GIT_FETCH_INTERVAL_STEP_SECONDS)
-                                }
-                              />
-                            </box>
-                          }
-                        />
-                        <SettingsRow
-                          title="New threads"
-                          description="Pick the default workspace mode for newly created draft threads."
-                          resetAction={
-                            defaultThreadEnvMode !==
-                            DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode ? (
-                              <SettingResetButton
-                                onPress={() =>
-                                  updateDefaultThreadEnvModeSetting(
-                                    DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode,
-                                  )
-                                }
-                              />
-                            ) : null
-                          }
-                          control={
-                            <ToolbarButton
-                              label={`${selectedThreadEnvLabel} ▾`}
-                              surface="inset"
-                              active={
-                                overlayMenu === "settings-select" &&
-                                settingsSelectKind === "thread-env"
-                              }
-                              onPress={(event) => openSettingsSelectMenu("thread-env", event)}
-                            />
-                          }
-                        />
-                        <SettingsRow
-                          title="Add project starts in"
-                          description={'Leave empty to use "~/" when the Add Project prompt opens.'}
-                          resetAction={
-                            addProjectBaseDirectory !==
-                            DEFAULT_SERVER_SETTINGS.addProjectBaseDirectory ? (
-                              <SettingResetButton
-                                onPress={() =>
-                                  updateAddProjectBaseDirectorySetting(
-                                    DEFAULT_SERVER_SETTINGS.addProjectBaseDirectory,
-                                  )
-                                }
-                              />
-                            ) : null
-                          }
-                        >
-                          <box
-                            style={{
-                              backgroundColor: PALETTE.input,
-                              paddingLeft: 1,
-                              paddingRight: 1,
-                              height: 3,
-                              justifyContent: "center",
-                            }}
-                          >
-                            <input
-                              value={addProjectBaseDirectory}
-                              onInput={(value) => updateAddProjectBaseDirectorySetting(value)}
-                              placeholder="~/"
-                              cursorColor={PALETTE.cursor}
-                              style={{
-                                backgroundColor: PALETTE.input,
-                                focusedBackgroundColor: PALETTE.input,
-                                textColor: PALETTE.text,
-                                focusedTextColor: PALETTE.text,
-                                placeholderColor: PALETTE.subtle,
-                              }}
-                            />
-                          </box>
-                        </SettingsRow>
-                        <SettingsRow
-                          title="Delete confirmation"
-                          description="Ask before deleting a thread and its chat history."
-                          status={appSettings.confirmThreadDelete ? "Enabled" : "Disabled"}
-                          resetAction={
-                            appSettings.confirmThreadDelete !==
-                            DEFAULT_APP_SETTINGS.confirmThreadDelete ? (
-                              <SettingResetButton
-                                onPress={() =>
-                                  updateAppSettings({
-                                    confirmThreadDelete: DEFAULT_APP_SETTINGS.confirmThreadDelete,
-                                  })
-                                }
-                              />
-                            ) : null
-                          }
-                          control={
-                            <TogglePill
-                              checked={appSettings.confirmThreadDelete}
-                              onPress={() =>
-                                updateAppSettings({
-                                  confirmThreadDelete: !appSettings.confirmThreadDelete,
-                                })
-                              }
-                            />
-                          }
-                        />
-                      </SettingsSection>
-
-                      <SettingsSection title="Models">
-                        <SettingsRow
-                          title="Text generation model"
-                          description="Used for generated commit messages, PR titles, and branch names."
-                          resetAction={
-                            isGitTextGenerationModelDirty ? (
-                              <SettingResetButton onPress={resetGitTextGenerationModel} />
-                            ) : null
-                          }
-                          control={
-                            <box style={{ flexDirection: "row", alignItems: "center" }}>
-                              <ToolbarButton
-                                label={`${selectedGitTextGenerationProviderLabel} ▾`}
+                                label={`${selectedThemeLabel} ▾`}
                                 surface="inset"
                                 active={
                                   overlayMenu === "settings-select" &&
-                                  settingsSelectKind === "git-model-provider"
+                                  settingsSelectKind === "theme"
+                                }
+                                onPress={(event) => openSettingsSelectMenu("theme", event)}
+                              />
+                            }
+                          />
+                          <SettingsRow
+                            title="Archive confirmation"
+                            description="Ask before moving a thread into Archive."
+                            status={appSettings.confirmThreadArchive ? "Enabled" : "Disabled"}
+                            resetAction={
+                              appSettings.confirmThreadArchive !==
+                              DEFAULT_APP_SETTINGS.confirmThreadArchive ? (
+                                <SettingResetButton
+                                  onPress={() =>
+                                    updateAppSettings({
+                                      confirmThreadArchive:
+                                        DEFAULT_APP_SETTINGS.confirmThreadArchive,
+                                    })
+                                  }
+                                />
+                              ) : null
+                            }
+                            control={
+                              <TogglePill
+                                checked={appSettings.confirmThreadArchive}
+                                onPress={() =>
+                                  updateAppSettings({
+                                    confirmThreadArchive: !appSettings.confirmThreadArchive,
+                                  })
+                                }
+                              />
+                            }
+                          />
+                          <SettingsRow
+                            title="Theme preset"
+                            description="Default uses the built-in palette. Terminal Match derives colors from your terminal palette."
+                            resetAction={
+                              tuiThemeId !== DEFAULT_TUI_THEME_ID ? (
+                                <SettingResetButton
+                                  onPress={() => setTuiThemeId(DEFAULT_TUI_THEME_ID)}
+                                />
+                              ) : null
+                            }
+                            control={
+                              <ToolbarButton
+                                label={`${selectedTuiThemeLabel} ▾`}
+                                surface="inset"
+                                active={
+                                  overlayMenu === "settings-select" &&
+                                  settingsSelectKind === "theme-preset"
+                                }
+                                onPress={(event) => openSettingsSelectMenu("theme-preset", event)}
+                              />
+                            }
+                          />
+                          <SettingsRow
+                            title="Time format"
+                            description="System default follows your browser or OS clock preference."
+                            resetAction={
+                              appSettings.timestampFormat !== DEFAULT_TIMESTAMP_FORMAT ? (
+                                <SettingResetButton
+                                  onPress={() =>
+                                    updateAppSettings({
+                                      timestampFormat: DEFAULT_TIMESTAMP_FORMAT,
+                                    })
+                                  }
+                                />
+                              ) : null
+                            }
+                            control={
+                              <ToolbarButton
+                                label={`${TIMESTAMP_FORMAT_LABELS[appSettings.timestampFormat]} ▾`}
+                                surface="inset"
+                                active={
+                                  overlayMenu === "settings-select" &&
+                                  settingsSelectKind === "timestamp-format"
                                 }
                                 onPress={(event) =>
-                                  openSettingsSelectMenu("git-model-provider", event)
+                                  openSettingsSelectMenu("timestamp-format", event)
                                 }
                               />
+                            }
+                          />
+                          <SettingsRow
+                            title="Diff line wrapping"
+                            description="Set whether the diff panel wraps long lines by default."
+                            status={appSettings.diffWordWrap ? "Wrapped" : "Unwrapped"}
+                            resetAction={
+                              appSettings.diffWordWrap !== DEFAULT_DIFF_WORD_WRAP ? (
+                                <SettingResetButton
+                                  onPress={() =>
+                                    updateAppSettings({
+                                      diffWordWrap: DEFAULT_DIFF_WORD_WRAP,
+                                    })
+                                  }
+                                />
+                              ) : null
+                            }
+                            control={
+                              <TogglePill
+                                checked={appSettings.diffWordWrap}
+                                onPress={() =>
+                                  updateAppSettings({
+                                    diffWordWrap: !appSettings.diffWordWrap,
+                                  })
+                                }
+                              />
+                            }
+                          />
+                          <SettingsRow
+                            title="Hide whitespace changes"
+                            description="Set whether the diff panel ignores whitespace-only edits by default."
+                            status={appSettings.diffIgnoreWhitespace ? "Hidden" : "Shown"}
+                            resetAction={
+                              appSettings.diffIgnoreWhitespace !==
+                              DEFAULT_APP_SETTINGS.diffIgnoreWhitespace ? (
+                                <SettingResetButton
+                                  onPress={() =>
+                                    updateAppSettings({
+                                      diffIgnoreWhitespace:
+                                        DEFAULT_APP_SETTINGS.diffIgnoreWhitespace,
+                                    })
+                                  }
+                                />
+                              ) : null
+                            }
+                            control={
+                              <TogglePill
+                                checked={appSettings.diffIgnoreWhitespace}
+                                onPress={() =>
+                                  updateAppSettings({
+                                    diffIgnoreWhitespace: !appSettings.diffIgnoreWhitespace,
+                                  })
+                                }
+                              />
+                            }
+                          />
+                          <SettingsRow
+                            title="Visible threads"
+                            description="Limit how many threads are shown for each expanded project."
+                            status={`${sidebarThreadPreviewCount} per project`}
+                            resetAction={
+                              sidebarThreadPreviewCount !== DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT ? (
+                                <SettingResetButton
+                                  onPress={() =>
+                                    updateAppSettings({
+                                      sidebarThreadPreviewCount:
+                                        DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT,
+                                    })
+                                  }
+                                />
+                              ) : null
+                            }
+                            control={
+                              <box style={{ flexDirection: "row", alignItems: "center" }}>
+                                <ToolbarButton
+                                  label="-"
+                                  disabled={
+                                    sidebarThreadPreviewCount <= MIN_SIDEBAR_THREAD_PREVIEW_COUNT
+                                  }
+                                  onPress={() => updateSidebarThreadPreviewCount(-1)}
+                                />
+                                <text
+                                  content={String(sidebarThreadPreviewCount)}
+                                  style={{ fg: PALETTE.text, marginLeft: 1, marginRight: 1 }}
+                                />
+                                <ToolbarButton
+                                  label="+"
+                                  disabled={
+                                    sidebarThreadPreviewCount >= MAX_SIDEBAR_THREAD_PREVIEW_COUNT
+                                  }
+                                  onPress={() => updateSidebarThreadPreviewCount(1)}
+                                />
+                              </box>
+                            }
+                          />
+                          <SettingsRow
+                            title="Assistant output"
+                            description="Show token-by-token output while a response is in progress."
+                            status={assistantStreamingEnabled ? "Streaming" : "Buffered"}
+                            resetAction={
+                              assistantStreamingEnabled !==
+                              DEFAULT_SERVER_SETTINGS.enableAssistantStreaming ? (
+                                <SettingResetButton
+                                  onPress={() =>
+                                    updateAssistantStreamingSetting(
+                                      DEFAULT_SERVER_SETTINGS.enableAssistantStreaming,
+                                    )
+                                  }
+                                />
+                              ) : null
+                            }
+                            control={
+                              <TogglePill
+                                checked={assistantStreamingEnabled}
+                                onPress={() =>
+                                  updateAssistantStreamingSetting(!assistantStreamingEnabled)
+                                }
+                              />
+                            }
+                          />
+                          <SettingsRow
+                            title="Git fetch interval"
+                            description="Refresh remote branch status in the background. Set to 0 seconds to only fetch during explicit Git actions."
+                            status={`${automaticGitFetchIntervalSeconds}s`}
+                            resetAction={
+                              automaticGitFetchIntervalSeconds !==
+                              defaultAutomaticGitFetchIntervalSeconds ? (
+                                <SettingResetButton
+                                  onPress={() =>
+                                    updateAutomaticGitFetchInterval(
+                                      defaultAutomaticGitFetchIntervalSeconds,
+                                    )
+                                  }
+                                />
+                              ) : null
+                            }
+                            control={
+                              <box style={{ flexDirection: "row", alignItems: "center" }}>
+                                <ToolbarButton
+                                  label="-"
+                                  disabled={automaticGitFetchIntervalSeconds <= 0}
+                                  onPress={() =>
+                                    updateAutomaticGitFetchIntervalBy(
+                                      -GIT_FETCH_INTERVAL_STEP_SECONDS,
+                                    )
+                                  }
+                                />
+                                <text
+                                  content={`${automaticGitFetchIntervalSeconds}s`}
+                                  style={{ fg: PALETTE.text, marginLeft: 1, marginRight: 1 }}
+                                />
+                                <ToolbarButton
+                                  label="+"
+                                  onPress={() =>
+                                    updateAutomaticGitFetchIntervalBy(
+                                      GIT_FETCH_INTERVAL_STEP_SECONDS,
+                                    )
+                                  }
+                                />
+                              </box>
+                            }
+                          />
+                          <SettingsRow
+                            title="New threads"
+                            description="Pick the default workspace mode for newly created draft threads."
+                            resetAction={
+                              defaultThreadEnvMode !==
+                              DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode ? (
+                                <SettingResetButton
+                                  onPress={() =>
+                                    updateDefaultThreadEnvModeSetting(
+                                      DEFAULT_SERVER_SETTINGS.defaultThreadEnvMode,
+                                    )
+                                  }
+                                />
+                              ) : null
+                            }
+                            control={
                               <ToolbarButton
-                                label={`${selectedGitTextGenerationModelLabel} ▾`}
+                                label={`${selectedThreadEnvLabel} ▾`}
                                 surface="inset"
                                 active={
                                   overlayMenu === "settings-select" &&
-                                  settingsSelectKind === "git-model"
+                                  settingsSelectKind === "thread-env"
                                 }
-                                onPress={(event) => openSettingsSelectMenu("git-model", event)}
+                                onPress={(event) => openSettingsSelectMenu("thread-env", event)}
+                              />
+                            }
+                          />
+                          <SettingsRow
+                            title="Add project starts in"
+                            description={
+                              'Leave empty to use "~/" when the Add Project prompt opens.'
+                            }
+                            resetAction={
+                              addProjectBaseDirectory !==
+                              DEFAULT_SERVER_SETTINGS.addProjectBaseDirectory ? (
+                                <SettingResetButton
+                                  onPress={() =>
+                                    updateAddProjectBaseDirectorySetting(
+                                      DEFAULT_SERVER_SETTINGS.addProjectBaseDirectory,
+                                    )
+                                  }
+                                />
+                              ) : null
+                            }
+                          >
+                            <box
+                              style={{
+                                backgroundColor: PALETTE.input,
+                                paddingLeft: 1,
+                                paddingRight: 1,
+                                height: 3,
+                                justifyContent: "center",
+                              }}
+                            >
+                              <input
+                                value={addProjectBaseDirectory}
+                                onInput={(value) => updateAddProjectBaseDirectorySetting(value)}
+                                placeholder="~/"
+                                cursorColor={PALETTE.cursor}
+                                style={{
+                                  backgroundColor: PALETTE.input,
+                                  focusedBackgroundColor: PALETTE.input,
+                                  textColor: PALETTE.text,
+                                  focusedTextColor: PALETTE.text,
+                                  placeholderColor: PALETTE.subtle,
+                                }}
                               />
                             </box>
-                          }
-                        />
-                        <SettingsRow
-                          title="Model preferences"
-                          description="Customize model picker favorites, hidden models, and order per provider instance."
-                          status={
-                            hasModelPreferenceSettings
-                              ? `${totalFavoriteModels} favorite · ${totalHiddenModels} hidden`
-                              : `${selectedModelPreferencesOptions.length} available`
-                          }
-                          resetAction={
-                            hasModelPreferenceSettings ? (
-                              <SettingResetButton onPress={resetProviderModelPreferences} />
-                            ) : null
-                          }
-                        >
-                          <box
-                            style={{ flexDirection: "row", alignItems: "center", marginBottom: 1 }}
+                          </SettingsRow>
+                          <SettingsRow
+                            title="Delete confirmation"
+                            description="Ask before deleting a thread and its chat history."
+                            status={appSettings.confirmThreadDelete ? "Enabled" : "Disabled"}
+                            resetAction={
+                              appSettings.confirmThreadDelete !==
+                              DEFAULT_APP_SETTINGS.confirmThreadDelete ? (
+                                <SettingResetButton
+                                  onPress={() =>
+                                    updateAppSettings({
+                                      confirmThreadDelete: DEFAULT_APP_SETTINGS.confirmThreadDelete,
+                                    })
+                                  }
+                                />
+                              ) : null
+                            }
+                            control={
+                              <TogglePill
+                                checked={appSettings.confirmThreadDelete}
+                                onPress={() =>
+                                  updateAppSettings({
+                                    confirmThreadDelete: !appSettings.confirmThreadDelete,
+                                  })
+                                }
+                              />
+                            }
+                          />
+                        </SettingsSection>
+                      ) : null}
+
+                      {mainView === "providers" ? (
+                        <SettingsSection title="Models">
+                          <SettingsRow
+                            title="Text generation model"
+                            description="Used for generated commit messages, PR titles, and branch names."
+                            resetAction={
+                              isGitTextGenerationModelDirty ? (
+                                <SettingResetButton onPress={resetGitTextGenerationModel} />
+                              ) : null
+                            }
+                            control={
+                              <box style={{ flexDirection: "row", alignItems: "center" }}>
+                                <ToolbarButton
+                                  label={`${selectedGitTextGenerationProviderLabel} ▾`}
+                                  surface="inset"
+                                  active={
+                                    overlayMenu === "settings-select" &&
+                                    settingsSelectKind === "git-model-provider"
+                                  }
+                                  onPress={(event) =>
+                                    openSettingsSelectMenu("git-model-provider", event)
+                                  }
+                                />
+                                <ToolbarButton
+                                  label={`${selectedGitTextGenerationModelLabel} ▾`}
+                                  surface="inset"
+                                  active={
+                                    overlayMenu === "settings-select" &&
+                                    settingsSelectKind === "git-model"
+                                  }
+                                  onPress={(event) => openSettingsSelectMenu("git-model", event)}
+                                />
+                              </box>
+                            }
+                          />
+                          <SettingsRow
+                            title="Model preferences"
+                            description="Customize model picker favorites, hidden models, and order per provider instance."
+                            status={
+                              hasModelPreferenceSettings
+                                ? `${totalFavoriteModels} favorite · ${totalHiddenModels} hidden`
+                                : `${selectedModelPreferencesOptions.length} available`
+                            }
+                            resetAction={
+                              hasModelPreferenceSettings ? (
+                                <SettingResetButton onPress={resetProviderModelPreferences} />
+                              ) : null
+                            }
                           >
-                            <ToolbarButton
-                              label={`${selectedModelPreferencesEntry.displayName} ▾`}
-                              surface="inset"
-                              active={
-                                overlayMenu === "settings-select" &&
-                                settingsSelectKind === "model-preferences-provider"
-                              }
-                              onPress={(event) =>
-                                openSettingsSelectMenu("model-preferences-provider", event)
-                              }
-                            />
-                            {hasModelPreferenceSettings ? (
+                            <box
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                marginBottom: 1,
+                              }}
+                            >
                               <ToolbarButton
-                                label="Reset"
-                                onPress={resetProviderModelPreferences}
+                                label={`${selectedModelPreferencesEntry.displayName} ▾`}
+                                surface="inset"
+                                active={
+                                  overlayMenu === "settings-select" &&
+                                  settingsSelectKind === "model-preferences-provider"
+                                }
+                                onPress={(event) =>
+                                  openSettingsSelectMenu("model-preferences-provider", event)
+                                }
+                              />
+                              {hasModelPreferenceSettings ? (
+                                <ToolbarButton
+                                  label="Reset"
+                                  onPress={resetProviderModelPreferences}
+                                />
+                              ) : null}
+                            </box>
+                            {visibleModelPreferenceRows.map((model, index) => {
+                              const isFavorite = selectedModelPreferencesFavoriteModels.has(
+                                model.slug,
+                              );
+                              const isHidden =
+                                !model.isCustom &&
+                                selectedModelPreferencesHiddenModels.has(model.slug);
+                              const previousModel = selectedModelPreferencesOptions[index - 1];
+                              const nextModel = selectedModelPreferencesOptions[index + 1];
+                              const canMoveUp =
+                                previousModel !== undefined &&
+                                selectedModelPreferencesFavoriteModels.has(previousModel.slug) ===
+                                  isFavorite;
+                              const canMoveDown =
+                                nextModel !== undefined &&
+                                selectedModelPreferencesFavoriteModels.has(nextModel.slug) ===
+                                  isFavorite;
+                              return (
+                                <box
+                                  key={`${selectedModelPreferencesEntry.instanceId}:${model.slug}`}
+                                  style={{
+                                    flexDirection: "row",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    backgroundColor: PALETTE.surfaceAlt,
+                                    paddingLeft: 1,
+                                    paddingRight: 1,
+                                    marginBottom: 1,
+                                  }}
+                                >
+                                  <box
+                                    style={{ flexDirection: "column", flexGrow: 1, flexShrink: 1 }}
+                                  >
+                                    <text
+                                      content={`${isFavorite ? "* " : ""}${model.name}${model.isCustom ? " · custom" : isHidden ? " · hidden" : ""}`}
+                                      style={{ fg: isHidden ? PALETTE.subtle : PALETTE.text }}
+                                    />
+                                    {model.name !== model.slug ? (
+                                      <text content={model.slug} style={{ fg: PALETTE.subtle }} />
+                                    ) : null}
+                                  </box>
+                                  <box style={{ flexDirection: "row", alignItems: "center" }}>
+                                    <ToolbarButton
+                                      label={isFavorite ? "Unstar" : "Star"}
+                                      onPress={() =>
+                                        toggleFavoriteModel(
+                                          selectedModelPreferencesEntry.instanceId,
+                                          model.slug,
+                                        )
+                                      }
+                                    />
+                                    <ToolbarButton
+                                      label="Up"
+                                      disabled={!canMoveUp}
+                                      onPress={() =>
+                                        moveModelPreference(
+                                          selectedModelPreferencesEntry.instanceId,
+                                          model.slug,
+                                          -1,
+                                        )
+                                      }
+                                    />
+                                    <ToolbarButton
+                                      label="Down"
+                                      disabled={!canMoveDown}
+                                      onPress={() =>
+                                        moveModelPreference(
+                                          selectedModelPreferencesEntry.instanceId,
+                                          model.slug,
+                                          1,
+                                        )
+                                      }
+                                    />
+                                    {!model.isCustom ? (
+                                      <ToolbarButton
+                                        label={isHidden ? "Show" : "Hide"}
+                                        onPress={() =>
+                                          toggleHiddenModel(
+                                            selectedModelPreferencesEntry.instanceId,
+                                            model.slug,
+                                          )
+                                        }
+                                      />
+                                    ) : null}
+                                  </box>
+                                </box>
+                              );
+                            })}
+                            {selectedModelPreferencesOptions.length > 8 ? (
+                              <ToolbarButton
+                                label={showAllModelPreferenceRows ? "Show less" : "Show more"}
+                                onPress={() => setShowAllModelPreferenceRows((current) => !current)}
                               />
                             ) : null}
-                          </box>
-                          {visibleModelPreferenceRows.map((model, index) => {
-                            const isFavorite = selectedModelPreferencesFavoriteModels.has(
-                              model.slug,
-                            );
-                            const isHidden =
-                              !model.isCustom &&
-                              selectedModelPreferencesHiddenModels.has(model.slug);
-                            const previousModel = selectedModelPreferencesOptions[index - 1];
-                            const nextModel = selectedModelPreferencesOptions[index + 1];
-                            const canMoveUp =
-                              previousModel !== undefined &&
-                              selectedModelPreferencesFavoriteModels.has(previousModel.slug) ===
-                                isFavorite;
-                            const canMoveDown =
-                              nextModel !== undefined &&
-                              selectedModelPreferencesFavoriteModels.has(nextModel.slug) ===
-                                isFavorite;
-                            return (
+                          </SettingsRow>
+                          <SettingsRow
+                            title="Custom models"
+                            description="Add custom model slugs for supported providers."
+                            status={
+                              totalCustomModels > 0
+                                ? `${totalCustomModels} saved model slug(s)`
+                                : null
+                            }
+                            resetAction={
+                              totalCustomModels > 0 ? (
+                                <SettingResetButton onPress={resetProviderCustomModels} />
+                              ) : null
+                            }
+                          >
+                            <box
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                marginBottom: 1,
+                              }}
+                            >
+                              <ToolbarButton
+                                label={`${selectedCustomModelProviderLabel} ▾`}
+                                surface="inset"
+                                active={
+                                  overlayMenu === "settings-select" &&
+                                  settingsSelectKind === "custom-model-provider"
+                                }
+                                onPress={(event) =>
+                                  openSettingsSelectMenu("custom-model-provider", event)
+                                }
+                              />
+                            </box>
+                            <box
+                              style={{
+                                backgroundColor: PALETTE.input,
+                                paddingLeft: 1,
+                                paddingRight: 1,
+                                height: 3,
+                                justifyContent: "center",
+                                marginBottom: 1,
+                              }}
+                            >
+                              <input
+                                value={customModelInputByProvider[selectedCustomModelProvider]}
+                                onInput={(value) => {
+                                  setCustomModelInputByProvider((current) => ({
+                                    ...current,
+                                    [selectedCustomModelProvider]: value,
+                                  }));
+                                  setCustomModelErrorByProvider((current) => ({
+                                    ...current,
+                                    [selectedCustomModelProvider]: null,
+                                  }));
+                                }}
+                                onKeyDown={(key) => {
+                                  if (
+                                    key.name === "return" ||
+                                    key.name === "enter" ||
+                                    key.name === "kpenter" ||
+                                    key.name === "linefeed"
+                                  ) {
+                                    key.preventDefault();
+                                    addCustomModel(selectedCustomModelProvider);
+                                  }
+                                }}
+                                placeholder={
+                                  MODEL_PROVIDER_SETTINGS.find(
+                                    (entry) => entry.provider === selectedCustomModelProvider,
+                                  )?.example || "custom/model-slug"
+                                }
+                                cursorColor={PALETTE.cursor}
+                                style={{
+                                  backgroundColor: PALETTE.input,
+                                  focusedBackgroundColor: PALETTE.input,
+                                  textColor: PALETTE.text,
+                                  focusedTextColor: PALETTE.text,
+                                  placeholderColor: PALETTE.subtle,
+                                }}
+                              />
+                            </box>
+                            <box
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                marginBottom: 1,
+                              }}
+                            >
+                              <ToolbarButton
+                                label="Add"
+                                onPress={() => addCustomModel(selectedCustomModelProvider)}
+                              />
+                              {totalCustomModels > 0 ? (
+                                <ToolbarButton label="Reset" onPress={resetProviderCustomModels} />
+                              ) : null}
+                            </box>
+                            {customModelErrorByProvider[selectedCustomModelProvider] ? (
+                              <text
+                                content={
+                                  customModelErrorByProvider[selectedCustomModelProvider] ?? ""
+                                }
+                                style={{ fg: PALETTE.warning, marginBottom: 1 }}
+                              />
+                            ) : null}
+                            {visibleCustomModelRows.map((row) => (
                               <box
-                                key={`${selectedModelPreferencesEntry.instanceId}:${model.slug}`}
+                                key={row.key}
                                 style={{
                                   flexDirection: "row",
                                   alignItems: "center",
@@ -11489,945 +11669,782 @@ export function App({
                                   style={{ flexDirection: "column", flexGrow: 1, flexShrink: 1 }}
                                 >
                                   <text
-                                    content={`${isFavorite ? "* " : ""}${model.name}${model.isCustom ? " · custom" : isHidden ? " · hidden" : ""}`}
-                                    style={{ fg: isHidden ? PALETTE.subtle : PALETTE.text }}
+                                    content={`${row.providerTitle} · ${row.slug}`}
+                                    style={{ fg: PALETTE.text }}
                                   />
-                                  {model.name !== model.slug ? (
-                                    <text content={model.slug} style={{ fg: PALETTE.subtle }} />
-                                  ) : null}
                                 </box>
-                                <box style={{ flexDirection: "row", alignItems: "center" }}>
-                                  <ToolbarButton
-                                    label={isFavorite ? "Unstar" : "Star"}
-                                    onPress={() =>
-                                      toggleFavoriteModel(
-                                        selectedModelPreferencesEntry.instanceId,
-                                        model.slug,
-                                      )
-                                    }
-                                  />
-                                  <ToolbarButton
-                                    label="Up"
-                                    disabled={!canMoveUp}
-                                    onPress={() =>
-                                      moveModelPreference(
-                                        selectedModelPreferencesEntry.instanceId,
-                                        model.slug,
-                                        -1,
-                                      )
-                                    }
-                                  />
-                                  <ToolbarButton
-                                    label="Down"
-                                    disabled={!canMoveDown}
-                                    onPress={() =>
-                                      moveModelPreference(
-                                        selectedModelPreferencesEntry.instanceId,
-                                        model.slug,
-                                        1,
-                                      )
-                                    }
-                                  />
-                                  {!model.isCustom ? (
-                                    <ToolbarButton
-                                      label={isHidden ? "Show" : "Hide"}
-                                      onPress={() =>
-                                        toggleHiddenModel(
-                                          selectedModelPreferencesEntry.instanceId,
-                                          model.slug,
-                                        )
-                                      }
-                                    />
-                                  ) : null}
-                                </box>
-                              </box>
-                            );
-                          })}
-                          {selectedModelPreferencesOptions.length > 8 ? (
-                            <ToolbarButton
-                              label={showAllModelPreferenceRows ? "Show less" : "Show more"}
-                              onPress={() => setShowAllModelPreferenceRows((current) => !current)}
-                            />
-                          ) : null}
-                        </SettingsRow>
-                        <SettingsRow
-                          title="Custom models"
-                          description="Add custom model slugs for supported providers."
-                          status={
-                            totalCustomModels > 0
-                              ? `${totalCustomModels} saved model slug(s)`
-                              : null
-                          }
-                          resetAction={
-                            totalCustomModels > 0 ? (
-                              <SettingResetButton onPress={resetProviderCustomModels} />
-                            ) : null
-                          }
-                        >
-                          <box
-                            style={{ flexDirection: "row", alignItems: "center", marginBottom: 1 }}
-                          >
-                            <ToolbarButton
-                              label={`${selectedCustomModelProviderLabel} ▾`}
-                              surface="inset"
-                              active={
-                                overlayMenu === "settings-select" &&
-                                settingsSelectKind === "custom-model-provider"
-                              }
-                              onPress={(event) =>
-                                openSettingsSelectMenu("custom-model-provider", event)
-                              }
-                            />
-                          </box>
-                          <box
-                            style={{
-                              backgroundColor: PALETTE.input,
-                              paddingLeft: 1,
-                              paddingRight: 1,
-                              height: 3,
-                              justifyContent: "center",
-                              marginBottom: 1,
-                            }}
-                          >
-                            <input
-                              value={customModelInputByProvider[selectedCustomModelProvider]}
-                              onInput={(value) => {
-                                setCustomModelInputByProvider((current) => ({
-                                  ...current,
-                                  [selectedCustomModelProvider]: value,
-                                }));
-                                setCustomModelErrorByProvider((current) => ({
-                                  ...current,
-                                  [selectedCustomModelProvider]: null,
-                                }));
-                              }}
-                              onKeyDown={(key) => {
-                                if (
-                                  key.name === "return" ||
-                                  key.name === "enter" ||
-                                  key.name === "kpenter" ||
-                                  key.name === "linefeed"
-                                ) {
-                                  key.preventDefault();
-                                  addCustomModel(selectedCustomModelProvider);
-                                }
-                              }}
-                              placeholder={
-                                MODEL_PROVIDER_SETTINGS.find(
-                                  (entry) => entry.provider === selectedCustomModelProvider,
-                                )?.example || "custom/model-slug"
-                              }
-                              cursorColor={PALETTE.cursor}
-                              style={{
-                                backgroundColor: PALETTE.input,
-                                focusedBackgroundColor: PALETTE.input,
-                                textColor: PALETTE.text,
-                                focusedTextColor: PALETTE.text,
-                                placeholderColor: PALETTE.subtle,
-                              }}
-                            />
-                          </box>
-                          <box
-                            style={{ flexDirection: "row", alignItems: "center", marginBottom: 1 }}
-                          >
-                            <ToolbarButton
-                              label="Add"
-                              onPress={() => addCustomModel(selectedCustomModelProvider)}
-                            />
-                            {totalCustomModels > 0 ? (
-                              <ToolbarButton label="Reset" onPress={resetProviderCustomModels} />
-                            ) : null}
-                          </box>
-                          {customModelErrorByProvider[selectedCustomModelProvider] ? (
-                            <text
-                              content={
-                                customModelErrorByProvider[selectedCustomModelProvider] ?? ""
-                              }
-                              style={{ fg: PALETTE.warning, marginBottom: 1 }}
-                            />
-                          ) : null}
-                          {visibleCustomModelRows.map((row) => (
-                            <box
-                              key={row.key}
-                              style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                backgroundColor: PALETTE.surfaceAlt,
-                                paddingLeft: 1,
-                                paddingRight: 1,
-                                marginBottom: 1,
-                              }}
-                            >
-                              <box style={{ flexDirection: "column", flexGrow: 1, flexShrink: 1 }}>
-                                <text
-                                  content={`${row.providerTitle} · ${row.slug}`}
-                                  style={{ fg: PALETTE.text }}
+                                <ToolbarButton
+                                  label="Remove"
+                                  onPress={() => removeCustomModel(row.provider, row.slug)}
                                 />
                               </box>
+                            ))}
+                            {savedCustomModelRows.length > 5 ? (
                               <ToolbarButton
-                                label="Remove"
-                                onPress={() => removeCustomModel(row.provider, row.slug)}
+                                label={showAllCustomModels ? "Show less" : "Show more"}
+                                onPress={() => setShowAllCustomModels((current) => !current)}
                               />
-                            </box>
-                          ))}
-                          {savedCustomModelRows.length > 5 ? (
-                            <ToolbarButton
-                              label={showAllCustomModels ? "Show less" : "Show more"}
-                              onPress={() => setShowAllCustomModels((current) => !current)}
-                            />
-                          ) : null}
-                        </SettingsRow>
-                      </SettingsSection>
+                            ) : null}
+                          </SettingsRow>
+                        </SettingsSection>
+                      ) : null}
 
-                      <SettingsSection title="Advanced">
-                        <SettingsRow
-                          title="Provider installs"
-                          description="Override the CLI used for new sessions."
-                          status={
-                            providerLastCheckedAt
-                              ? formatCheckedRelativeTime(providerLastCheckedAt)
-                              : null
-                          }
-                          resetAction={
-                            isInstallSettingsDirty ? (
-                              <SettingResetButton onPress={resetProviderInstallSettings} />
-                            ) : null
-                          }
-                          control={
-                            <ToolbarButton
-                              label={isRefreshingProviders ? "Refreshing..." : "Refresh"}
-                              disabled={!api || isRefreshingProviders}
-                              onPress={() => {
-                                void refreshProviderSnapshots();
-                              }}
-                            />
-                          }
-                        >
-                          {INSTALL_PROVIDER_SETTINGS.map((providerSettings) => {
-                            const isOpen = openInstallProviders[providerSettings.provider];
-                            const isProviderDirty =
-                              isProviderInstallSettingsDirty(providerSettings);
-                            const isProviderEnabled = providerInstallEnabled(
-                              providerSettings.provider,
-                            );
-                            const additionalProviderInstances = readAdditionalProviderInstances(
-                              serverSettings,
-                              providerSettings.provider,
-                            );
-                            const defaultProviderSnapshot = providerSnapshotByInstanceId.get(
-                              defaultProviderInstanceIdForSettingsKey(providerSettings.provider),
-                            );
-                            const defaultProviderStatus =
-                              formatProviderVersionStatus(defaultProviderSnapshot);
-                            const canUpdateDefaultProvider =
-                              canRunProviderUpdate(defaultProviderSnapshot);
-                            const isDefaultProviderUpdating =
-                              isProviderUpdateActive(defaultProviderSnapshot) ||
-                              updatingProviderInstanceId === defaultProviderSnapshot?.instanceId;
-                            return (
-                              <box
-                                key={providerSettings.provider}
-                                style={{ flexDirection: "column" }}
-                              >
+                      {mainView === "providers" ? (
+                        <SettingsSection title="Provider Installs">
+                          <SettingsRow
+                            title="Provider installs"
+                            description="Override the CLI used for new sessions."
+                            status={
+                              providerLastCheckedAt
+                                ? formatCheckedRelativeTime(providerLastCheckedAt)
+                                : null
+                            }
+                            resetAction={
+                              isInstallSettingsDirty ? (
+                                <SettingResetButton onPress={resetProviderInstallSettings} />
+                              ) : null
+                            }
+                            control={
+                              <ToolbarButton
+                                label={isRefreshingProviders ? "Refreshing..." : "Refresh"}
+                                disabled={!api || isRefreshingProviders}
+                                onPress={() => {
+                                  void refreshProviderSnapshots();
+                                }}
+                              />
+                            }
+                          >
+                            {INSTALL_PROVIDER_SETTINGS.map((providerSettings) => {
+                              const isOpen = openInstallProviders[providerSettings.provider];
+                              const isProviderDirty =
+                                isProviderInstallSettingsDirty(providerSettings);
+                              const isProviderEnabled = providerInstallEnabled(
+                                providerSettings.provider,
+                              );
+                              const additionalProviderInstances = readAdditionalProviderInstances(
+                                serverSettings,
+                                providerSettings.provider,
+                              );
+                              const defaultProviderSnapshot = providerSnapshotByInstanceId.get(
+                                defaultProviderInstanceIdForSettingsKey(providerSettings.provider),
+                              );
+                              const defaultProviderStatus =
+                                formatProviderVersionStatus(defaultProviderSnapshot);
+                              const canUpdateDefaultProvider =
+                                canRunProviderUpdate(defaultProviderSnapshot);
+                              const isDefaultProviderUpdating =
+                                isProviderUpdateActive(defaultProviderSnapshot) ||
+                                updatingProviderInstanceId === defaultProviderSnapshot?.instanceId;
+                              return (
                                 <box
-                                  style={{
-                                    flexDirection: "row",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                    backgroundColor: PALETTE.surfaceAlt,
-                                    paddingLeft: 1,
-                                    paddingRight: 1,
-                                    marginBottom: 1,
-                                  }}
+                                  key={providerSettings.provider}
+                                  style={{ flexDirection: "column" }}
                                 >
                                   <box
                                     style={{
                                       flexDirection: "row",
                                       alignItems: "center",
-                                      flexGrow: 1,
-                                      flexShrink: 1,
-                                    }}
-                                  >
-                                    <text
-                                      content={providerSettings.title}
-                                      style={{ fg: PALETTE.text, marginRight: 1 }}
-                                    />
-                                    {providerSettings.badgeLabel ? (
-                                      <text
-                                        content={providerSettings.badgeLabel}
-                                        style={{ fg: PALETTE.warning, marginRight: 1 }}
-                                      />
-                                    ) : null}
-                                    {isProviderDirty ? (
-                                      <text content="Custom" style={{ fg: PALETTE.subtle }} />
-                                    ) : null}
-                                    {defaultProviderStatus ? (
-                                      <text
-                                        content={defaultProviderStatus}
-                                        style={{ fg: PALETTE.subtle, marginLeft: 1 }}
-                                      />
-                                    ) : null}
-                                  </box>
-                                  <box style={{ flexDirection: "row", alignItems: "center" }}>
-                                    {defaultProviderSnapshot?.versionAdvisory?.canUpdate ? (
-                                      <ToolbarButton
-                                        label={providerUpdateButtonLabel(defaultProviderSnapshot)}
-                                        disabled={
-                                          !api ||
-                                          !canUpdateDefaultProvider ||
-                                          isDefaultProviderUpdating
-                                        }
-                                        onPress={() => {
-                                          void runProviderUpdate(defaultProviderSnapshot);
-                                        }}
-                                      />
-                                    ) : null}
-                                    <TogglePill
-                                      checked={isProviderEnabled}
-                                      onPress={() =>
-                                        updateProviderInstallEnabled(
-                                          providerSettings.provider,
-                                          !isProviderEnabled,
-                                        )
-                                      }
-                                    />
-                                    <ToolbarButton
-                                      label="Add"
-                                      disabled={!serverSettings}
-                                      onPress={() => addProviderInstallInstance(providerSettings)}
-                                    />
-                                    <ToolbarButton
-                                      label={isOpen ? "Hide" : "Edit"}
-                                      onPress={() =>
-                                        setOpenInstallProviders((current) => ({
-                                          ...current,
-                                          [providerSettings.provider]:
-                                            !current[providerSettings.provider],
-                                        }))
-                                      }
-                                    />
-                                  </box>
-                                </box>
-                                {isOpen ? (
-                                  <box
-                                    style={{
-                                      flexDirection: "column",
-                                      marginBottom: 1,
+                                      justifyContent: "space-between",
+                                      backgroundColor: PALETTE.surfaceAlt,
                                       paddingLeft: 1,
                                       paddingRight: 1,
+                                      marginBottom: 1,
                                     }}
                                   >
-                                    <box style={{ flexDirection: "column" }}>
+                                    <box
+                                      style={{
+                                        flexDirection: "row",
+                                        alignItems: "center",
+                                        flexGrow: 1,
+                                        flexShrink: 1,
+                                      }}
+                                    >
                                       <text
-                                        content="Display name"
-                                        style={{ fg: PALETTE.text, marginBottom: 1 }}
+                                        content={providerSettings.title}
+                                        style={{ fg: PALETTE.text, marginRight: 1 }}
                                       />
-                                      <box
-                                        style={{
-                                          backgroundColor: PALETTE.input,
-                                          paddingLeft: 1,
-                                          paddingRight: 1,
-                                          height: 3,
-                                          justifyContent: "center",
-                                          marginBottom: 1,
-                                        }}
-                                      >
-                                        <input
-                                          value={providerInstanceMetadataValue(
-                                            providerSettings.provider,
-                                            "displayName",
-                                          )}
-                                          onInput={(value) =>
-                                            updateProviderInstanceDisplayName(
-                                              providerSettings.provider,
-                                              value,
-                                            )
-                                          }
-                                          placeholder={providerSettings.title}
-                                          cursorColor={PALETTE.cursor}
-                                          style={{
-                                            backgroundColor: PALETTE.input,
-                                            focusedBackgroundColor: PALETTE.input,
-                                            textColor: PALETTE.text,
-                                            focusedTextColor: PALETTE.text,
-                                            placeholderColor: PALETTE.subtle,
-                                          }}
-                                        />
-                                      </box>
-                                      <text
-                                        content="Optional label shown in provider and model pickers."
-                                        style={{ fg: PALETTE.subtle, marginBottom: 1 }}
-                                      />
-                                    </box>
-                                    <box style={{ flexDirection: "column" }}>
-                                      <text
-                                        content="Accent color"
-                                        style={{ fg: PALETTE.text, marginBottom: 1 }}
-                                      />
-                                      <box
-                                        style={{
-                                          backgroundColor: PALETTE.input,
-                                          paddingLeft: 1,
-                                          paddingRight: 1,
-                                          height: 3,
-                                          justifyContent: "center",
-                                          marginBottom: 1,
-                                        }}
-                                      >
-                                        <input
-                                          value={providerInstanceMetadataValue(
-                                            providerSettings.provider,
-                                            "accentColor",
-                                          )}
-                                          onInput={(value) =>
-                                            updateProviderInstanceAccentColor(
-                                              providerSettings.provider,
-                                              value,
-                                            )
-                                          }
-                                          placeholder="#7c3aed"
-                                          cursorColor={PALETTE.cursor}
-                                          style={{
-                                            backgroundColor: PALETTE.input,
-                                            focusedBackgroundColor: PALETTE.input,
-                                            textColor: PALETTE.text,
-                                            focusedTextColor: PALETTE.text,
-                                            placeholderColor: PALETTE.subtle,
-                                          }}
-                                        />
-                                      </box>
-                                      <text
-                                        content="Use a six-digit hex color such as #7c3aed."
-                                        style={{ fg: PALETTE.subtle, marginBottom: 1 }}
-                                      />
-                                    </box>
-                                    <box style={{ flexDirection: "column", marginBottom: 1 }}>
-                                      <box
-                                        style={{
-                                          flexDirection: "row",
-                                          alignItems: "center",
-                                          justifyContent: "space-between",
-                                          marginBottom: 1,
-                                        }}
-                                      >
+                                      {providerSettings.badgeLabel ? (
                                         <text
-                                          content="Additional instances"
-                                          style={{ fg: PALETTE.text }}
+                                          content={providerSettings.badgeLabel}
+                                          style={{ fg: PALETTE.warning, marginRight: 1 }}
                                         />
+                                      ) : null}
+                                      {isProviderDirty ? (
+                                        <text content="Custom" style={{ fg: PALETTE.subtle }} />
+                                      ) : null}
+                                      {defaultProviderStatus ? (
+                                        <text
+                                          content={defaultProviderStatus}
+                                          style={{ fg: PALETTE.subtle, marginLeft: 1 }}
+                                        />
+                                      ) : null}
+                                    </box>
+                                    <box style={{ flexDirection: "row", alignItems: "center" }}>
+                                      {defaultProviderSnapshot?.versionAdvisory?.canUpdate ? (
                                         <ToolbarButton
-                                          label="Add"
-                                          disabled={!serverSettings}
-                                          onPress={() =>
-                                            addProviderInstallInstance(providerSettings)
+                                          label={providerUpdateButtonLabel(defaultProviderSnapshot)}
+                                          disabled={
+                                            !api ||
+                                            !canUpdateDefaultProvider ||
+                                            isDefaultProviderUpdating
                                           }
+                                          onPress={() => {
+                                            void runProviderUpdate(defaultProviderSnapshot);
+                                          }}
                                         />
-                                      </box>
-                                      {additionalProviderInstances.length === 0 ? (
+                                      ) : null}
+                                      <TogglePill
+                                        checked={isProviderEnabled}
+                                        onPress={() =>
+                                          updateProviderInstallEnabled(
+                                            providerSettings.provider,
+                                            !isProviderEnabled,
+                                          )
+                                        }
+                                      />
+                                      <ToolbarButton
+                                        label="Add"
+                                        disabled={!serverSettings}
+                                        onPress={() => addProviderInstallInstance(providerSettings)}
+                                      />
+                                      <ToolbarButton
+                                        label={isOpen ? "Hide" : "Edit"}
+                                        onPress={() =>
+                                          setOpenInstallProviders((current) => ({
+                                            ...current,
+                                            [providerSettings.provider]:
+                                              !current[providerSettings.provider],
+                                          }))
+                                        }
+                                      />
+                                    </box>
+                                  </box>
+                                  {isOpen ? (
+                                    <box
+                                      style={{
+                                        flexDirection: "column",
+                                        marginBottom: 1,
+                                        paddingLeft: 1,
+                                        paddingRight: 1,
+                                      }}
+                                    >
+                                      <box style={{ flexDirection: "column" }}>
                                         <text
-                                          content="Add another instance when the same provider needs separate paths, auth, or model preferences."
+                                          content="Display name"
+                                          style={{ fg: PALETTE.text, marginBottom: 1 }}
+                                        />
+                                        <box
+                                          style={{
+                                            backgroundColor: PALETTE.input,
+                                            paddingLeft: 1,
+                                            paddingRight: 1,
+                                            height: 3,
+                                            justifyContent: "center",
+                                            marginBottom: 1,
+                                          }}
+                                        >
+                                          <input
+                                            value={providerInstanceMetadataValue(
+                                              providerSettings.provider,
+                                              "displayName",
+                                            )}
+                                            onInput={(value) =>
+                                              updateProviderInstanceDisplayName(
+                                                providerSettings.provider,
+                                                value,
+                                              )
+                                            }
+                                            placeholder={providerSettings.title}
+                                            cursorColor={PALETTE.cursor}
+                                            style={{
+                                              backgroundColor: PALETTE.input,
+                                              focusedBackgroundColor: PALETTE.input,
+                                              textColor: PALETTE.text,
+                                              focusedTextColor: PALETTE.text,
+                                              placeholderColor: PALETTE.subtle,
+                                            }}
+                                          />
+                                        </box>
+                                        <text
+                                          content="Optional label shown in provider and model pickers."
                                           style={{ fg: PALETTE.subtle, marginBottom: 1 }}
                                         />
-                                      ) : (
-                                        additionalProviderInstances.map(
-                                          ([instanceId, instance]) => (
-                                            <box
-                                              key={`${providerSettings.provider}:instance:${String(instanceId)}`}
-                                              style={{ flexDirection: "column", marginBottom: 1 }}
-                                            >
+                                      </box>
+                                      <box style={{ flexDirection: "column" }}>
+                                        <text
+                                          content="Accent color"
+                                          style={{ fg: PALETTE.text, marginBottom: 1 }}
+                                        />
+                                        <box
+                                          style={{
+                                            backgroundColor: PALETTE.input,
+                                            paddingLeft: 1,
+                                            paddingRight: 1,
+                                            height: 3,
+                                            justifyContent: "center",
+                                            marginBottom: 1,
+                                          }}
+                                        >
+                                          <input
+                                            value={providerInstanceMetadataValue(
+                                              providerSettings.provider,
+                                              "accentColor",
+                                            )}
+                                            onInput={(value) =>
+                                              updateProviderInstanceAccentColor(
+                                                providerSettings.provider,
+                                                value,
+                                              )
+                                            }
+                                            placeholder="#7c3aed"
+                                            cursorColor={PALETTE.cursor}
+                                            style={{
+                                              backgroundColor: PALETTE.input,
+                                              focusedBackgroundColor: PALETTE.input,
+                                              textColor: PALETTE.text,
+                                              focusedTextColor: PALETTE.text,
+                                              placeholderColor: PALETTE.subtle,
+                                            }}
+                                          />
+                                        </box>
+                                        <text
+                                          content="Use a six-digit hex color such as #7c3aed."
+                                          style={{ fg: PALETTE.subtle, marginBottom: 1 }}
+                                        />
+                                      </box>
+                                      <box style={{ flexDirection: "column", marginBottom: 1 }}>
+                                        <box
+                                          style={{
+                                            flexDirection: "row",
+                                            alignItems: "center",
+                                            justifyContent: "space-between",
+                                            marginBottom: 1,
+                                          }}
+                                        >
+                                          <text
+                                            content="Additional instances"
+                                            style={{ fg: PALETTE.text }}
+                                          />
+                                          <ToolbarButton
+                                            label="Add"
+                                            disabled={!serverSettings}
+                                            onPress={() =>
+                                              addProviderInstallInstance(providerSettings)
+                                            }
+                                          />
+                                        </box>
+                                        {additionalProviderInstances.length === 0 ? (
+                                          <text
+                                            content="Add another instance when the same provider needs separate paths, auth, or model preferences."
+                                            style={{ fg: PALETTE.subtle, marginBottom: 1 }}
+                                          />
+                                        ) : (
+                                          additionalProviderInstances.map(
+                                            ([instanceId, instance]) => (
                                               <box
-                                                style={{
-                                                  flexDirection: "row",
-                                                  alignItems: "center",
-                                                  justifyContent: "space-between",
-                                                  backgroundColor: PALETTE.surfaceAlt,
-                                                  paddingLeft: 1,
-                                                  paddingRight: 1,
-                                                }}
+                                                key={`${providerSettings.provider}:instance:${String(instanceId)}`}
+                                                style={{ flexDirection: "column", marginBottom: 1 }}
                                               >
-                                                <box
-                                                  style={{
-                                                    flexDirection: "column",
-                                                    flexGrow: 1,
-                                                    flexShrink: 1,
-                                                  }}
-                                                >
-                                                  <text
-                                                    content={formatProviderInstanceSummary(
-                                                      instanceId,
-                                                      instance,
-                                                    )}
-                                                    style={{ fg: PALETTE.text }}
-                                                  />
-                                                  <text
-                                                    content={
-                                                      formatProviderVersionStatus(
-                                                        providerSnapshotByInstanceId.get(
-                                                          instanceId,
-                                                        ),
-                                                      ) ??
-                                                      "Copied install settings can be edited independently."
-                                                    }
-                                                    style={{ fg: PALETTE.subtle }}
-                                                  />
-                                                </box>
                                                 <box
                                                   style={{
                                                     flexDirection: "row",
                                                     alignItems: "center",
+                                                    justifyContent: "space-between",
+                                                    backgroundColor: PALETTE.surfaceAlt,
+                                                    paddingLeft: 1,
+                                                    paddingRight: 1,
                                                   }}
                                                 >
-                                                  {providerSnapshotByInstanceId.get(instanceId)
-                                                    ?.versionAdvisory?.canUpdate ? (
-                                                    <ToolbarButton
-                                                      label={providerUpdateButtonLabel(
-                                                        providerSnapshotByInstanceId.get(
-                                                          instanceId,
-                                                        ),
+                                                  <box
+                                                    style={{
+                                                      flexDirection: "column",
+                                                      flexGrow: 1,
+                                                      flexShrink: 1,
+                                                    }}
+                                                  >
+                                                    <text
+                                                      content={formatProviderInstanceSummary(
+                                                        instanceId,
+                                                        instance,
                                                       )}
-                                                      disabled={
-                                                        !api ||
-                                                        !canRunProviderUpdate(
-                                                          providerSnapshotByInstanceId.get(
-                                                            instanceId,
-                                                          ),
-                                                        ) ||
-                                                        isProviderUpdateActive(
-                                                          providerSnapshotByInstanceId.get(
-                                                            instanceId,
-                                                          ),
-                                                        ) ||
-                                                        updatingProviderInstanceId === instanceId
-                                                      }
-                                                      onPress={() => {
-                                                        const snapshot =
-                                                          providerSnapshotByInstanceId.get(
-                                                            instanceId,
-                                                          );
-                                                        if (snapshot) {
-                                                          void runProviderUpdate(snapshot);
-                                                        }
-                                                      }}
+                                                      style={{ fg: PALETTE.text }}
                                                     />
-                                                  ) : null}
-                                                  <TogglePill
-                                                    checked={instance.enabled !== false}
-                                                    onPress={() =>
-                                                      updateProviderInstallInstanceEnabled(
-                                                        instanceId,
-                                                        instance.enabled === false,
-                                                      )
-                                                    }
-                                                  />
-                                                  <ToolbarButton
-                                                    label="Remove"
-                                                    onPress={() =>
-                                                      removeProviderInstallInstance(instanceId)
-                                                    }
-                                                  />
-                                                </box>
-                                              </box>
-                                              <box
-                                                style={{
-                                                  flexDirection: "column",
-                                                  paddingLeft: 1,
-                                                  paddingRight: 1,
-                                                  marginBottom: 1,
-                                                }}
-                                              >
-                                                <text
-                                                  content="Display name"
-                                                  style={{ fg: PALETTE.text, marginBottom: 1 }}
-                                                />
-                                                <box
-                                                  style={{
-                                                    backgroundColor: PALETTE.input,
-                                                    paddingLeft: 1,
-                                                    paddingRight: 1,
-                                                    height: 3,
-                                                    justifyContent: "center",
-                                                    marginBottom: 1,
-                                                  }}
-                                                >
-                                                  <input
-                                                    value={instance.displayName?.trim() ?? ""}
-                                                    onInput={(value) =>
-                                                      updateProviderInstallInstanceDisplayName(
-                                                        instanceId,
-                                                        value,
-                                                      )
-                                                    }
-                                                    placeholder={String(instanceId)}
-                                                    cursorColor={PALETTE.cursor}
-                                                    style={{
-                                                      backgroundColor: PALETTE.input,
-                                                      focusedBackgroundColor: PALETTE.input,
-                                                      textColor: PALETTE.text,
-                                                      focusedTextColor: PALETTE.text,
-                                                      placeholderColor: PALETTE.subtle,
-                                                    }}
-                                                  />
-                                                </box>
-                                                <text
-                                                  content="Accent color"
-                                                  style={{ fg: PALETTE.text, marginBottom: 1 }}
-                                                />
-                                                <box
-                                                  style={{
-                                                    backgroundColor: PALETTE.input,
-                                                    paddingLeft: 1,
-                                                    paddingRight: 1,
-                                                    height: 3,
-                                                    justifyContent: "center",
-                                                    marginBottom: 1,
-                                                  }}
-                                                >
-                                                  <input
-                                                    value={instance.accentColor?.trim() ?? ""}
-                                                    onInput={(value) =>
-                                                      updateProviderInstallInstanceAccentColor(
-                                                        instanceId,
-                                                        value,
-                                                      )
-                                                    }
-                                                    placeholder="#7c3aed"
-                                                    cursorColor={PALETTE.cursor}
-                                                    style={{
-                                                      backgroundColor: PALETTE.input,
-                                                      focusedBackgroundColor: PALETTE.input,
-                                                      textColor: PALETTE.text,
-                                                      focusedTextColor: PALETTE.text,
-                                                      placeholderColor: PALETTE.subtle,
-                                                    }}
-                                                  />
-                                                </box>
-                                                <box
-                                                  style={{
-                                                    flexDirection: "column",
-                                                    marginBottom: 1,
-                                                  }}
-                                                >
+                                                    <text
+                                                      content={
+                                                        formatProviderVersionStatus(
+                                                          providerSnapshotByInstanceId.get(
+                                                            instanceId,
+                                                          ),
+                                                        ) ??
+                                                        "Copied install settings can be edited independently."
+                                                      }
+                                                      style={{ fg: PALETTE.subtle }}
+                                                    />
+                                                  </box>
                                                   <box
                                                     style={{
                                                       flexDirection: "row",
                                                       alignItems: "center",
-                                                      justifyContent: "space-between",
-                                                      marginBottom: 1,
                                                     }}
                                                   >
-                                                    <text
-                                                      content="Environment variables"
-                                                      style={{ fg: PALETTE.text }}
-                                                    />
-                                                    <ToolbarButton
-                                                      label="Add"
+                                                    {providerSnapshotByInstanceId.get(instanceId)
+                                                      ?.versionAdvisory?.canUpdate ? (
+                                                      <ToolbarButton
+                                                        label={providerUpdateButtonLabel(
+                                                          providerSnapshotByInstanceId.get(
+                                                            instanceId,
+                                                          ),
+                                                        )}
+                                                        disabled={
+                                                          !api ||
+                                                          !canRunProviderUpdate(
+                                                            providerSnapshotByInstanceId.get(
+                                                              instanceId,
+                                                            ),
+                                                          ) ||
+                                                          isProviderUpdateActive(
+                                                            providerSnapshotByInstanceId.get(
+                                                              instanceId,
+                                                            ),
+                                                          ) ||
+                                                          updatingProviderInstanceId === instanceId
+                                                        }
+                                                        onPress={() => {
+                                                          const snapshot =
+                                                            providerSnapshotByInstanceId.get(
+                                                              instanceId,
+                                                            );
+                                                          if (snapshot) {
+                                                            void runProviderUpdate(snapshot);
+                                                          }
+                                                        }}
+                                                      />
+                                                    ) : null}
+                                                    <TogglePill
+                                                      checked={instance.enabled !== false}
                                                       onPress={() =>
-                                                        addProviderInstallInstanceEnvironmentVariable(
+                                                        updateProviderInstallInstanceEnabled(
                                                           instanceId,
+                                                          instance.enabled === false,
                                                         )
                                                       }
                                                     />
-                                                  </box>
-                                                  {(instance.environment ?? []).length === 0 ? (
-                                                    <text
-                                                      content="Add API keys, base URLs, or other per-instance CLI settings."
-                                                      style={{
-                                                        fg: PALETTE.subtle,
-                                                        marginBottom: 1,
-                                                      }}
+                                                    <ToolbarButton
+                                                      label="Remove"
+                                                      onPress={() =>
+                                                        removeProviderInstallInstance(instanceId)
+                                                      }
                                                     />
-                                                  ) : (
-                                                    (instance.environment ?? []).map((variable) => (
-                                                      <box
-                                                        key={`${providerSettings.provider}:instance:${String(instanceId)}:env:${variable.name}`}
-                                                        style={{
-                                                          flexDirection: "row",
-                                                          alignItems: "center",
-                                                          justifyContent: "space-between",
-                                                          backgroundColor: PALETTE.surfaceAlt,
-                                                          paddingLeft: 1,
-                                                          paddingRight: 1,
-                                                          marginBottom: 1,
-                                                        }}
-                                                      >
-                                                        <box
-                                                          style={{
-                                                            flexDirection: "column",
-                                                            flexGrow: 1,
-                                                            flexShrink: 1,
-                                                          }}
-                                                        >
-                                                          <text
-                                                            content={`${variable.name}${variable.sensitive ? " · sensitive" : ""}`}
-                                                            style={{ fg: PALETTE.text }}
-                                                          />
-                                                          <text
-                                                            content={
-                                                              variable.valueRedacted
-                                                                ? "stored secret"
-                                                                : variable.value
-                                                                  ? variable.sensitive
-                                                                    ? "value hidden"
-                                                                    : variable.value
-                                                                  : "empty value"
-                                                            }
-                                                            style={{ fg: PALETTE.subtle }}
-                                                          />
-                                                        </box>
-                                                        <box
-                                                          style={{
-                                                            flexDirection: "row",
-                                                            alignItems: "center",
-                                                          }}
-                                                        >
-                                                          <ToolbarButton
-                                                            label={
-                                                              variable.sensitive
-                                                                ? "Public"
-                                                                : "Sensitive"
-                                                            }
-                                                            onPress={() =>
-                                                              updateProviderInstallInstanceEnvironmentVariable(
-                                                                instanceId,
-                                                                variable.name,
-                                                                {
-                                                                  sensitive: !variable.sensitive,
-                                                                },
-                                                              )
-                                                            }
-                                                          />
-                                                          <ToolbarButton
-                                                            label="Remove"
-                                                            onPress={() =>
-                                                              removeProviderInstallInstanceEnvironmentVariable(
-                                                                instanceId,
-                                                                variable.name,
-                                                              )
-                                                            }
-                                                          />
-                                                        </box>
-                                                      </box>
-                                                    ))
-                                                  )}
+                                                  </box>
+                                                </box>
+                                                <box
+                                                  style={{
+                                                    flexDirection: "column",
+                                                    paddingLeft: 1,
+                                                    paddingRight: 1,
+                                                    marginBottom: 1,
+                                                  }}
+                                                >
+                                                  <text
+                                                    content="Display name"
+                                                    style={{ fg: PALETTE.text, marginBottom: 1 }}
+                                                  />
                                                   <box
                                                     style={{
-                                                      flexDirection: "column",
-                                                      backgroundColor: PALETTE.surfaceAlt,
+                                                      backgroundColor: PALETTE.input,
                                                       paddingLeft: 1,
                                                       paddingRight: 1,
+                                                      height: 3,
+                                                      justifyContent: "center",
                                                       marginBottom: 1,
                                                     }}
                                                   >
-                                                    <box
+                                                    <input
+                                                      value={instance.displayName?.trim() ?? ""}
+                                                      onInput={(value) =>
+                                                        updateProviderInstallInstanceDisplayName(
+                                                          instanceId,
+                                                          value,
+                                                        )
+                                                      }
+                                                      placeholder={String(instanceId)}
+                                                      cursorColor={PALETTE.cursor}
                                                       style={{
                                                         backgroundColor: PALETTE.input,
-                                                        paddingLeft: 1,
-                                                        paddingRight: 1,
-                                                        height: 3,
-                                                        justifyContent: "center",
-                                                        marginBottom: 1,
+                                                        focusedBackgroundColor: PALETTE.input,
+                                                        textColor: PALETTE.text,
+                                                        focusedTextColor: PALETTE.text,
+                                                        placeholderColor: PALETTE.subtle,
                                                       }}
-                                                    >
-                                                      <input
-                                                        value={
-                                                          (
-                                                            providerEnvironmentDraftByInstance[
-                                                              instanceId
-                                                            ] ?? EMPTY_PROVIDER_ENVIRONMENT_DRAFT
-                                                          ).name
-                                                        }
-                                                        onInput={(value) =>
-                                                          setProviderEnvironmentDraftByInstance(
-                                                            (current) => ({
-                                                              ...current,
-                                                              [instanceId]: {
-                                                                ...(current[instanceId] ??
-                                                                  EMPTY_PROVIDER_ENVIRONMENT_DRAFT),
-                                                                name: value,
-                                                              },
-                                                            }),
-                                                          )
-                                                        }
-                                                        placeholder="VARIABLE_NAME"
-                                                        cursorColor={PALETTE.cursor}
-                                                        style={{
-                                                          backgroundColor: PALETTE.input,
-                                                          focusedBackgroundColor: PALETTE.input,
-                                                          textColor: PALETTE.text,
-                                                          focusedTextColor: PALETTE.text,
-                                                          placeholderColor: PALETTE.subtle,
-                                                        }}
-                                                      />
-                                                    </box>
-                                                    <box
+                                                    />
+                                                  </box>
+                                                  <text
+                                                    content="Accent color"
+                                                    style={{ fg: PALETTE.text, marginBottom: 1 }}
+                                                  />
+                                                  <box
+                                                    style={{
+                                                      backgroundColor: PALETTE.input,
+                                                      paddingLeft: 1,
+                                                      paddingRight: 1,
+                                                      height: 3,
+                                                      justifyContent: "center",
+                                                      marginBottom: 1,
+                                                    }}
+                                                  >
+                                                    <input
+                                                      value={instance.accentColor?.trim() ?? ""}
+                                                      onInput={(value) =>
+                                                        updateProviderInstallInstanceAccentColor(
+                                                          instanceId,
+                                                          value,
+                                                        )
+                                                      }
+                                                      placeholder="#7c3aed"
+                                                      cursorColor={PALETTE.cursor}
                                                       style={{
                                                         backgroundColor: PALETTE.input,
-                                                        paddingLeft: 1,
-                                                        paddingRight: 1,
-                                                        height: 3,
-                                                        justifyContent: "center",
-                                                        marginBottom: 1,
+                                                        focusedBackgroundColor: PALETTE.input,
+                                                        textColor: PALETTE.text,
+                                                        focusedTextColor: PALETTE.text,
+                                                        placeholderColor: PALETTE.subtle,
                                                       }}
-                                                    >
-                                                      <input
-                                                        value={
-                                                          (
-                                                            providerEnvironmentDraftByInstance[
-                                                              instanceId
-                                                            ] ?? EMPTY_PROVIDER_ENVIRONMENT_DRAFT
-                                                          ).value
-                                                        }
-                                                        onInput={(value) =>
-                                                          setProviderEnvironmentDraftByInstance(
-                                                            (current) => ({
-                                                              ...current,
-                                                              [instanceId]: {
-                                                                ...(current[instanceId] ??
-                                                                  EMPTY_PROVIDER_ENVIRONMENT_DRAFT),
-                                                                value,
-                                                              },
-                                                            }),
-                                                          )
-                                                        }
-                                                        placeholder="Value"
-                                                        cursorColor={PALETTE.cursor}
-                                                        style={{
-                                                          backgroundColor: PALETTE.input,
-                                                          focusedBackgroundColor: PALETTE.input,
-                                                          textColor: PALETTE.text,
-                                                          focusedTextColor: PALETTE.text,
-                                                          placeholderColor: PALETTE.subtle,
-                                                        }}
-                                                      />
-                                                    </box>
+                                                    />
+                                                  </box>
+                                                  <box
+                                                    style={{
+                                                      flexDirection: "column",
+                                                      marginBottom: 1,
+                                                    }}
+                                                  >
                                                     <box
                                                       style={{
                                                         flexDirection: "row",
                                                         alignItems: "center",
                                                         justifyContent: "space-between",
-                                                      }}
-                                                    >
-                                                      <text
-                                                        content={
-                                                          (
-                                                            providerEnvironmentDraftByInstance[
-                                                              instanceId
-                                                            ] ?? EMPTY_PROVIDER_ENVIRONMENT_DRAFT
-                                                          ).sensitive
-                                                            ? "Sensitive value"
-                                                            : "Public value"
-                                                        }
-                                                        style={{ fg: PALETTE.subtle }}
-                                                      />
-                                                      <TogglePill
-                                                        checked={
-                                                          (
-                                                            providerEnvironmentDraftByInstance[
-                                                              instanceId
-                                                            ] ?? EMPTY_PROVIDER_ENVIRONMENT_DRAFT
-                                                          ).sensitive
-                                                        }
-                                                        onPress={() =>
-                                                          setProviderEnvironmentDraftByInstance(
-                                                            (current) => {
-                                                              const draft =
-                                                                current[instanceId] ??
-                                                                EMPTY_PROVIDER_ENVIRONMENT_DRAFT;
-                                                              return {
-                                                                ...current,
-                                                                [instanceId]: {
-                                                                  ...draft,
-                                                                  sensitive: !draft.sensitive,
-                                                                },
-                                                              };
-                                                            },
-                                                          )
-                                                        }
-                                                      />
-                                                    </box>
-                                                  </box>
-                                                </box>
-                                                {providerSettings.fields.map((field) => (
-                                                  <box
-                                                    key={`${providerSettings.provider}:instance:${String(instanceId)}:${field.key}`}
-                                                    style={{ flexDirection: "column" }}
-                                                  >
-                                                    <text
-                                                      content={field.label}
-                                                      style={{ fg: PALETTE.text, marginBottom: 1 }}
-                                                    />
-                                                    <box
-                                                      style={{
-                                                        backgroundColor: PALETTE.input,
-                                                        paddingLeft: 1,
-                                                        paddingRight: 1,
-                                                        height: 3,
-                                                        justifyContent: "center",
                                                         marginBottom: 1,
                                                       }}
                                                     >
-                                                      <input
-                                                        value={readProviderInstanceConfigValue(
-                                                          instance,
-                                                          field.key,
-                                                        )}
-                                                        onInput={(value) =>
-                                                          updateProviderInstallInstanceField(
+                                                      <text
+                                                        content="Environment variables"
+                                                        style={{ fg: PALETTE.text }}
+                                                      />
+                                                      <ToolbarButton
+                                                        label="Add"
+                                                        onPress={() =>
+                                                          addProviderInstallInstanceEnvironmentVariable(
                                                             instanceId,
-                                                            field.key,
-                                                            value,
                                                           )
                                                         }
-                                                        placeholder={field.placeholder}
-                                                        cursorColor={PALETTE.cursor}
-                                                        style={{
-                                                          backgroundColor: PALETTE.input,
-                                                          focusedBackgroundColor: PALETTE.input,
-                                                          textColor: PALETTE.text,
-                                                          focusedTextColor: PALETTE.text,
-                                                          placeholderColor: PALETTE.subtle,
-                                                        }}
                                                       />
                                                     </box>
+                                                    {(instance.environment ?? []).length === 0 ? (
+                                                      <text
+                                                        content="Add API keys, base URLs, or other per-instance CLI settings."
+                                                        style={{
+                                                          fg: PALETTE.subtle,
+                                                          marginBottom: 1,
+                                                        }}
+                                                      />
+                                                    ) : (
+                                                      (instance.environment ?? []).map(
+                                                        (variable) => (
+                                                          <box
+                                                            key={`${providerSettings.provider}:instance:${String(instanceId)}:env:${variable.name}`}
+                                                            style={{
+                                                              flexDirection: "row",
+                                                              alignItems: "center",
+                                                              justifyContent: "space-between",
+                                                              backgroundColor: PALETTE.surfaceAlt,
+                                                              paddingLeft: 1,
+                                                              paddingRight: 1,
+                                                              marginBottom: 1,
+                                                            }}
+                                                          >
+                                                            <box
+                                                              style={{
+                                                                flexDirection: "column",
+                                                                flexGrow: 1,
+                                                                flexShrink: 1,
+                                                              }}
+                                                            >
+                                                              <text
+                                                                content={`${variable.name}${variable.sensitive ? " · sensitive" : ""}`}
+                                                                style={{ fg: PALETTE.text }}
+                                                              />
+                                                              <text
+                                                                content={
+                                                                  variable.valueRedacted
+                                                                    ? "stored secret"
+                                                                    : variable.value
+                                                                      ? variable.sensitive
+                                                                        ? "value hidden"
+                                                                        : variable.value
+                                                                      : "empty value"
+                                                                }
+                                                                style={{ fg: PALETTE.subtle }}
+                                                              />
+                                                            </box>
+                                                            <box
+                                                              style={{
+                                                                flexDirection: "row",
+                                                                alignItems: "center",
+                                                              }}
+                                                            >
+                                                              <ToolbarButton
+                                                                label={
+                                                                  variable.sensitive
+                                                                    ? "Public"
+                                                                    : "Sensitive"
+                                                                }
+                                                                onPress={() =>
+                                                                  updateProviderInstallInstanceEnvironmentVariable(
+                                                                    instanceId,
+                                                                    variable.name,
+                                                                    {
+                                                                      sensitive:
+                                                                        !variable.sensitive,
+                                                                    },
+                                                                  )
+                                                                }
+                                                              />
+                                                              <ToolbarButton
+                                                                label="Remove"
+                                                                onPress={() =>
+                                                                  removeProviderInstallInstanceEnvironmentVariable(
+                                                                    instanceId,
+                                                                    variable.name,
+                                                                  )
+                                                                }
+                                                              />
+                                                            </box>
+                                                          </box>
+                                                        ),
+                                                      )
+                                                    )}
+                                                    <box
+                                                      style={{
+                                                        flexDirection: "column",
+                                                        backgroundColor: PALETTE.surfaceAlt,
+                                                        paddingLeft: 1,
+                                                        paddingRight: 1,
+                                                        marginBottom: 1,
+                                                      }}
+                                                    >
+                                                      <box
+                                                        style={{
+                                                          backgroundColor: PALETTE.input,
+                                                          paddingLeft: 1,
+                                                          paddingRight: 1,
+                                                          height: 3,
+                                                          justifyContent: "center",
+                                                          marginBottom: 1,
+                                                        }}
+                                                      >
+                                                        <input
+                                                          value={
+                                                            (
+                                                              providerEnvironmentDraftByInstance[
+                                                                instanceId
+                                                              ] ?? EMPTY_PROVIDER_ENVIRONMENT_DRAFT
+                                                            ).name
+                                                          }
+                                                          onInput={(value) =>
+                                                            setProviderEnvironmentDraftByInstance(
+                                                              (current) => ({
+                                                                ...current,
+                                                                [instanceId]: {
+                                                                  ...(current[instanceId] ??
+                                                                    EMPTY_PROVIDER_ENVIRONMENT_DRAFT),
+                                                                  name: value,
+                                                                },
+                                                              }),
+                                                            )
+                                                          }
+                                                          placeholder="VARIABLE_NAME"
+                                                          cursorColor={PALETTE.cursor}
+                                                          style={{
+                                                            backgroundColor: PALETTE.input,
+                                                            focusedBackgroundColor: PALETTE.input,
+                                                            textColor: PALETTE.text,
+                                                            focusedTextColor: PALETTE.text,
+                                                            placeholderColor: PALETTE.subtle,
+                                                          }}
+                                                        />
+                                                      </box>
+                                                      <box
+                                                        style={{
+                                                          backgroundColor: PALETTE.input,
+                                                          paddingLeft: 1,
+                                                          paddingRight: 1,
+                                                          height: 3,
+                                                          justifyContent: "center",
+                                                          marginBottom: 1,
+                                                        }}
+                                                      >
+                                                        <input
+                                                          value={
+                                                            (
+                                                              providerEnvironmentDraftByInstance[
+                                                                instanceId
+                                                              ] ?? EMPTY_PROVIDER_ENVIRONMENT_DRAFT
+                                                            ).value
+                                                          }
+                                                          onInput={(value) =>
+                                                            setProviderEnvironmentDraftByInstance(
+                                                              (current) => ({
+                                                                ...current,
+                                                                [instanceId]: {
+                                                                  ...(current[instanceId] ??
+                                                                    EMPTY_PROVIDER_ENVIRONMENT_DRAFT),
+                                                                  value,
+                                                                },
+                                                              }),
+                                                            )
+                                                          }
+                                                          placeholder="Value"
+                                                          cursorColor={PALETTE.cursor}
+                                                          style={{
+                                                            backgroundColor: PALETTE.input,
+                                                            focusedBackgroundColor: PALETTE.input,
+                                                            textColor: PALETTE.text,
+                                                            focusedTextColor: PALETTE.text,
+                                                            placeholderColor: PALETTE.subtle,
+                                                          }}
+                                                        />
+                                                      </box>
+                                                      <box
+                                                        style={{
+                                                          flexDirection: "row",
+                                                          alignItems: "center",
+                                                          justifyContent: "space-between",
+                                                        }}
+                                                      >
+                                                        <text
+                                                          content={
+                                                            (
+                                                              providerEnvironmentDraftByInstance[
+                                                                instanceId
+                                                              ] ?? EMPTY_PROVIDER_ENVIRONMENT_DRAFT
+                                                            ).sensitive
+                                                              ? "Sensitive value"
+                                                              : "Public value"
+                                                          }
+                                                          style={{ fg: PALETTE.subtle }}
+                                                        />
+                                                        <TogglePill
+                                                          checked={
+                                                            (
+                                                              providerEnvironmentDraftByInstance[
+                                                                instanceId
+                                                              ] ?? EMPTY_PROVIDER_ENVIRONMENT_DRAFT
+                                                            ).sensitive
+                                                          }
+                                                          onPress={() =>
+                                                            setProviderEnvironmentDraftByInstance(
+                                                              (current) => {
+                                                                const draft =
+                                                                  current[instanceId] ??
+                                                                  EMPTY_PROVIDER_ENVIRONMENT_DRAFT;
+                                                                return {
+                                                                  ...current,
+                                                                  [instanceId]: {
+                                                                    ...draft,
+                                                                    sensitive: !draft.sensitive,
+                                                                  },
+                                                                };
+                                                              },
+                                                            )
+                                                          }
+                                                        />
+                                                      </box>
+                                                    </box>
                                                   </box>
-                                                ))}
+                                                  {providerSettings.fields.map((field) => (
+                                                    <box
+                                                      key={`${providerSettings.provider}:instance:${String(instanceId)}:${field.key}`}
+                                                      style={{ flexDirection: "column" }}
+                                                    >
+                                                      <text
+                                                        content={field.label}
+                                                        style={{
+                                                          fg: PALETTE.text,
+                                                          marginBottom: 1,
+                                                        }}
+                                                      />
+                                                      <box
+                                                        style={{
+                                                          backgroundColor: PALETTE.input,
+                                                          paddingLeft: 1,
+                                                          paddingRight: 1,
+                                                          height: 3,
+                                                          justifyContent: "center",
+                                                          marginBottom: 1,
+                                                        }}
+                                                      >
+                                                        <input
+                                                          value={readProviderInstanceConfigValue(
+                                                            instance,
+                                                            field.key,
+                                                          )}
+                                                          onInput={(value) =>
+                                                            updateProviderInstallInstanceField(
+                                                              instanceId,
+                                                              field.key,
+                                                              value,
+                                                            )
+                                                          }
+                                                          placeholder={field.placeholder}
+                                                          cursorColor={PALETTE.cursor}
+                                                          style={{
+                                                            backgroundColor: PALETTE.input,
+                                                            focusedBackgroundColor: PALETTE.input,
+                                                            textColor: PALETTE.text,
+                                                            focusedTextColor: PALETTE.text,
+                                                            placeholderColor: PALETTE.subtle,
+                                                          }}
+                                                        />
+                                                      </box>
+                                                    </box>
+                                                  ))}
+                                                </box>
                                               </box>
-                                            </box>
-                                          ),
-                                        )
-                                      )}
-                                    </box>
-                                    <box style={{ flexDirection: "column", marginBottom: 1 }}>
-                                      <box
-                                        style={{
-                                          flexDirection: "row",
-                                          alignItems: "center",
-                                          justifyContent: "space-between",
-                                          marginBottom: 1,
-                                        }}
-                                      >
-                                        <text
-                                          content="Environment variables"
-                                          style={{ fg: PALETTE.text }}
-                                        />
-                                        <ToolbarButton
-                                          label="Add"
-                                          onPress={() =>
-                                            addProviderEnvironmentVariable(
-                                              providerSettings.provider,
-                                            )
-                                          }
-                                        />
+                                            ),
+                                          )
+                                        )}
                                       </box>
-                                      {providerInstanceEnvironment(providerSettings.provider)
-                                        .length === 0 ? (
-                                        <text
-                                          content="Add API keys, base URLs, or other per-instance CLI settings."
-                                          style={{ fg: PALETTE.subtle, marginBottom: 1 }}
-                                        />
-                                      ) : (
-                                        providerInstanceEnvironment(providerSettings.provider).map(
-                                          (variable) => (
+                                      <box style={{ flexDirection: "column", marginBottom: 1 }}>
+                                        <box
+                                          style={{
+                                            flexDirection: "row",
+                                            alignItems: "center",
+                                            justifyContent: "space-between",
+                                            marginBottom: 1,
+                                          }}
+                                        >
+                                          <text
+                                            content="Environment variables"
+                                            style={{ fg: PALETTE.text }}
+                                          />
+                                          <ToolbarButton
+                                            label="Add"
+                                            onPress={() =>
+                                              addProviderEnvironmentVariable(
+                                                providerSettings.provider,
+                                              )
+                                            }
+                                          />
+                                        </box>
+                                        {providerInstanceEnvironment(providerSettings.provider)
+                                          .length === 0 ? (
+                                          <text
+                                            content="Add API keys, base URLs, or other per-instance CLI settings."
+                                            style={{ fg: PALETTE.subtle, marginBottom: 1 }}
+                                          />
+                                        ) : (
+                                          providerInstanceEnvironment(
+                                            providerSettings.provider,
+                                          ).map((variable) => (
                                             <box
                                               key={`${providerSettings.provider}:env:${variable.name}`}
                                               style={{
@@ -12495,623 +12512,381 @@ export function App({
                                                 />
                                               </box>
                                             </box>
-                                          ),
-                                        )
-                                      )}
-                                      <box
-                                        style={{
-                                          flexDirection: "column",
-                                          backgroundColor: PALETTE.surfaceAlt,
-                                          paddingLeft: 1,
-                                          paddingRight: 1,
-                                          marginBottom: 1,
-                                        }}
-                                      >
+                                          ))
+                                        )}
                                         <box
                                           style={{
-                                            backgroundColor: PALETTE.input,
+                                            flexDirection: "column",
+                                            backgroundColor: PALETTE.surfaceAlt,
                                             paddingLeft: 1,
                                             paddingRight: 1,
-                                            height: 3,
-                                            justifyContent: "center",
                                             marginBottom: 1,
                                           }}
                                         >
-                                          <input
-                                            value={
-                                              providerEnvironmentDraftByProvider[
-                                                providerSettings.provider
-                                              ].name
-                                            }
-                                            onInput={(value) =>
-                                              setProviderEnvironmentDraftByProvider((current) => ({
-                                                ...current,
-                                                [providerSettings.provider]: {
-                                                  ...current[providerSettings.provider],
-                                                  name: value,
-                                                },
-                                              }))
-                                            }
-                                            placeholder="VARIABLE_NAME"
-                                            cursorColor={PALETTE.cursor}
+                                          <box
                                             style={{
                                               backgroundColor: PALETTE.input,
-                                              focusedBackgroundColor: PALETTE.input,
-                                              textColor: PALETTE.text,
-                                              focusedTextColor: PALETTE.text,
-                                              placeholderColor: PALETTE.subtle,
+                                              paddingLeft: 1,
+                                              paddingRight: 1,
+                                              height: 3,
+                                              justifyContent: "center",
+                                              marginBottom: 1,
                                             }}
-                                          />
-                                        </box>
-                                        <box
-                                          style={{
-                                            backgroundColor: PALETTE.input,
-                                            paddingLeft: 1,
-                                            paddingRight: 1,
-                                            height: 3,
-                                            justifyContent: "center",
-                                            marginBottom: 1,
-                                          }}
-                                        >
-                                          <input
-                                            value={
-                                              providerEnvironmentDraftByProvider[
-                                                providerSettings.provider
-                                              ].value
-                                            }
-                                            onInput={(value) =>
-                                              setProviderEnvironmentDraftByProvider((current) => ({
-                                                ...current,
-                                                [providerSettings.provider]: {
-                                                  ...current[providerSettings.provider],
-                                                  value,
-                                                },
-                                              }))
-                                            }
-                                            placeholder="Value"
-                                            cursorColor={PALETTE.cursor}
+                                          >
+                                            <input
+                                              value={
+                                                providerEnvironmentDraftByProvider[
+                                                  providerSettings.provider
+                                                ].name
+                                              }
+                                              onInput={(value) =>
+                                                setProviderEnvironmentDraftByProvider(
+                                                  (current) => ({
+                                                    ...current,
+                                                    [providerSettings.provider]: {
+                                                      ...current[providerSettings.provider],
+                                                      name: value,
+                                                    },
+                                                  }),
+                                                )
+                                              }
+                                              placeholder="VARIABLE_NAME"
+                                              cursorColor={PALETTE.cursor}
+                                              style={{
+                                                backgroundColor: PALETTE.input,
+                                                focusedBackgroundColor: PALETTE.input,
+                                                textColor: PALETTE.text,
+                                                focusedTextColor: PALETTE.text,
+                                                placeholderColor: PALETTE.subtle,
+                                              }}
+                                            />
+                                          </box>
+                                          <box
                                             style={{
                                               backgroundColor: PALETTE.input,
-                                              focusedBackgroundColor: PALETTE.input,
-                                              textColor: PALETTE.text,
-                                              focusedTextColor: PALETTE.text,
-                                              placeholderColor: PALETTE.subtle,
+                                              paddingLeft: 1,
+                                              paddingRight: 1,
+                                              height: 3,
+                                              justifyContent: "center",
+                                              marginBottom: 1,
                                             }}
-                                          />
-                                        </box>
-                                        <box
-                                          style={{
-                                            flexDirection: "row",
-                                            alignItems: "center",
-                                            justifyContent: "space-between",
-                                          }}
-                                        >
-                                          <text
-                                            content={
-                                              providerEnvironmentDraftByProvider[
-                                                providerSettings.provider
-                                              ].sensitive
-                                                ? "Sensitive value"
-                                                : "Public value"
-                                            }
-                                            style={{ fg: PALETTE.subtle }}
-                                          />
-                                          <TogglePill
-                                            checked={
-                                              providerEnvironmentDraftByProvider[
-                                                providerSettings.provider
-                                              ].sensitive
-                                            }
-                                            onPress={() =>
-                                              setProviderEnvironmentDraftByProvider((current) => ({
-                                                ...current,
-                                                [providerSettings.provider]: {
-                                                  ...current[providerSettings.provider],
-                                                  sensitive:
-                                                    !current[providerSettings.provider].sensitive,
-                                                },
-                                              }))
-                                            }
-                                          />
-                                        </box>
-                                      </box>
-                                      <text
-                                        content="Sensitive values are stored separately after saving."
-                                        style={{ fg: PALETTE.subtle, marginBottom: 1 }}
-                                      />
-                                    </box>
-                                    {providerSettings.fields.map((field) => (
-                                      <box
-                                        key={`${providerSettings.provider}:${field.key}`}
-                                        style={{ flexDirection: "column" }}
-                                      >
-                                        <text
-                                          content={field.label}
-                                          style={{ fg: PALETTE.text, marginBottom: 1 }}
-                                        />
-                                        <box
-                                          style={{
-                                            backgroundColor: PALETTE.input,
-                                            paddingLeft: 1,
-                                            paddingRight: 1,
-                                            height: 3,
-                                            justifyContent: "center",
-                                            marginBottom: 1,
-                                          }}
-                                        >
-                                          <input
-                                            value={providerInstallValue(
-                                              providerSettings.provider,
-                                              field.key,
-                                            )}
-                                            onInput={(value) =>
-                                              updateProviderInstallSettings(
-                                                providerSettings.provider,
-                                                {
-                                                  [field.key]: value,
-                                                },
-                                              )
-                                            }
-                                            placeholder={field.placeholder}
-                                            cursorColor={PALETTE.cursor}
+                                          >
+                                            <input
+                                              value={
+                                                providerEnvironmentDraftByProvider[
+                                                  providerSettings.provider
+                                                ].value
+                                              }
+                                              onInput={(value) =>
+                                                setProviderEnvironmentDraftByProvider(
+                                                  (current) => ({
+                                                    ...current,
+                                                    [providerSettings.provider]: {
+                                                      ...current[providerSettings.provider],
+                                                      value,
+                                                    },
+                                                  }),
+                                                )
+                                              }
+                                              placeholder="Value"
+                                              cursorColor={PALETTE.cursor}
+                                              style={{
+                                                backgroundColor: PALETTE.input,
+                                                focusedBackgroundColor: PALETTE.input,
+                                                textColor: PALETTE.text,
+                                                focusedTextColor: PALETTE.text,
+                                                placeholderColor: PALETTE.subtle,
+                                              }}
+                                            />
+                                          </box>
+                                          <box
                                             style={{
-                                              backgroundColor: PALETTE.input,
-                                              focusedBackgroundColor: PALETTE.input,
-                                              textColor: PALETTE.text,
-                                              focusedTextColor: PALETTE.text,
-                                              placeholderColor: PALETTE.subtle,
+                                              flexDirection: "row",
+                                              alignItems: "center",
+                                              justifyContent: "space-between",
                                             }}
-                                          />
+                                          >
+                                            <text
+                                              content={
+                                                providerEnvironmentDraftByProvider[
+                                                  providerSettings.provider
+                                                ].sensitive
+                                                  ? "Sensitive value"
+                                                  : "Public value"
+                                              }
+                                              style={{ fg: PALETTE.subtle }}
+                                            />
+                                            <TogglePill
+                                              checked={
+                                                providerEnvironmentDraftByProvider[
+                                                  providerSettings.provider
+                                                ].sensitive
+                                              }
+                                              onPress={() =>
+                                                setProviderEnvironmentDraftByProvider(
+                                                  (current) => ({
+                                                    ...current,
+                                                    [providerSettings.provider]: {
+                                                      ...current[providerSettings.provider],
+                                                      sensitive:
+                                                        !current[providerSettings.provider]
+                                                          .sensitive,
+                                                    },
+                                                  }),
+                                                )
+                                              }
+                                            />
+                                          </box>
                                         </box>
                                         <text
-                                          content={field.description}
+                                          content="Sensitive values are stored separately after saving."
                                           style={{ fg: PALETTE.subtle, marginBottom: 1 }}
                                         />
                                       </box>
-                                    ))}
-                                  </box>
-                                ) : null}
-                              </box>
-                            );
-                          })}
-                          {COMING_SOON_INSTALL_PROVIDER_OPTIONS.map((providerOption) => (
-                            <box
-                              key={`provider-install-soon:${String(providerOption.provider)}`}
-                              style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                backgroundColor: PALETTE.surfaceAlt,
-                                paddingLeft: 1,
-                                paddingRight: 1,
-                                marginBottom: 1,
-                              }}
-                            >
-                              <box style={{ flexDirection: "row", alignItems: "center" }}>
-                                <text
-                                  content={providerPickerIcon(String(providerOption.provider))}
-                                  style={{ fg: PALETTE.subtle, marginRight: 1 }}
-                                />
-                                <text
-                                  content={providerOption.title}
-                                  style={{ fg: PALETTE.subtle, marginRight: 1 }}
-                                />
-                              </box>
-                              <text content="Soon" style={{ fg: PALETTE.subtle }} />
-                            </box>
-                          ))}
-                        </SettingsRow>
-                        <SettingsRow
-                          title="Observability"
-                          description={formatDiagnosticsDescription({
-                            localTracingEnabled:
-                              serverConfig?.observability.localTracingEnabled ?? true,
-                            otlpTracesEnabled: Boolean(
-                              serverSettings?.observability.otlpTracesUrl.trim(),
-                            ),
-                            otlpTracesUrl:
-                              serverSettings?.observability.otlpTracesUrl.trim() || undefined,
-                            otlpMetricsEnabled: Boolean(
-                              serverSettings?.observability.otlpMetricsUrl.trim(),
-                            ),
-                            otlpMetricsUrl:
-                              serverSettings?.observability.otlpMetricsUrl.trim() || undefined,
-                          })}
-                          status={
-                            <>
-                              <text
-                                content={
-                                  serverConfig?.observability.logsDirectoryPath ??
-                                  "Resolving logs directory..."
-                                }
-                                style={{ fg: PALETTE.text }}
-                              />
-                              <text
-                                content="Local diagnostics scan this directory."
-                                style={{ fg: PALETTE.subtle }}
-                              />
-                              {openLogsDirectoryError ? (
-                                <text
-                                  content={openLogsDirectoryError}
-                                  style={{ fg: PALETTE.warning }}
-                                />
-                              ) : null}
-                            </>
-                          }
-                          control={
-                            <ToolbarButton
-                              label={isOpeningLogsDirectory ? "Opening..." : "Open logs"}
-                              disabled={
-                                !serverConfig?.observability.logsDirectoryPath ||
-                                isOpeningLogsDirectory
-                              }
-                              onPress={() => {
-                                void openLogsDirectory();
-                              }}
-                            />
-                          }
-                        >
-                          <box style={{ flexDirection: "column" }}>
-                            <text content="OTEL traces URL" style={{ fg: PALETTE.text }} />
-                            <box
-                              style={{
-                                backgroundColor: PALETTE.input,
-                                paddingLeft: 1,
-                                paddingRight: 1,
-                                height: 3,
-                                justifyContent: "center",
-                                marginBottom: 1,
-                              }}
-                            >
-                              <input
-                                value={serverSettings?.observability.otlpTracesUrl ?? ""}
-                                onInput={(value) =>
-                                  updateObservabilitySettings({ otlpTracesUrl: value })
-                                }
-                                placeholder="http://localhost:4318/v1/traces"
-                                cursorColor={PALETTE.cursor}
-                                style={{
-                                  backgroundColor: PALETTE.input,
-                                  focusedBackgroundColor: PALETTE.input,
-                                  textColor: PALETTE.text,
-                                  focusedTextColor: PALETTE.text,
-                                  placeholderColor: PALETTE.subtle,
-                                }}
-                              />
-                            </box>
-                            <text content="OTEL metrics URL" style={{ fg: PALETTE.text }} />
-                            <box
-                              style={{
-                                backgroundColor: PALETTE.input,
-                                paddingLeft: 1,
-                                paddingRight: 1,
-                                height: 3,
-                                justifyContent: "center",
-                                marginBottom: 1,
-                              }}
-                            >
-                              <input
-                                value={serverSettings?.observability.otlpMetricsUrl ?? ""}
-                                onInput={(value) =>
-                                  updateObservabilitySettings({ otlpMetricsUrl: value })
-                                }
-                                placeholder="http://localhost:4318/v1/metrics"
-                                cursorColor={PALETTE.cursor}
-                                style={{
-                                  backgroundColor: PALETTE.input,
-                                  focusedBackgroundColor: PALETTE.input,
-                                  textColor: PALETTE.text,
-                                  focusedTextColor: PALETTE.text,
-                                  placeholderColor: PALETTE.subtle,
-                                }}
-                              />
-                            </box>
-                          </box>
-                        </SettingsRow>
-                        <SettingsRow
-                          title="Source control"
-                          description="Discover Git and hosted source-control CLI integrations available to the server."
-                          status={
-                            <>
-                              <text
-                                content={
-                                  sourceControlDiscovery
-                                    ? `${sourceControlDiscovery.versionControlSystems.filter((item) => item.status === "available").length}/${sourceControlDiscovery.versionControlSystems.length} VCS · ${sourceControlDiscovery.sourceControlProviders.filter((item) => item.status === "available").length}/${sourceControlDiscovery.sourceControlProviders.length} providers`
-                                    : "No source-control snapshot loaded."
-                                }
-                                style={{ fg: PALETTE.text }}
-                              />
-                              <text
-                                content={
-                                  sourceControlDiscovery
-                                    ? "Provider auth is checked through local CLI status commands and server env."
-                                    : "Refresh to probe git, gh, glab, az, and Bitbucket env auth."
-                                }
-                                style={{ fg: PALETTE.subtle }}
-                              />
-                              {sourceControlDiscoveryError ? (
-                                <text
-                                  content={sourceControlDiscoveryError}
-                                  style={{ fg: PALETTE.warning }}
-                                />
-                              ) : null}
-                            </>
-                          }
-                          control={
-                            <ToolbarButton
-                              label={isLoadingSourceControlDiscovery ? "Refreshing..." : "Refresh"}
-                              disabled={!api || isLoadingSourceControlDiscovery}
-                              onPress={() => {
-                                void refreshSourceControlDiscovery();
-                              }}
-                            />
-                          }
-                        >
-                          {sourceControlDiscovery ? (
-                            <>
-                              {sourceControlDiscovery.versionControlSystems.map((item) => (
-                                <box
-                                  key={`vcs:${item.kind}`}
-                                  style={{
-                                    flexDirection: "column",
-                                    backgroundColor: PALETTE.surfaceAlt,
-                                    paddingLeft: 1,
-                                    paddingRight: 1,
-                                    marginBottom: 1,
-                                  }}
-                                >
-                                  <text
-                                    content={`${item.label} · ${item.status}${item.implemented ? "" : " · not implemented"}`}
-                                    style={{
-                                      fg:
-                                        item.status === "available"
-                                          ? PALETTE.text
-                                          : PALETTE.warning,
-                                    }}
-                                  />
-                                  <text
-                                    content={item.version ?? item.detail ?? item.installHint}
-                                    style={{ fg: PALETTE.subtle }}
-                                  />
-                                </box>
-                              ))}
-                              {sourceControlDiscovery.sourceControlProviders.map((item) => (
-                                <box
-                                  key={`source-control:${item.kind}`}
-                                  style={{
-                                    flexDirection: "column",
-                                    backgroundColor: PALETTE.surfaceAlt,
-                                    paddingLeft: 1,
-                                    paddingRight: 1,
-                                    marginBottom: 1,
-                                  }}
-                                >
-                                  <text
-                                    content={`${item.label} · ${item.status} · auth ${item.auth.status}`}
-                                    style={{
-                                      fg:
-                                        item.status === "available" &&
-                                        item.auth.status === "authenticated"
-                                          ? PALETTE.text
-                                          : PALETTE.warning,
-                                    }}
-                                  />
-                                  <text
-                                    content={
-                                      item.auth.account
-                                        ? `${item.auth.account}${item.auth.host ? ` on ${item.auth.host}` : ""}`
-                                        : (item.version ??
-                                          item.auth.detail ??
-                                          item.detail ??
-                                          item.installHint)
-                                    }
-                                    style={{ fg: PALETTE.subtle }}
-                                  />
-                                </box>
-                              ))}
-                            </>
-                          ) : (
-                            <text
-                              content="No source-control tools discovered yet."
-                              style={{ fg: PALETTE.subtle }}
-                            />
-                          )}
-                        </SettingsRow>
-                        <SettingsRow
-                          title="Process diagnostics"
-                          description="Inspect live child processes spawned by this server."
-                          status={
-                            <>
-                              <text
-                                content={
-                                  processDiagnostics
-                                    ? `${processDiagnostics.processCount} processes · ${formatMemoryBytes(processDiagnostics.totalRssBytes)} RSS · ${formatCpuPercent(processDiagnostics.totalCpuPercent)} CPU`
-                                    : "No process snapshot loaded."
-                                }
-                                style={{ fg: PALETTE.text }}
-                              />
-                              <text
-                                content={
-                                  processDiagnostics
-                                    ? `${formatCheckedRelativeTime(processDiagnostics.readAt)} · server pid ${processDiagnostics.serverPid}`
-                                    : "Refresh to query the current provider process tree."
-                                }
-                                style={{ fg: PALETTE.subtle }}
-                              />
-                              {processDiagnosticsError ? (
-                                <text
-                                  content={processDiagnosticsError}
-                                  style={{ fg: PALETTE.warning }}
-                                />
-                              ) : null}
-                            </>
-                          }
-                          control={
-                            <ToolbarButton
-                              label={isLoadingProcessDiagnostics ? "Refreshing..." : "Refresh"}
-                              disabled={!api || isLoadingProcessDiagnostics}
-                              onPress={() => {
-                                void refreshProcessDiagnostics();
-                              }}
-                            />
-                          }
-                        >
-                          {processDiagnostics?.processes.length ? (
-                            processDiagnostics.processes.slice(0, 8).map((processEntry) => {
-                              const isSignaling = signalingProcessPid === processEntry.pid;
-                              return (
-                                <box
-                                  key={`process:${processEntry.pid}`}
-                                  style={{
-                                    flexDirection: "row",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                    backgroundColor: PALETTE.surfaceAlt,
-                                    paddingLeft: 1,
-                                    paddingRight: 1,
-                                    marginBottom: 1,
-                                  }}
-                                >
-                                  <box
-                                    style={{
-                                      flexDirection: "column",
-                                      flexGrow: 1,
-                                      flexShrink: 1,
-                                      minWidth: 0,
-                                    }}
-                                  >
-                                    <text
-                                      content={`${"  ".repeat(processEntry.depth)}pid ${processEntry.pid} · ${processEntry.status} · ${formatMemoryBytes(processEntry.rssBytes)} · ${formatCpuPercent(processEntry.cpuPercent)}`}
-                                      style={{ fg: PALETTE.text }}
-                                    />
-                                    <text
-                                      content={processEntry.command}
-                                      style={{ fg: PALETTE.subtle }}
-                                    />
-                                  </box>
-                                  <box style={{ flexDirection: "row", alignItems: "center" }}>
-                                    <ToolbarButton
-                                      label="INT"
-                                      disabled={!api || Boolean(signalingProcessPid)}
-                                      onPress={() => {
-                                        void signalProcess(processEntry.pid, "SIGINT");
-                                      }}
-                                    />
-                                    <ToolbarButton
-                                      label={isSignaling ? "..." : "KILL"}
-                                      disabled={!api || Boolean(signalingProcessPid)}
-                                      onPress={() => {
-                                        void signalProcess(processEntry.pid, "SIGKILL");
-                                      }}
-                                    />
-                                  </box>
+                                      {providerSettings.fields.map((field) => (
+                                        <box
+                                          key={`${providerSettings.provider}:${field.key}`}
+                                          style={{ flexDirection: "column" }}
+                                        >
+                                          <text
+                                            content={field.label}
+                                            style={{ fg: PALETTE.text, marginBottom: 1 }}
+                                          />
+                                          <box
+                                            style={{
+                                              backgroundColor: PALETTE.input,
+                                              paddingLeft: 1,
+                                              paddingRight: 1,
+                                              height: 3,
+                                              justifyContent: "center",
+                                              marginBottom: 1,
+                                            }}
+                                          >
+                                            <input
+                                              value={providerInstallValue(
+                                                providerSettings.provider,
+                                                field.key,
+                                              )}
+                                              onInput={(value) =>
+                                                updateProviderInstallSettings(
+                                                  providerSettings.provider,
+                                                  {
+                                                    [field.key]: value,
+                                                  },
+                                                )
+                                              }
+                                              placeholder={field.placeholder}
+                                              cursorColor={PALETTE.cursor}
+                                              style={{
+                                                backgroundColor: PALETTE.input,
+                                                focusedBackgroundColor: PALETTE.input,
+                                                textColor: PALETTE.text,
+                                                focusedTextColor: PALETTE.text,
+                                                placeholderColor: PALETTE.subtle,
+                                              }}
+                                            />
+                                          </box>
+                                          <text
+                                            content={field.description}
+                                            style={{ fg: PALETTE.subtle, marginBottom: 1 }}
+                                          />
+                                        </box>
+                                      ))}
+                                    </box>
+                                  ) : null}
                                 </box>
                               );
-                            })
-                          ) : (
-                            <text
-                              content="No live descendant processes in the latest snapshot."
-                              style={{ fg: PALETTE.subtle }}
-                            />
-                          )}
-                          {processDiagnostics && processDiagnostics.processes.length > 8 ? (
-                            <text
-                              content={`Showing 8 of ${processDiagnostics.processes.length} processes.`}
-                              style={{ fg: PALETTE.subtle }}
-                            />
-                          ) : null}
-                        </SettingsRow>
-                        <SettingsRow
-                          title="Trace diagnostics"
-                          description="Summarize local server trace records and recent failures."
-                          status={
-                            <>
-                              <text
-                                content={
-                                  traceDiagnostics
-                                    ? `${traceDiagnostics.recordCount} spans · ${traceDiagnostics.failureCount} failures · ${traceDiagnostics.slowSpanCount} slow`
-                                    : "No trace snapshot loaded."
-                                }
-                                style={{ fg: PALETTE.text }}
-                              />
-                              <text
-                                content={
-                                  traceDiagnostics
-                                    ? `${formatCheckedRelativeTime(traceDiagnostics.readAt)} · ${traceDiagnostics.traceFilePath}`
-                                    : "Refresh to scan local server trace files."
-                                }
-                                style={{ fg: PALETTE.subtle }}
-                              />
-                              {traceDiagnosticsError ? (
-                                <text
-                                  content={
-                                    traceDiagnostics?.partialFailure
-                                      ? `Partial trace scan: ${traceDiagnosticsError}`
-                                      : traceDiagnosticsError
-                                  }
-                                  style={{ fg: PALETTE.warning }}
-                                />
-                              ) : null}
-                            </>
-                          }
-                          control={
-                            <ToolbarButton
-                              label={isLoadingTraceDiagnostics ? "Refreshing..." : "Refresh"}
-                              disabled={!api || isLoadingTraceDiagnostics}
-                              onPress={() => {
-                                void refreshTraceDiagnostics();
-                              }}
-                            />
-                          }
-                        >
-                          {traceDiagnostics ? (
-                            <>
+                            })}
+                            {COMING_SOON_INSTALL_PROVIDER_OPTIONS.map((providerOption) => (
                               <box
+                                key={`provider-install-soon:${String(providerOption.provider)}`}
                                 style={{
                                   flexDirection: "row",
                                   alignItems: "center",
+                                  justifyContent: "space-between",
                                   backgroundColor: PALETTE.surfaceAlt,
                                   paddingLeft: 1,
                                   paddingRight: 1,
                                   marginBottom: 1,
                                 }}
                               >
+                                <box style={{ flexDirection: "row", alignItems: "center" }}>
+                                  <text
+                                    content={providerPickerIcon(String(providerOption.provider))}
+                                    style={{ fg: PALETTE.subtle, marginRight: 1 }}
+                                  />
+                                  <text
+                                    content={providerOption.title}
+                                    style={{ fg: PALETTE.subtle, marginRight: 1 }}
+                                  />
+                                </box>
+                                <text content="Soon" style={{ fg: PALETTE.subtle }} />
+                              </box>
+                            ))}
+                          </SettingsRow>
+                        </SettingsSection>
+                      ) : null}
+
+                      {mainView === "diagnostics" ? (
+                        <SettingsSection title="Observability">
+                          <SettingsRow
+                            title="Observability"
+                            description={formatDiagnosticsDescription({
+                              localTracingEnabled:
+                                serverConfig?.observability.localTracingEnabled ?? true,
+                              otlpTracesEnabled: Boolean(
+                                serverSettings?.observability.otlpTracesUrl.trim(),
+                              ),
+                              otlpTracesUrl:
+                                serverSettings?.observability.otlpTracesUrl.trim() || undefined,
+                              otlpMetricsEnabled: Boolean(
+                                serverSettings?.observability.otlpMetricsUrl.trim(),
+                              ),
+                              otlpMetricsUrl:
+                                serverSettings?.observability.otlpMetricsUrl.trim() || undefined,
+                            })}
+                            status={
+                              <>
                                 <text
-                                  content={`Parse errors ${traceDiagnostics.parseErrorCount}`}
-                                  style={{ fg: PALETTE.subtle, marginRight: 2 }}
+                                  content={
+                                    serverConfig?.observability.logsDirectoryPath ??
+                                    "Resolving logs directory..."
+                                  }
+                                  style={{ fg: PALETTE.text }}
                                 />
                                 <text
-                                  content={`Interruptions ${traceDiagnostics.interruptionCount}`}
-                                  style={{ fg: PALETTE.subtle, marginRight: 2 }}
-                                />
-                                <text
-                                  content={`Slow >= ${formatDurationMs(traceDiagnostics.slowSpanThresholdMs)}`}
+                                  content="Local diagnostics scan this directory."
                                   style={{ fg: PALETTE.subtle }}
                                 />
-                              </box>
-                              {traceDiagnostics.latestFailures.slice(0, 3).map((failure) => (
-                                <box
-                                  key={`trace-failure:${failure.traceId}:${failure.spanId}`}
-                                  style={{
-                                    flexDirection: "column",
-                                    backgroundColor: PALETTE.surfaceAlt,
-                                    paddingLeft: 1,
-                                    paddingRight: 1,
-                                    marginBottom: 1,
-                                  }}
-                                >
+                                {openLogsDirectoryError ? (
                                   <text
-                                    content={`${failure.name} · ${formatDurationMs(failure.durationMs)} · ${formatCheckedRelativeTime(failure.endedAt)}`}
-                                    style={{ fg: PALETTE.text }}
+                                    content={openLogsDirectoryError}
+                                    style={{ fg: PALETTE.warning }}
                                   />
-                                  <text content={failure.cause} style={{ fg: PALETTE.warning }} />
-                                </box>
-                              ))}
-                              {traceDiagnostics.latestWarningAndErrorLogs
-                                .slice(0, 3)
-                                .map((event) => (
+                                ) : null}
+                              </>
+                            }
+                            control={
+                              <ToolbarButton
+                                label={isOpeningLogsDirectory ? "Opening..." : "Open logs"}
+                                disabled={
+                                  !serverConfig?.observability.logsDirectoryPath ||
+                                  isOpeningLogsDirectory
+                                }
+                                onPress={() => {
+                                  void openLogsDirectory();
+                                }}
+                              />
+                            }
+                          >
+                            <box style={{ flexDirection: "column" }}>
+                              <text content="OTEL traces URL" style={{ fg: PALETTE.text }} />
+                              <box
+                                style={{
+                                  backgroundColor: PALETTE.input,
+                                  paddingLeft: 1,
+                                  paddingRight: 1,
+                                  height: 3,
+                                  justifyContent: "center",
+                                  marginBottom: 1,
+                                }}
+                              >
+                                <input
+                                  value={serverSettings?.observability.otlpTracesUrl ?? ""}
+                                  onInput={(value) =>
+                                    updateObservabilitySettings({ otlpTracesUrl: value })
+                                  }
+                                  placeholder="http://localhost:4318/v1/traces"
+                                  cursorColor={PALETTE.cursor}
+                                  style={{
+                                    backgroundColor: PALETTE.input,
+                                    focusedBackgroundColor: PALETTE.input,
+                                    textColor: PALETTE.text,
+                                    focusedTextColor: PALETTE.text,
+                                    placeholderColor: PALETTE.subtle,
+                                  }}
+                                />
+                              </box>
+                              <text content="OTEL metrics URL" style={{ fg: PALETTE.text }} />
+                              <box
+                                style={{
+                                  backgroundColor: PALETTE.input,
+                                  paddingLeft: 1,
+                                  paddingRight: 1,
+                                  height: 3,
+                                  justifyContent: "center",
+                                  marginBottom: 1,
+                                }}
+                              >
+                                <input
+                                  value={serverSettings?.observability.otlpMetricsUrl ?? ""}
+                                  onInput={(value) =>
+                                    updateObservabilitySettings({ otlpMetricsUrl: value })
+                                  }
+                                  placeholder="http://localhost:4318/v1/metrics"
+                                  cursorColor={PALETTE.cursor}
+                                  style={{
+                                    backgroundColor: PALETTE.input,
+                                    focusedBackgroundColor: PALETTE.input,
+                                    textColor: PALETTE.text,
+                                    focusedTextColor: PALETTE.text,
+                                    placeholderColor: PALETTE.subtle,
+                                  }}
+                                />
+                              </box>
+                            </box>
+                          </SettingsRow>
+                        </SettingsSection>
+                      ) : null}
+
+                      {mainView === "source-control" ? (
+                        <SettingsSection title="Source Control">
+                          <SettingsRow
+                            title="Source control"
+                            description="Discover Git and hosted source-control CLI integrations available to the server."
+                            status={
+                              <>
+                                <text
+                                  content={
+                                    sourceControlDiscovery
+                                      ? `${sourceControlDiscovery.versionControlSystems.filter((item) => item.status === "available").length}/${sourceControlDiscovery.versionControlSystems.length} VCS · ${sourceControlDiscovery.sourceControlProviders.filter((item) => item.status === "available").length}/${sourceControlDiscovery.sourceControlProviders.length} providers`
+                                      : "No source-control snapshot loaded."
+                                  }
+                                  style={{ fg: PALETTE.text }}
+                                />
+                                <text
+                                  content={
+                                    sourceControlDiscovery
+                                      ? "Provider auth is checked through local CLI status commands and server env."
+                                      : "Refresh to probe git, gh, glab, az, and Bitbucket env auth."
+                                  }
+                                  style={{ fg: PALETTE.subtle }}
+                                />
+                                {sourceControlDiscoveryError ? (
+                                  <text
+                                    content={sourceControlDiscoveryError}
+                                    style={{ fg: PALETTE.warning }}
+                                  />
+                                ) : null}
+                              </>
+                            }
+                            control={
+                              <ToolbarButton
+                                label={
+                                  isLoadingSourceControlDiscovery ? "Refreshing..." : "Refresh"
+                                }
+                                disabled={!api || isLoadingSourceControlDiscovery}
+                                onPress={() => {
+                                  void refreshSourceControlDiscovery();
+                                }}
+                              />
+                            }
+                          >
+                            {sourceControlDiscovery ? (
+                              <>
+                                {sourceControlDiscovery.versionControlSystems.map((item) => (
                                   <box
-                                    key={`trace-log:${event.traceId}:${event.spanId}:${event.seenAt}:${event.message}`}
+                                    key={`vcs:${item.kind}`}
                                     style={{
                                       flexDirection: "column",
                                       backgroundColor: PALETTE.surfaceAlt,
@@ -13121,97 +12896,361 @@ export function App({
                                     }}
                                   >
                                     <text
-                                      content={`${event.level} · ${event.spanName} · ${formatCheckedRelativeTime(event.seenAt)}`}
-                                      style={{ fg: PALETTE.text }}
+                                      content={`${item.label} · ${item.status}${item.implemented ? "" : " · not implemented"}`}
+                                      style={{
+                                        fg:
+                                          item.status === "available"
+                                            ? PALETTE.text
+                                            : PALETTE.warning,
+                                      }}
                                     />
-                                    <text content={event.message} style={{ fg: PALETTE.subtle }} />
+                                    <text
+                                      content={item.version ?? item.detail ?? item.installHint}
+                                      style={{ fg: PALETTE.subtle }}
+                                    />
                                   </box>
                                 ))}
-                              {traceDiagnostics.topSpansByCount.slice(0, 5).map((span) => (
-                                <box
-                                  key={`trace-span:${span.name}`}
-                                  style={{
-                                    flexDirection: "row",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                    backgroundColor: PALETTE.surfaceAlt,
-                                    paddingLeft: 1,
-                                    paddingRight: 1,
-                                    marginBottom: 1,
-                                  }}
-                                >
-                                  <box style={{ flexGrow: 1, flexShrink: 1, overflow: "hidden" }}>
-                                    <text content={span.name} style={{ fg: PALETTE.text }} />
+                                {sourceControlDiscovery.sourceControlProviders.map((item) => (
+                                  <box
+                                    key={`source-control:${item.kind}`}
+                                    style={{
+                                      flexDirection: "column",
+                                      backgroundColor: PALETTE.surfaceAlt,
+                                      paddingLeft: 1,
+                                      paddingRight: 1,
+                                      marginBottom: 1,
+                                    }}
+                                  >
+                                    <text
+                                      content={`${item.label} · ${item.status} · auth ${item.auth.status}`}
+                                      style={{
+                                        fg:
+                                          item.status === "available" &&
+                                          item.auth.status === "authenticated"
+                                            ? PALETTE.text
+                                            : PALETTE.warning,
+                                      }}
+                                    />
+                                    <text
+                                      content={
+                                        item.auth.account
+                                          ? `${item.auth.account}${item.auth.host ? ` on ${item.auth.host}` : ""}`
+                                          : (item.version ??
+                                            item.auth.detail ??
+                                            item.detail ??
+                                            item.installHint)
+                                      }
+                                      style={{ fg: PALETTE.subtle }}
+                                    />
                                   </box>
+                                ))}
+                              </>
+                            ) : (
+                              <text
+                                content="No source-control tools discovered yet."
+                                style={{ fg: PALETTE.subtle }}
+                              />
+                            )}
+                          </SettingsRow>
+                        </SettingsSection>
+                      ) : null}
+
+                      {mainView === "diagnostics" ? (
+                        <>
+                          <SettingsSection title="Process Diagnostics">
+                            <SettingsRow
+                              title="Process diagnostics"
+                              description="Inspect live child processes spawned by this server."
+                              status={
+                                <>
                                   <text
-                                    content={`${span.count}x · avg ${formatDurationMs(span.averageDurationMs)} · max ${formatDurationMs(span.maxDurationMs)}`}
+                                    content={
+                                      processDiagnostics
+                                        ? `${processDiagnostics.processCount} processes · ${formatMemoryBytes(processDiagnostics.totalRssBytes)} RSS · ${formatCpuPercent(processDiagnostics.totalCpuPercent)} CPU`
+                                        : "No process snapshot loaded."
+                                    }
+                                    style={{ fg: PALETTE.text }}
+                                  />
+                                  <text
+                                    content={
+                                      processDiagnostics
+                                        ? `${formatCheckedRelativeTime(processDiagnostics.readAt)} · server pid ${processDiagnostics.serverPid}`
+                                        : "Refresh to query the current provider process tree."
+                                    }
                                     style={{ fg: PALETTE.subtle }}
                                   />
-                                </box>
-                              ))}
-                              {traceDiagnostics.recordCount === 0 ? (
-                                <text
-                                  content="No local trace records in the latest snapshot."
-                                  style={{ fg: PALETTE.subtle }}
+                                  {processDiagnosticsError ? (
+                                    <text
+                                      content={processDiagnosticsError}
+                                      style={{ fg: PALETTE.warning }}
+                                    />
+                                  ) : null}
+                                </>
+                              }
+                              control={
+                                <ToolbarButton
+                                  label={isLoadingProcessDiagnostics ? "Refreshing..." : "Refresh"}
+                                  disabled={!api || isLoadingProcessDiagnostics}
+                                  onPress={() => {
+                                    void refreshProcessDiagnostics();
+                                  }}
                                 />
-                              ) : null}
-                            </>
-                          ) : (
-                            <text
-                              content="No trace records loaded yet."
-                              style={{ fg: PALETTE.subtle }}
-                            />
-                          )}
-                        </SettingsRow>
-                        <SettingsRow
-                          title="Keybindings"
-                          description="Open the persisted keybindings.json file to edit advanced bindings directly."
-                          status={
-                            <>
-                              <text
-                                content={
-                                  serverConfig?.keybindingsConfigPath ??
-                                  "Resolving keybindings path..."
-                                }
-                                style={{ fg: PALETTE.text }}
-                              />
-                              {openKeybindingsError ? (
-                                <text
-                                  content={openKeybindingsError}
-                                  style={{ fg: PALETTE.warning }}
-                                />
+                              }
+                            >
+                              {processDiagnostics?.processes.length ? (
+                                processDiagnostics.processes.slice(0, 8).map((processEntry) => {
+                                  const isSignaling = signalingProcessPid === processEntry.pid;
+                                  return (
+                                    <box
+                                      key={`process:${processEntry.pid}`}
+                                      style={{
+                                        flexDirection: "row",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        backgroundColor: PALETTE.surfaceAlt,
+                                        paddingLeft: 1,
+                                        paddingRight: 1,
+                                        marginBottom: 1,
+                                      }}
+                                    >
+                                      <box
+                                        style={{
+                                          flexDirection: "column",
+                                          flexGrow: 1,
+                                          flexShrink: 1,
+                                          minWidth: 0,
+                                        }}
+                                      >
+                                        <text
+                                          content={`${"  ".repeat(processEntry.depth)}pid ${processEntry.pid} · ${processEntry.status} · ${formatMemoryBytes(processEntry.rssBytes)} · ${formatCpuPercent(processEntry.cpuPercent)}`}
+                                          style={{ fg: PALETTE.text }}
+                                        />
+                                        <text
+                                          content={processEntry.command}
+                                          style={{ fg: PALETTE.subtle }}
+                                        />
+                                      </box>
+                                      <box style={{ flexDirection: "row", alignItems: "center" }}>
+                                        <ToolbarButton
+                                          label="INT"
+                                          disabled={!api || Boolean(signalingProcessPid)}
+                                          onPress={() => {
+                                            void signalProcess(processEntry.pid, "SIGINT");
+                                          }}
+                                        />
+                                        <ToolbarButton
+                                          label={isSignaling ? "..." : "KILL"}
+                                          disabled={!api || Boolean(signalingProcessPid)}
+                                          onPress={() => {
+                                            void signalProcess(processEntry.pid, "SIGKILL");
+                                          }}
+                                        />
+                                      </box>
+                                    </box>
+                                  );
+                                })
                               ) : (
                                 <text
-                                  content="Opens in your preferred editor."
+                                  content="No live descendant processes in the latest snapshot."
                                   style={{ fg: PALETTE.subtle }}
                                 />
                               )}
-                            </>
-                          }
-                          control={
-                            <box style={{ flexDirection: "row" }}>
-                              <ToolbarButton
-                                label="View page"
-                                onPress={() => openMainView("keybindings")}
-                              />
-                              <ToolbarButton
-                                label={isOpeningKeybindings ? "Opening..." : "Open file"}
-                                disabled={
-                                  !serverConfig?.keybindingsConfigPath || isOpeningKeybindings
-                                }
-                                onPress={() => {
-                                  void openKeybindingsFile();
-                                }}
-                              />
-                            </box>
-                          }
-                        />
-                        <SettingsRow
-                          title="Version"
-                          description="Current application version."
-                          control={<text content={APP_VERSION} style={{ fg: PALETTE.muted }} />}
-                        />
-                      </SettingsSection>
+                              {processDiagnostics && processDiagnostics.processes.length > 8 ? (
+                                <text
+                                  content={`Showing 8 of ${processDiagnostics.processes.length} processes.`}
+                                  style={{ fg: PALETTE.subtle }}
+                                />
+                              ) : null}
+                            </SettingsRow>
+                          </SettingsSection>
+
+                          <SettingsSection title="Trace Diagnostics">
+                            <SettingsRow
+                              title="Trace diagnostics"
+                              description="Summarize local server trace records and recent failures."
+                              status={
+                                <>
+                                  <text
+                                    content={
+                                      traceDiagnostics
+                                        ? `${traceDiagnostics.recordCount} spans · ${traceDiagnostics.failureCount} failures · ${traceDiagnostics.slowSpanCount} slow`
+                                        : "No trace snapshot loaded."
+                                    }
+                                    style={{ fg: PALETTE.text }}
+                                  />
+                                  <text
+                                    content={
+                                      traceDiagnostics
+                                        ? `${formatCheckedRelativeTime(traceDiagnostics.readAt)} · ${traceDiagnostics.traceFilePath}`
+                                        : "Refresh to scan local server trace files."
+                                    }
+                                    style={{ fg: PALETTE.subtle }}
+                                  />
+                                  {traceDiagnosticsError ? (
+                                    <text
+                                      content={
+                                        traceDiagnostics?.partialFailure
+                                          ? `Partial trace scan: ${traceDiagnosticsError}`
+                                          : traceDiagnosticsError
+                                      }
+                                      style={{ fg: PALETTE.warning }}
+                                    />
+                                  ) : null}
+                                </>
+                              }
+                              control={
+                                <ToolbarButton
+                                  label={isLoadingTraceDiagnostics ? "Refreshing..." : "Refresh"}
+                                  disabled={!api || isLoadingTraceDiagnostics}
+                                  onPress={() => {
+                                    void refreshTraceDiagnostics();
+                                  }}
+                                />
+                              }
+                            >
+                              {traceDiagnostics ? (
+                                <>
+                                  <box
+                                    style={{
+                                      flexDirection: "row",
+                                      alignItems: "center",
+                                      backgroundColor: PALETTE.surfaceAlt,
+                                      paddingLeft: 1,
+                                      paddingRight: 1,
+                                      marginBottom: 1,
+                                    }}
+                                  >
+                                    <text
+                                      content={`Parse errors ${traceDiagnostics.parseErrorCount}`}
+                                      style={{ fg: PALETTE.subtle, marginRight: 2 }}
+                                    />
+                                    <text
+                                      content={`Interruptions ${traceDiagnostics.interruptionCount}`}
+                                      style={{ fg: PALETTE.subtle, marginRight: 2 }}
+                                    />
+                                    <text
+                                      content={`Slow >= ${formatDurationMs(traceDiagnostics.slowSpanThresholdMs)}`}
+                                      style={{ fg: PALETTE.subtle }}
+                                    />
+                                  </box>
+                                  {traceDiagnostics.latestFailures.slice(0, 3).map((failure) => (
+                                    <box
+                                      key={`trace-failure:${failure.traceId}:${failure.spanId}`}
+                                      style={{
+                                        flexDirection: "column",
+                                        backgroundColor: PALETTE.surfaceAlt,
+                                        paddingLeft: 1,
+                                        paddingRight: 1,
+                                        marginBottom: 1,
+                                      }}
+                                    >
+                                      <text
+                                        content={`${failure.name} · ${formatDurationMs(failure.durationMs)} · ${formatCheckedRelativeTime(failure.endedAt)}`}
+                                        style={{ fg: PALETTE.text }}
+                                      />
+                                      <text
+                                        content={failure.cause}
+                                        style={{ fg: PALETTE.warning }}
+                                      />
+                                    </box>
+                                  ))}
+                                  {traceDiagnostics.latestWarningAndErrorLogs
+                                    .slice(0, 3)
+                                    .map((event) => (
+                                      <box
+                                        key={`trace-log:${event.traceId}:${event.spanId}:${event.seenAt}:${event.message}`}
+                                        style={{
+                                          flexDirection: "column",
+                                          backgroundColor: PALETTE.surfaceAlt,
+                                          paddingLeft: 1,
+                                          paddingRight: 1,
+                                          marginBottom: 1,
+                                        }}
+                                      >
+                                        <text
+                                          content={`${event.level} · ${event.spanName} · ${formatCheckedRelativeTime(event.seenAt)}`}
+                                          style={{ fg: PALETTE.text }}
+                                        />
+                                        <text
+                                          content={event.message}
+                                          style={{ fg: PALETTE.subtle }}
+                                        />
+                                      </box>
+                                    ))}
+                                  {traceDiagnostics.topSpansByCount.slice(0, 5).map((span) => (
+                                    <box
+                                      key={`trace-span:${span.name}`}
+                                      style={{
+                                        flexDirection: "row",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        backgroundColor: PALETTE.surfaceAlt,
+                                        paddingLeft: 1,
+                                        paddingRight: 1,
+                                        marginBottom: 1,
+                                      }}
+                                    >
+                                      <box
+                                        style={{ flexGrow: 1, flexShrink: 1, overflow: "hidden" }}
+                                      >
+                                        <text content={span.name} style={{ fg: PALETTE.text }} />
+                                      </box>
+                                      <text
+                                        content={`${span.count}x · avg ${formatDurationMs(span.averageDurationMs)} · max ${formatDurationMs(span.maxDurationMs)}`}
+                                        style={{ fg: PALETTE.subtle }}
+                                      />
+                                    </box>
+                                  ))}
+                                  {traceDiagnostics.recordCount === 0 ? (
+                                    <text
+                                      content="No local trace records in the latest snapshot."
+                                      style={{ fg: PALETTE.subtle }}
+                                    />
+                                  ) : null}
+                                </>
+                              ) : (
+                                <text
+                                  content="No trace records loaded yet."
+                                  style={{ fg: PALETTE.subtle }}
+                                />
+                              )}
+                            </SettingsRow>
+                          </SettingsSection>
+                        </>
+                      ) : null}
+
+                      {mainView === "connections" ? (
+                        <>
+                          <SettingsSection title="Local backend access">
+                            <SettingsRow
+                              title="Owner tools"
+                              description="Pairing links, authorized client management, and backend network exposure are available in the desktop/web settings surface."
+                              status={
+                                serverHttpOrigin
+                                  ? `Connected to local backend at ${serverHttpOrigin}`
+                                  : "Local backend origin is still resolving."
+                              }
+                            />
+                          </SettingsSection>
+                          <SettingsSection title="Remote environments">
+                            <SettingsRow
+                              title="Environment pairing"
+                              description="Remote environment pairing is not exposed by the TUI yet."
+                              status="Use a configured WebSocket endpoint to connect this TUI session to another backend."
+                            />
+                          </SettingsSection>
+                        </>
+                      ) : null}
+
+                      {mainView === "settings" ? (
+                        <SettingsSection title="About">
+                          <SettingsRow
+                            title="Version"
+                            description="Current application version."
+                            control={<text content={APP_VERSION} style={{ fg: PALETTE.muted }} />}
+                          />
+                        </SettingsSection>
+                      ) : null}
                     </>
                   ) : mainView === "archive" ? (
                     <ArchivedThreadsPanel
@@ -13244,6 +13283,45 @@ export function App({
                           style={{ fg: PALETTE.subtle }}
                         />
                       </box>
+                      <SettingsSection title="Keybindings">
+                        <SettingsRow
+                          title="Keybindings file"
+                          description="Open the persisted keybindings.json file to edit advanced bindings directly."
+                          status={
+                            <>
+                              <text
+                                content={
+                                  serverConfig?.keybindingsConfigPath ??
+                                  "Resolving keybindings path..."
+                                }
+                                style={{ fg: PALETTE.text }}
+                              />
+                              {openKeybindingsError ? (
+                                <text
+                                  content={openKeybindingsError}
+                                  style={{ fg: PALETTE.warning }}
+                                />
+                              ) : (
+                                <text
+                                  content="Opens in your preferred editor."
+                                  style={{ fg: PALETTE.subtle }}
+                                />
+                              )}
+                            </>
+                          }
+                          control={
+                            <ToolbarButton
+                              label={isOpeningKeybindings ? "Opening..." : "Open file"}
+                              disabled={
+                                !serverConfig?.keybindingsConfigPath || isOpeningKeybindings
+                              }
+                              onPress={() => {
+                                void openKeybindingsFile();
+                              }}
+                            />
+                          }
+                        />
+                      </SettingsSection>
                       {KEYBINDING_GUIDE_SECTIONS.map((section) => (
                         <SettingsSection key={section.title} title={section.title}>
                           {section.items.map((item) => (
