@@ -1070,6 +1070,31 @@ describe("WebSocket Server", () => {
     expectAvailableEditors((response.result as { availableEditors: unknown }).availableEditors);
   });
 
+  it("responds to server.getAdvertisedEndpoints", async () => {
+    server = await createTestServer({ cwd: "/my/workspace" });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.serverGetAdvertisedEndpoints);
+    expect(response.error).toBeUndefined();
+    expect(response.result).toEqual({
+      endpoints: [
+        expect.objectContaining({
+          id: "local-backend",
+          label: "Local backend",
+          httpBaseUrl: `http://127.0.0.1:${port}/`,
+          wsBaseUrl: `ws://127.0.0.1:${port}/`,
+          reachability: "loopback",
+          status: "available",
+          isDefault: true,
+        }),
+      ],
+    });
+  });
+
   it("responds to server.refreshProviders", async () => {
     let refreshCount = 0;
     const initialSnapshot: ServerProvider = {

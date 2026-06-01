@@ -66,6 +66,7 @@ import type {
   OrchestrationReadModel,
 } from "./orchestration";
 import { EditorId } from "./editor";
+import type { AdvertisedEndpoint } from "./remoteAccess";
 
 export interface ContextMenuItem<T extends string = string> {
   id: T;
@@ -201,6 +202,7 @@ export interface NativeApi {
     getProcessDiagnostics: () => Promise<ServerProcessDiagnosticsResult>;
     signalProcess: (input: ServerSignalProcessInput) => Promise<ServerSignalProcessResult>;
     discoverSourceControl: () => Promise<SourceControlDiscoveryResult>;
+    getAdvertisedEndpoints: () => Promise<{ endpoints: readonly AdvertisedEndpoint[] }>;
   };
   orchestration: {
     getSnapshot: () => Promise<OrchestrationReadModel>;

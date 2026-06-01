@@ -153,6 +153,7 @@ export function createTransportNativeApi(options: NativeApiAdapterOptions): {
       signalProcess: (input: ServerSignalProcessInput) =>
         transport.request(WS_METHODS.serverSignalProcess, input),
       discoverSourceControl: () => transport.request(WS_METHODS.serverDiscoverSourceControl),
+      getAdvertisedEndpoints: () => transport.request(WS_METHODS.serverGetAdvertisedEndpoints),
     },
     orchestration: {
       getSnapshot: () => transport.request(ORCHESTRATION_WS_METHODS.getSnapshot),

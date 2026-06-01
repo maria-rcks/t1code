@@ -51,6 +51,7 @@ import {
   type ProviderOptionSelection,
   type RuntimeMode,
   type ServerConfig,
+  type AdvertisedEndpoint,
   type ServerProcessDiagnosticsResult,
   type ServerProcessSignal,
   type ServerProvider,
@@ -190,6 +191,13 @@ import {
   resolveCodeBlockFiletype,
 } from "./messageMarkdown";
 import { openExternalUrl } from "./openExternal";
+import {
+  buildTuiAttachCommand,
+  formatEndpointCompatibility,
+  formatEndpointStatus,
+  formatTuiAttachCommandPreview,
+  parseTuiServerConnection,
+} from "./connectionsPanel";
 import { type TuiPrefs, readPrefs, writePrefs } from "./prefs";
 import {
   ADDITIONAL_COMING_SOON_MODEL_PROVIDER_OPTIONS,
@@ -3720,6 +3728,22 @@ export function App({
   const [openLogsDirectoryError, setOpenLogsDirectoryError] = useState<string | null>(null);
   const [prefsReady, setPrefsReady] = useState(false);
   const [serverHttpOrigin, setServerHttpOrigin] = useState<string | null>(null);
+  const [serverWsUrl, setServerWsUrl] = useState<string | null>(null);
+  const tuiServerConnection = useMemo(
+    () => (serverWsUrl ? parseTuiServerConnection(serverWsUrl) : null),
+    [serverWsUrl],
+  );
+  const tuiAttachCommand = useMemo(
+    () => (tuiServerConnection ? buildTuiAttachCommand(tuiServerConnection) : null),
+    [tuiServerConnection],
+  );
+  const tuiAttachCommandPreview = useMemo(
+    () => (tuiServerConnection ? formatTuiAttachCommandPreview(tuiServerConnection) : null),
+    [tuiServerConnection],
+  );
+  const [advertisedEndpoints, setAdvertisedEndpoints] = useState<readonly AdvertisedEndpoint[]>([]);
+  const [advertisedEndpointsError, setAdvertisedEndpointsError] = useState<string | null>(null);
+  const [isLoadingAdvertisedEndpoints, setIsLoadingAdvertisedEndpoints] = useState(false);
   const [processDiagnostics, setProcessDiagnostics] =
     useState<ServerProcessDiagnosticsResult | null>(null);
   const [processDiagnosticsError, setProcessDiagnosticsError] = useState<string | null>(null);
@@ -3848,6 +3872,21 @@ export function App({
       setIsLoadingProcessDiagnostics(false);
     }
   }, [api, isLoadingProcessDiagnostics, logger]);
+  const refreshAdvertisedEndpoints = useCallback(async () => {
+    if (!api || isLoadingAdvertisedEndpoints) return;
+    setIsLoadingAdvertisedEndpoints(true);
+    setAdvertisedEndpointsError(null);
+    try {
+      const result = await api.server.getAdvertisedEndpoints();
+      setAdvertisedEndpoints(result.endpoints);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Connection endpoints unavailable";
+      logger.log("server.advertisedEndpoints.refreshFailed", { error: message });
+      setAdvertisedEndpointsError(message);
+    } finally {
+      setIsLoadingAdvertisedEndpoints(false);
+    }
+  }, [api, isLoadingAdvertisedEndpoints, logger]);
   const refreshTraceDiagnostics = useCallback(async () => {
     if (!api || isLoadingTraceDiagnostics) return;
     setIsLoadingTraceDiagnostics(true);
@@ -3897,6 +3936,31 @@ export function App({
     },
     [api, logger, refreshProcessDiagnostics, setStatus, signalingProcessPid],
   );
+  useEffect(() => {
+    if (mainView !== "connections" || advertisedEndpoints.length > 0 || advertisedEndpointsError) {
+      return;
+    }
+    void refreshAdvertisedEndpoints();
+  }, [advertisedEndpoints.length, advertisedEndpointsError, mainView, refreshAdvertisedEndpoints]);
+  useEffect(() => {
+    if (mainView !== "diagnostics") {
+      return;
+    }
+    if (!processDiagnostics && !processDiagnosticsError) {
+      void refreshProcessDiagnostics();
+    }
+    if (!traceDiagnostics && !traceDiagnosticsError) {
+      void refreshTraceDiagnostics();
+    }
+  }, [
+    mainView,
+    processDiagnostics,
+    processDiagnosticsError,
+    refreshProcessDiagnostics,
+    refreshTraceDiagnostics,
+    traceDiagnostics,
+    traceDiagnosticsError,
+  ]);
   const dismissProviderUpdateNotice = useCallback(
     (key: string) => {
       updateAppSettings({
@@ -4221,6 +4285,7 @@ export function App({
           url: server.wsUrl,
           onWarning: (message, details) => logger.log("ws.warning", { message, details }),
         });
+        setServerWsUrl(server.wsUrl);
         setServerHttpOrigin(resolveHttpOriginFromWsUrl(server.wsUrl));
         const nativeBridge = createTransportNativeApi({ transport });
         const nativeApi = nativeBridge.api;
@@ -13344,20 +13409,113 @@ export function App({
                         <>
                           <SettingsSection title="Local backend access">
                             <SettingsRow
-                              title="Owner tools"
-                              description="Pairing links, authorized client management, and backend network exposure are available in the desktop/web settings surface."
+                              title="Backend endpoint"
+                              description="Current HTTP/WebSocket endpoint for this TUI session."
                               status={
                                 serverHttpOrigin
                                   ? `Connected to local backend at ${serverHttpOrigin}`
                                   : "Local backend origin is still resolving."
                               }
+                              control={
+                                <box style={{ flexDirection: "row", gap: 1 }}>
+                                  <ToolbarButton
+                                    label="Copy URL"
+                                    disabled={!serverHttpOrigin}
+                                    onPress={() => {
+                                      if (serverHttpOrigin) {
+                                        void copyToClipboard(
+                                          serverHttpOrigin,
+                                          "Backend URL copied",
+                                        );
+                                      }
+                                    }}
+                                  />
+                                  <ToolbarButton
+                                    label={
+                                      isLoadingAdvertisedEndpoints ? "Refreshing..." : "Refresh"
+                                    }
+                                    disabled={!api || isLoadingAdvertisedEndpoints}
+                                    onPress={() => {
+                                      void refreshAdvertisedEndpoints();
+                                    }}
+                                  />
+                                </box>
+                              }
                             />
+                            <SettingsRow
+                              title="Attach another TUI"
+                              description="Start a second TUI against this backend without launching another server."
+                              status={
+                                tuiAttachCommandPreview
+                                  ? tuiAttachCommandPreview
+                                  : "Attach command is still resolving."
+                              }
+                              control={
+                                <ToolbarButton
+                                  label="Copy command"
+                                  disabled={!tuiAttachCommand}
+                                  onPress={() => {
+                                    if (tuiAttachCommand) {
+                                      void copyToClipboard(
+                                        tuiAttachCommand,
+                                        "Attach command copied",
+                                      );
+                                    }
+                                  }}
+                                />
+                              }
+                            />
+                            {advertisedEndpointsError ? (
+                              <SettingsRow
+                                title="Endpoint discovery failed"
+                                description={advertisedEndpointsError}
+                                control={
+                                  <ToolbarButton
+                                    label="Retry"
+                                    disabled={!api || isLoadingAdvertisedEndpoints}
+                                    onPress={() => {
+                                      void refreshAdvertisedEndpoints();
+                                    }}
+                                  />
+                                }
+                              />
+                            ) : null}
+                            {advertisedEndpoints.map((endpoint) => (
+                              <SettingsRow
+                                key={endpoint.id}
+                                title={endpoint.label}
+                                description={endpoint.description ?? endpoint.httpBaseUrl}
+                                status={
+                                  <>
+                                    <text
+                                      content={`${endpoint.httpBaseUrl} · ${endpoint.wsBaseUrl}`}
+                                      style={{ fg: PALETTE.subtle }}
+                                    />
+                                    <text
+                                      content={`${formatEndpointStatus(endpoint)} · ${formatEndpointCompatibility(endpoint)}`}
+                                      style={{ fg: PALETTE.subtle }}
+                                    />
+                                  </>
+                                }
+                                control={
+                                  <ToolbarButton
+                                    label="Copy WS"
+                                    onPress={() => {
+                                      void copyToClipboard(
+                                        endpoint.wsBaseUrl,
+                                        `${endpoint.label} WebSocket copied`,
+                                      );
+                                    }}
+                                  />
+                                }
+                              />
+                            ))}
                           </SettingsSection>
                           <SettingsSection title="Remote environments">
                             <SettingsRow
                               title="Environment pairing"
-                              description="Remote environment pairing is not exposed by the TUI yet."
-                              status="Use a configured WebSocket endpoint to connect this TUI session to another backend."
+                              description="Use attach-only mode to connect this TUI to another reachable backend."
+                              status="Set T1CODE_TUI_ATTACH_ONLY=1 with T1CODE_HOST, T1CODE_PORT, and T1CODE_AUTH_TOKEN."
                             />
                           </SettingsSection>
                         </>

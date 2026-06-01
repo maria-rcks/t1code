@@ -44,6 +44,7 @@ import {
   ServerRefreshProvidersInput,
 } from "./server";
 import { ServerSettingsPatch } from "./settings";
+import { AdvertisedEndpoint } from "./remoteAccess";
 import {
   SourceControlCloneRepositoryInput,
   SourceControlPublishRepositoryInput,
@@ -95,6 +96,7 @@ export const WS_METHODS = {
   serverGetProcessDiagnostics: "server.getProcessDiagnostics",
   serverSignalProcess: "server.signalProcess",
   serverDiscoverSourceControl: "server.discoverSourceControl",
+  serverGetAdvertisedEndpoints: "server.getAdvertisedEndpoints",
 
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
@@ -173,6 +175,7 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.serverGetProcessDiagnostics, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverSignalProcess, ServerSignalProcessInput),
   tagRequestBody(WS_METHODS.serverDiscoverSourceControl, Schema.Struct({})),
+  tagRequestBody(WS_METHODS.serverGetAdvertisedEndpoints, Schema.Struct({})),
 
   // Source control methods
   tagRequestBody(WS_METHODS.sourceControlLookupRepository, SourceControlRepositoryLookupInput),
@@ -264,6 +267,11 @@ export const WsPush = Schema.Union([
 export type WsPush = typeof WsPush.Type;
 
 export type WsPushMessage<C extends WsPushChannel> = Extract<WsPush, { channel: C }>;
+
+export const ServerAdvertisedEndpointsResult = Schema.Struct({
+  endpoints: Schema.Array(AdvertisedEndpoint),
+});
+export type ServerAdvertisedEndpointsResult = typeof ServerAdvertisedEndpointsResult.Type;
 
 export const WsPushEnvelopeBase = Schema.Struct({
   type: Schema.Literal("push"),
