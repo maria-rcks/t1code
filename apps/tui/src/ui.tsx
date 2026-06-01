@@ -281,7 +281,7 @@ type FocusArea =
   | "timeline"
   | "diff"
   | "settings";
-type MainView = "thread" | "settings" | "keybindings";
+type MainView = "thread" | "settings" | "keybindings" | "archive";
 type ThreadEnvMode = "local" | "worktree";
 type OverlayMenu =
   | null
@@ -331,6 +331,7 @@ const GIT_FETCH_INTERVAL_STEP_SECONDS = 5;
 type T1Api = ReturnType<typeof createTransportNativeApi>["api"];
 type ThreadReadModel = OrchestrationReadModel["threads"][number];
 type ProjectReadModel = OrchestrationReadModel["projects"][number];
+type MainViewNavigationTarget = Exclude<MainView, "thread">;
 type TuiServerConfig = ServerConfig | null;
 type DraftComposerImageAttachment = ResolvedComposerImageAttachment & { localPath?: string };
 type ComposerMention = {
@@ -400,6 +401,11 @@ const SIDEBAR_THREAD_SORT_LABELS: Record<SidebarThreadSortOrder, string> = {
   created_at: "Created at",
 };
 const SELECTION_COPY_TOAST_MESSAGE = "Copied to clipboard";
+const MAIN_VIEW_TITLES: Record<MainViewNavigationTarget, string> = {
+  settings: "Settings",
+  keybindings: "Keybindings",
+  archive: "Archive",
+};
 
 type ComposerPathTrigger = {
   query: string;
@@ -950,6 +956,11 @@ function formatRelativeTime(iso: string | null | undefined): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h`;
   return `${Math.floor(hours / 24)}d`;
+}
+
+function formatRelativeTimeLabel(iso: string | null | undefined): string {
+  const relativeTime = formatRelativeTime(iso);
+  return relativeTime === "now" ? "now" : `${relativeTime} ago`;
 }
 
 function formatCheckedRelativeTime(iso: string | null | undefined): string {
@@ -2647,6 +2658,33 @@ function resolvePersistedModel(provider: ProviderKind, model: string | undefined
   );
 }
 
+function groupThreadsByProject(
+  threads: readonly ThreadReadModel[],
+  projects: readonly ProjectReadModel[],
+): ReadonlyArray<{
+  readonly project: ProjectReadModel | null;
+  readonly threads: readonly ThreadReadModel[];
+}> {
+  const projectsById = new Map(projects.map((project) => [project.id, project]));
+  const buckets = new Map<string, ThreadReadModel[]>();
+  for (const thread of threads) {
+    const bucket = buckets.get(thread.projectId);
+    if (bucket) {
+      bucket.push(thread);
+    } else {
+      buckets.set(thread.projectId, [thread]);
+    }
+  }
+  return [...buckets.entries()].map(([projectId, projectThreads]) => ({
+    project: projectsById.get(projectId) ?? null,
+    threads: projectThreads.toSorted((left, right) => {
+      const leftKey = left.archivedAt ?? left.createdAt;
+      const rightKey = right.archivedAt ?? right.createdAt;
+      return rightKey.localeCompare(leftKey) || right.id.localeCompare(left.id);
+    }),
+  }));
+}
+
 function Badge(props: { label: string; tone?: "default" | "accent" | "warn" }) {
   let foreground = PALETTE.muted;
   let background = PALETTE.controlHover;
@@ -3267,6 +3305,63 @@ function SettingsRow(props: {
         <box style={{ flexDirection: "column", marginTop: 1 }}>{props.children}</box>
       ) : null}
     </box>
+  );
+}
+
+function ArchivedThreadsPanel(props: {
+  archivedThreads: readonly ThreadReadModel[];
+  projects: readonly ProjectReadModel[];
+  onUnarchiveThread: (threadId: string) => void;
+  onDeleteThread: (thread: ThreadReadModel) => void;
+}) {
+  const groups = useMemo(
+    () => groupThreadsByProject(props.archivedThreads, props.projects),
+    [props.archivedThreads, props.projects],
+  );
+
+  if (groups.length === 0) {
+    return (
+      <SettingsSection title="Archived threads">
+        <SettingsRow
+          title="No archived threads"
+          description="Archived threads will appear here."
+          control={<text content="󰉖" style={{ fg: PALETTE.muted }} />}
+        />
+      </SettingsSection>
+    );
+  }
+
+  return (
+    <>
+      {groups.map(({ project, threads }) => (
+        <SettingsSection
+          key={project?.id ?? threads[0]?.projectId}
+          title={project?.title ?? "Unknown project"}
+        >
+          {threads.map((thread) => (
+            <SettingsRow
+              key={thread.id}
+              title={thread.title}
+              description={`Archived ${formatRelativeTimeLabel(thread.archivedAt)} · Created ${formatRelativeTimeLabel(thread.createdAt)}`}
+              control={
+                <box style={{ flexDirection: "row", gap: 1 }}>
+                  <ToolbarButton
+                    label="Unarchive"
+                    surface="inset"
+                    onPress={() => props.onUnarchiveThread(thread.id)}
+                  />
+                  <ToolbarButton
+                    label="Delete"
+                    surface="inset"
+                    onPress={() => props.onDeleteThread(thread)}
+                  />
+                </box>
+              }
+            />
+          ))}
+        </SettingsSection>
+      ))}
+    </>
   );
 }
 
@@ -3979,7 +4074,11 @@ export function App({
             ),
           );
         }
-        if (prefs.mainView === "settings" || prefs.mainView === "keybindings") {
+        if (
+          prefs.mainView === "settings" ||
+          prefs.mainView === "keybindings" ||
+          prefs.mainView === "archive"
+        ) {
           setMainView(prefs.mainView);
           setFocusArea("settings");
         }
@@ -4281,7 +4380,23 @@ export function App({
     [snapshot?.projects],
   );
   const allThreads = useMemo(
-    () => snapshot?.threads.filter((thread) => thread.deletedAt === null) ?? [],
+    () =>
+      snapshot?.threads.filter(
+        (thread) => thread.deletedAt === null && thread.archivedAt === null,
+      ) ?? [],
+    [snapshot?.threads],
+  );
+  const archivedThreads = useMemo(
+    () =>
+      (
+        snapshot?.threads.filter(
+          (thread) => thread.deletedAt === null && thread.archivedAt !== null,
+        ) ?? []
+      ).toSorted((left, right) => {
+        const leftKey = left.archivedAt ?? left.createdAt;
+        const rightKey = right.archivedAt ?? right.createdAt;
+        return rightKey.localeCompare(leftKey) || right.id.localeCompare(left.id);
+      }),
     [snapshot?.threads],
   );
   const sortedProjects = useMemo(
@@ -5095,6 +5210,9 @@ export function App({
     ...(appSettings.confirmThreadDelete !== DEFAULT_APP_SETTINGS.confirmThreadDelete
       ? ["Delete confirmation"]
       : []),
+    ...(appSettings.confirmThreadArchive !== DEFAULT_APP_SETTINGS.confirmThreadArchive
+      ? ["Archive confirmation"]
+      : []),
     ...(isGitTextGenerationModelDirty ? ["Text generation model"] : []),
     ...(hasModelPreferenceSettings ? ["Model preferences"] : []),
     ...(totalCustomModels > 0 ? ["Custom models"] : []),
@@ -5117,11 +5235,7 @@ export function App({
     ),
   );
   const activeThreadDisplayTitle = truncateTitleForDisplay(
-    (mainView === "settings"
-      ? "Settings"
-      : mainView === "keybindings"
-        ? "Keybindings"
-        : activeThread?.title) ??
+    (mainView === "thread" ? activeThread?.title : MAIN_VIEW_TITLES[mainView]) ??
       (activeDraftThread ? "New thread" : activeProject?.title) ??
       "New thread",
     headerTitleMaxLength,
@@ -5377,7 +5491,7 @@ export function App({
 
   useEffect(() => {
     if (selectedThreadIds.size === 0) return;
-    const liveThreadIds = new Set<string>(allThreads.map((thread) => thread.id));
+    const liveThreadIds = new Set<string>(snapshot?.threads.map((thread) => thread.id) ?? []);
     const staleThreadIds = [...selectedThreadIds].filter(
       (threadId) => !liveThreadIds.has(threadId),
     );
@@ -5392,13 +5506,13 @@ export function App({
       setSelectedThreadIds(next.selectedThreadIds);
       setSelectionAnchorThreadId(next.anchorThreadId);
     }
-  }, [allThreads, selectedThreadIds, selectionAnchorThreadId]);
+  }, [selectedThreadIds, selectionAnchorThreadId, snapshot?.threads]);
 
   useEffect(() => {
-    const liveThreadIds = new Set<string>(allThreads.map((thread) => thread.id));
+    const liveThreadIds = new Set<string>(snapshot?.threads.map((thread) => thread.id) ?? []);
     setLocallyUnreadThreadIds((current) => pruneLocallyUnreadThreadIds(current, liveThreadIds));
     setLocallyVisitedThreads((current) => pruneLocalThreadVisitedState(current, liveThreadIds));
-  }, [allThreads]);
+  }, [snapshot?.threads]);
 
   useEffect(() => {
     let cancelled = false;
@@ -6079,6 +6193,15 @@ export function App({
     setSidebarContextMenu(null);
   }
 
+  function getThreadContextMenuItems(
+    threadId: string,
+  ): readonly ReturnType<typeof buildThreadContextMenuItems>[number][] {
+    const thread = snapshot?.threads.find((entry) => entry.id === threadId);
+    return buildThreadContextMenuItems({
+      archived: thread?.archivedAt !== null && thread?.archivedAt !== undefined,
+    });
+  }
+
   function clearSelection() {
     const next = clearThreadSelection();
     setSelectedThreadIds(next.selectedThreadIds);
@@ -6222,6 +6345,45 @@ export function App({
     setStatus("Threads deleted");
   }
 
+  async function archiveThread(threadId: string) {
+    await dispatch({
+      type: "thread.archive",
+      commandId: newCommandId(),
+      threadId: threadId as never,
+    });
+    removeThreadsFromSelection([threadId]);
+    if (selectedThreadId === threadId) {
+      setSelectedThreadId(undefined);
+      setFocusArea("threads");
+    }
+    setStatus("Thread archived");
+  }
+
+  async function archiveThreads(threadIds: readonly string[]) {
+    for (const threadId of threadIds) {
+      await dispatch({
+        type: "thread.archive",
+        commandId: newCommandId(),
+        threadId: threadId as never,
+      });
+      if (selectedThreadId === threadId) {
+        setSelectedThreadId(undefined);
+      }
+    }
+    removeThreadsFromSelection(threadIds);
+    setFocusArea("threads");
+    setStatus("Threads archived");
+  }
+
+  async function unarchiveThread(threadId: string) {
+    await dispatch({
+      type: "thread.unarchive",
+      commandId: newCommandId(),
+      threadId: threadId as never,
+    });
+    setStatus("Thread restored");
+  }
+
   async function removeProject(projectId: string) {
     await dispatch({
       type: "project.delete",
@@ -6292,6 +6454,21 @@ export function App({
     closeSidebarContextMenu();
     setOverlayMenu(null);
     setConfirmDialog(input);
+  }
+
+  function confirmDeleteThread(thread: ThreadReadModel) {
+    if (!appSettings.confirmThreadDelete) {
+      void deleteThread(thread.id);
+      return;
+    }
+    promptConfirm({
+      title: `Delete thread "${thread.title}"?`,
+      body: "This permanently clears conversation history for this thread.",
+      confirmLabel: "Delete",
+      onConfirm: async () => {
+        await deleteThread(thread.id);
+      },
+    });
   }
 
   async function submitRenameThread() {
@@ -6368,19 +6545,29 @@ export function App({
       return;
     }
 
-    if (actionId === "delete") {
-      if (!appSettings.confirmThreadDelete) {
-        await deleteThread(thread.id);
+    if (actionId === "archive") {
+      if (!appSettings.confirmThreadArchive) {
+        await archiveThread(thread.id);
         return;
       }
       promptConfirm({
-        title: `Delete thread "${thread.title}"?`,
-        body: "This permanently clears conversation history for this thread.",
-        confirmLabel: "Delete",
+        title: `Archive thread "${thread.title}"?`,
+        body: "Archived threads move out of the project sidebar and can be restored from Archive.",
+        confirmLabel: "Archive",
         onConfirm: async () => {
-          await deleteThread(thread.id);
+          await archiveThread(thread.id);
         },
       });
+      return;
+    }
+
+    if (actionId === "unarchive") {
+      await unarchiveThread(thread.id);
+      return;
+    }
+
+    if (actionId === "delete") {
+      confirmDeleteThread(thread);
     }
   }
 
@@ -6411,6 +6598,22 @@ export function App({
       });
       clearSelection();
       setStatus("Marked unread");
+      return;
+    }
+
+    if (actionId === "archive") {
+      if (!appSettings.confirmThreadArchive) {
+        await archiveThreads(threadIds);
+        return;
+      }
+      promptConfirm({
+        title: `Archive ${threadIds.length} thread${threadIds.length === 1 ? "" : "s"}?`,
+        body: "Archived threads move out of the project sidebar and can be restored from Archive.",
+        confirmLabel: "Archive",
+        onConfirm: async () => {
+          await archiveThreads(threadIds);
+        },
+      });
       return;
     }
 
@@ -6677,7 +6880,7 @@ export function App({
     if (sidebarContextMenu) {
       const menuItems =
         sidebarContextMenu.kind === "thread"
-          ? buildThreadContextMenuItems()
+          ? getThreadContextMenuItems(sidebarContextMenu.threadId)
           : sidebarContextMenu.kind === "multi-thread"
             ? buildMultiSelectContextMenuItems(sidebarContextMenu.threadIds.length)
             : buildProjectContextMenuItems();
@@ -6713,7 +6916,9 @@ export function App({
         const selectedItem = menuItems[sidebarContextMenu.selectedIndex];
         if (!selectedItem) return;
         if (sidebarContextMenu.kind === "thread") {
-          const thread = allThreads.find((entry) => entry.id === sidebarContextMenu.threadId);
+          const thread = snapshot?.threads.find(
+            (entry) => entry.id === sidebarContextMenu.threadId,
+          );
           if (thread) {
             void handleThreadContextAction(selectedItem.id, thread);
           }
@@ -7150,12 +7355,12 @@ export function App({
     await api.orchestration.dispatchCommand(command);
   }
 
-  function openMainView(view: Exclude<MainView, "thread">) {
+  function openMainView(view: MainViewNavigationTarget) {
     closeSidebarContextMenu();
     closeOverlayMenu();
     setMainView(view);
     setFocusArea("settings");
-    setStatus(view === "settings" ? "Settings" : "Keybindings");
+    setStatus(MAIN_VIEW_TITLES[view]);
   }
 
   function returnToThreadView() {
@@ -10029,7 +10234,7 @@ export function App({
     Math.max(countDistinctSections(traitsMenuItems) - 1, 0);
   const sidebarContextMenuItems = sidebarContextMenu
     ? sidebarContextMenu.kind === "thread"
-      ? buildThreadContextMenuItems()
+      ? getThreadContextMenuItems(sidebarContextMenu.threadId)
       : sidebarContextMenu.kind === "multi-thread"
         ? buildMultiSelectContextMenuItems(sidebarContextMenu.threadIds.length)
         : buildProjectContextMenuItems()
@@ -10617,6 +10822,28 @@ export function App({
             <SidebarRow
               suppressHighlight
               onPress={() => {
+                if (mainView === "archive") {
+                  returnToThreadView();
+                  return;
+                }
+                openMainView("archive");
+              }}
+            >
+              <text
+                content="󰉖"
+                style={{
+                  fg: mainView === "archive" ? PALETTE.text : PALETTE.muted,
+                  marginRight: 1,
+                }}
+              />
+              <text
+                content={`Archive${archivedThreads.length > 0 ? ` (${archivedThreads.length})` : ""}`}
+                style={{ fg: mainView === "archive" ? PALETTE.text : PALETTE.muted }}
+              />
+            </SidebarRow>
+            <SidebarRow
+              suppressHighlight
+              onPress={() => {
                 if (mainView === "keybindings") {
                   returnToThreadView();
                   return;
@@ -10705,7 +10932,7 @@ export function App({
                 marginRight={1}
                 onPress={() => restoreDefaultSettings()}
               />
-            ) : mainView === "keybindings" ? null : (
+            ) : mainView !== "thread" ? null : (
               <>
                 <ToolbarButton
                   icon={gitActionBusy ? "󱦟" : "󰊢"}
@@ -10770,6 +10997,19 @@ export function App({
                 <box style={{ maxWidth: 104, width: "100%", flexDirection: "column" }}>
                   {mainView === "settings" ? (
                     <>
+                      <SettingsSection title="Archive">
+                        <SettingsRow
+                          title="Archived threads"
+                          description="View and restore threads hidden from the project sidebar."
+                          status={`${archivedThreads.length} archived`}
+                          control={
+                            <ToolbarButton
+                              label="Open archive"
+                              onPress={() => openMainView("archive")}
+                            />
+                          }
+                        />
+                      </SettingsSection>
                       <SettingsSection title="General">
                         <SettingsRow
                           title="Theme"
@@ -10789,6 +11029,33 @@ export function App({
                                 overlayMenu === "settings-select" && settingsSelectKind === "theme"
                               }
                               onPress={(event) => openSettingsSelectMenu("theme", event)}
+                            />
+                          }
+                        />
+                        <SettingsRow
+                          title="Archive confirmation"
+                          description="Ask before moving a thread into Archive."
+                          status={appSettings.confirmThreadArchive ? "Enabled" : "Disabled"}
+                          resetAction={
+                            appSettings.confirmThreadArchive !==
+                            DEFAULT_APP_SETTINGS.confirmThreadArchive ? (
+                              <SettingResetButton
+                                onPress={() =>
+                                  updateAppSettings({
+                                    confirmThreadArchive: DEFAULT_APP_SETTINGS.confirmThreadArchive,
+                                  })
+                                }
+                              />
+                            ) : null
+                          }
+                          control={
+                            <TogglePill
+                              checked={appSettings.confirmThreadArchive}
+                              onPress={() =>
+                                updateAppSettings({
+                                  confirmThreadArchive: !appSettings.confirmThreadArchive,
+                                })
+                              }
                             />
                           }
                         />
@@ -12919,6 +13186,15 @@ export function App({
                         />
                       </SettingsSection>
                     </>
+                  ) : mainView === "archive" ? (
+                    <ArchivedThreadsPanel
+                      archivedThreads={archivedThreads}
+                      projects={projects}
+                      onUnarchiveThread={(threadId) => {
+                        void unarchiveThread(threadId);
+                      }}
+                      onDeleteThread={(thread) => confirmDeleteThread(thread)}
+                    />
                   ) : (
                     <>
                       <box
@@ -14624,7 +14900,7 @@ export function App({
                 }
                 onPress={() => {
                   if (sidebarContextMenu.kind === "thread") {
-                    const thread = allThreads.find(
+                    const thread = snapshot?.threads.find(
                       (entry) => entry.id === sidebarContextMenu.threadId,
                     );
                     if (thread) {

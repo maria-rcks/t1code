@@ -84,6 +84,7 @@ export const AppSettingsSchema = Schema.Struct({
   codexBinaryPath: Schema.String.check(Schema.isMaxLength(4096)).pipe(withDefaults(() => "")),
   codexHomePath: Schema.String.check(Schema.isMaxLength(4096)).pipe(withDefaults(() => "")),
   defaultThreadEnvMode: AppThreadEnvMode.pipe(withDefaults(() => "local" as const)),
+  confirmThreadArchive: Schema.Boolean.pipe(withDefaults(() => false)),
   confirmThreadDelete: Schema.Boolean.pipe(withDefaults(() => true)),
   diffIgnoreWhitespace: Schema.Boolean.pipe(withDefaults(() => DEFAULT_DIFF_IGNORE_WHITESPACE)),
   diffWordWrap: Schema.Boolean.pipe(withDefaults(() => DEFAULT_DIFF_WORD_WRAP)),
