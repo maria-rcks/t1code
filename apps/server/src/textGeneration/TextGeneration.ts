@@ -1,6 +1,6 @@
 import type { ChatAttachment, ModelSelection, ProviderInstanceId } from "@t3tools/contracts";
 import { TextGenerationError } from "@t3tools/contracts";
-import { Effect, Layer, ServiceMap } from "effect";
+import { Effect, Layer, Context } from "effect";
 
 import {
   ProviderInstanceRegistry,
@@ -113,7 +113,7 @@ export interface TextGenerationShape {
 /**
  * TextGeneration - Service tag for commit and PR text generation.
  */
-export class TextGeneration extends ServiceMap.Service<TextGeneration, TextGenerationShape>()(
+export class TextGeneration extends Context.Service<TextGeneration, TextGenerationShape>()(
   "t3/textGeneration/TextGeneration",
 ) {}
 

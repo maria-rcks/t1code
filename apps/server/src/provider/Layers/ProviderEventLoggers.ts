@@ -1,4 +1,4 @@
-import { Effect, Layer, ServiceMap } from "effect";
+import { Effect, Layer, Context } from "effect";
 
 import { ServerConfig } from "../../config";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger";
@@ -8,7 +8,7 @@ export interface ProviderEventLoggersShape {
   readonly canonical: EventNdjsonLogger | undefined;
 }
 
-export class ProviderEventLoggers extends ServiceMap.Service<
+export class ProviderEventLoggers extends Context.Service<
   ProviderEventLoggers,
   ProviderEventLoggersShape
 >()("t3/provider/Layers/ProviderEventLoggers") {}

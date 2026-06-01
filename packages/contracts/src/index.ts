@@ -1,4 +1,6 @@
 export * from "./baseSchemas";
+export * from "./environment";
+export * from "./remoteAccess";
 export * from "./ipc";
 export * from "./terminal";
 export * from "./provider";

@@ -8,8 +8,10 @@
  *
  * @module DrainableWorker
  */
-import { Deferred, Effect, Queue, Ref } from "effect";
-import type { Scope } from "effect";
+import * as Scope from "effect/Scope";
+import * as Effect from "effect/Effect";
+import * as TxQueue from "effect/TxQueue";
+import * as TxRef from "effect/TxRef";
 
 export interface DrainableWorker<A> {
   /**
@@ -39,62 +41,30 @@ export const makeDrainableWorker = <A, E, R>(
   process: (item: A) => Effect.Effect<void, E, R>,
 ): Effect.Effect<DrainableWorker<A>, never, Scope.Scope | R> =>
   Effect.gen(function* () {
-    const queue = yield* Queue.unbounded<A>();
-    const initialIdle = yield* Deferred.make<void>();
-    yield* Deferred.succeed(initialIdle, undefined).pipe(Effect.orDie);
-    const state = yield* Ref.make({
-      outstanding: 0,
-      idle: initialIdle,
-    });
+    const queue = yield* Effect.acquireRelease(TxQueue.unbounded<A>(), TxQueue.shutdown);
+    const outstanding = yield* TxRef.make(0);
 
-    yield* Effect.addFinalizer(() => Queue.shutdown(queue).pipe(Effect.asVoid));
-
-    const finishOne = Ref.modify(state, (current) => {
-      const remaining = Math.max(0, current.outstanding - 1);
-      return [
-        remaining === 0 ? current.idle : null,
-        {
-          outstanding: remaining,
-          idle: current.idle,
-        },
-      ] as const;
-    }).pipe(
-      Effect.flatMap((idle) =>
-        idle === null ? Effect.void : Deferred.succeed(idle, undefined).pipe(Effect.orDie),
-      ),
-    );
-
-    yield* Effect.forkScoped(
-      Effect.forever(
-        Queue.take(queue).pipe(
-          Effect.flatMap((item) => process(item).pipe(Effect.ensuring(finishOne))),
+    yield* TxQueue.take(queue).pipe(
+      Effect.tap((item) =>
+        Effect.ensuring(
+          process(item),
+          TxRef.update(outstanding, (n) => n - 1),
         ),
       ),
+      Effect.forever,
+      Effect.forkScoped,
     );
 
     const enqueue: DrainableWorker<A>["enqueue"] = (item) =>
-      Effect.gen(function* () {
-        const nextIdle = yield* Deferred.make<void>();
-        yield* Ref.update(state, (current) =>
-          current.outstanding === 0
-            ? {
-                outstanding: 1,
-                idle: nextIdle,
-              }
-            : {
-                outstanding: current.outstanding + 1,
-                idle: current.idle,
-              },
-        );
+      TxQueue.offer(queue, item).pipe(
+        Effect.tap(() => TxRef.update(outstanding, (n) => n + 1)),
+        Effect.asVoid,
+        Effect.tx,
+      );
 
-        const accepted = yield* Queue.offer(queue, item);
-        if (!accepted) {
-          yield* finishOne;
-        }
-      });
-
-    const drain: DrainableWorker<A>["drain"] = Ref.get(state).pipe(
-      Effect.flatMap(({ idle }) => Deferred.await(idle)),
+    const drain: DrainableWorker<A>["drain"] = TxRef.get(outstanding).pipe(
+      Effect.tap((n) => (n > 0 ? Effect.txRetry : Effect.void)),
+      Effect.tx,
     );
 
     return { enqueue, drain } satisfies DrainableWorker<A>;

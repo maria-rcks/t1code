@@ -12,7 +12,7 @@ async function mountPicker(props: {
   reasoningEffort?: "low" | "medium" | "high" | "xhigh";
   fastModeEnabled: boolean;
 }) {
-  const threadId = ThreadId.makeUnsafe("thread-codex-traits");
+  const threadId = ThreadId.make("thread-codex-traits");
   const draftsByThreadId = {} as ReturnType<
     typeof useComposerDraftStore.getState
   >["draftsByThreadId"];
@@ -37,7 +37,7 @@ async function mountPicker(props: {
     draftsByThreadId,
     draftThreadsByThreadId: {},
     projectDraftThreadIdByProjectId: {
-      [ProjectId.makeUnsafe("project-codex-traits")]: threadId,
+      [ProjectId.make("project-codex-traits")]: threadId,
     },
   });
   const host = document.createElement("div");
@@ -136,7 +136,7 @@ describe("CodexTraitsPicker", () => {
   });
 
   it("hydrates legacy codex persisted state into modelOptions through the picker", async () => {
-    const threadId = ThreadId.makeUnsafe("thread-codex-legacy");
+    const threadId = ThreadId.make("thread-codex-legacy");
     localStorage.setItem(
       COMPOSER_DRAFT_STORAGE_KEY,
       JSON.stringify({

@@ -32,7 +32,7 @@
     "prepack": "bun run build && node scripts/prepare-package-json.mjs",
     "postpack": "node scripts/restore-package-json.mjs",
     "start": "bun dist/index.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {

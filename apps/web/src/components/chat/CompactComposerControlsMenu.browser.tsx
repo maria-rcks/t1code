@@ -16,7 +16,7 @@ async function mountMenu(props?: {
   provider?: "codex" | "claudeAgent";
   modelOptions?: ProviderModelOptions | null;
 }) {
-  const threadId = ThreadId.makeUnsafe("thread-compact-menu");
+  const threadId = ThreadId.make("thread-compact-menu");
   const provider = props?.provider ?? "claudeAgent";
   const draftsByThreadId = {} as ReturnType<
     typeof useComposerDraftStore.getState

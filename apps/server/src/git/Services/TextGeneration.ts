@@ -6,7 +6,7 @@
  *
  * @module TextGeneration
  */
-import { ServiceMap } from "effect";
+import { Context } from "effect";
 import type { Effect } from "effect";
 import type { ChatAttachment } from "@t3tools/contracts";
 
@@ -115,6 +115,6 @@ export interface TextGenerationShape {
 /**
  * TextGeneration - Service tag for commit and PR text generation.
  */
-export class TextGeneration extends ServiceMap.Service<TextGeneration, TextGenerationShape>()(
+export class TextGeneration extends Context.Service<TextGeneration, TextGenerationShape>()(
   "t3/git/Services/TextGeneration",
 ) {}

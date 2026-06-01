@@ -5,7 +5,7 @@
  *
  * @module GitHubCli
  */
-import { ServiceMap } from "effect";
+import { Context } from "effect";
 import type { Effect } from "effect";
 import type { SourceControlRepositoryVisibility } from "@t3tools/contracts";
 
@@ -108,6 +108,6 @@ export interface GitHubCliShape {
 /**
  * GitHubCli - Service tag for GitHub CLI process execution.
  */
-export class GitHubCli extends ServiceMap.Service<GitHubCli, GitHubCliShape>()(
+export class GitHubCli extends Context.Service<GitHubCli, GitHubCliShape>()(
   "t3/git/Services/GitHubCli",
 ) {}

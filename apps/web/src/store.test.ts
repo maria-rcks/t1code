@@ -19,9 +19,9 @@ import { DEFAULT_INTERACTION_MODE, DEFAULT_RUNTIME_MODE, type Thread } from "./t
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
   return {
-    id: ThreadId.makeUnsafe("thread-1"),
+    id: ThreadId.make("thread-1"),
     codexThreadId: null,
-    projectId: ProjectId.makeUnsafe("project-1"),
+    projectId: ProjectId.make("project-1"),
     title: "Thread",
     model: "gpt-5-codex",
     runtimeMode: DEFAULT_RUNTIME_MODE,
@@ -44,7 +44,7 @@ function makeState(thread: Thread): AppState {
   return {
     projects: [
       {
-        id: ProjectId.makeUnsafe("project-1"),
+        id: ProjectId.make("project-1"),
         name: "Project",
         cwd: "/tmp/project",
         model: "gpt-5-codex",
@@ -59,8 +59,8 @@ function makeState(thread: Thread): AppState {
 
 function makeReadModelThread(overrides: Partial<OrchestrationReadModel["threads"][number]>) {
   return {
-    id: ThreadId.makeUnsafe("thread-1"),
-    projectId: ProjectId.makeUnsafe("project-1"),
+    id: ThreadId.make("thread-1"),
+    projectId: ProjectId.make("project-1"),
     title: "Thread",
     model: "gpt-5.3-codex",
     runtimeMode: DEFAULT_RUNTIME_MODE,
@@ -86,7 +86,7 @@ function makeReadModel(thread: OrchestrationReadModel["threads"][number]): Orche
     updatedAt: "2026-02-27T00:00:00.000Z",
     projects: [
       {
-        id: ProjectId.makeUnsafe("project-1"),
+        id: ProjectId.make("project-1"),
         title: "Project",
         workspaceRoot: "/tmp/project",
         defaultModel: "gpt-5.3-codex",
@@ -104,7 +104,7 @@ function makeReadModelProject(
   overrides: Partial<OrchestrationReadModel["projects"][number]>,
 ): OrchestrationReadModel["projects"][number] {
   return {
-    id: ProjectId.makeUnsafe("project-1"),
+    id: ProjectId.make("project-1"),
     title: "Project",
     workspaceRoot: "/tmp/project",
     defaultModel: "gpt-5.3-codex",
@@ -122,7 +122,7 @@ describe("store pure functions", () => {
 
     const next = markThreadVisited(
       initialState,
-      ThreadId.makeUnsafe("thread-1"),
+      ThreadId.make("thread-1"),
       "2026-02-25T12:30:00.700Z",
     );
 
@@ -138,7 +138,7 @@ describe("store pure functions", () => {
 
     const next = markThreadVisited(
       initialState,
-      ThreadId.makeUnsafe("thread-1"),
+      ThreadId.make("thread-1"),
       "2026-02-25T12:30:00.000Z",
     );
 
@@ -150,7 +150,7 @@ describe("store pure functions", () => {
     const initialState = makeState(
       makeThread({
         latestTurn: {
-          turnId: TurnId.makeUnsafe("turn-1"),
+          turnId: TurnId.make("turn-1"),
           state: "completed",
           requestedAt: "2026-02-25T12:28:00.000Z",
           startedAt: "2026-02-25T12:28:30.000Z",
@@ -161,7 +161,7 @@ describe("store pure functions", () => {
       }),
     );
 
-    const next = markThreadUnread(initialState, ThreadId.makeUnsafe("thread-1"));
+    const next = markThreadUnread(initialState, ThreadId.make("thread-1"));
 
     const updatedThread = next.threads[0];
     expect(updatedThread).toBeDefined();
@@ -179,15 +179,15 @@ describe("store pure functions", () => {
       }),
     );
 
-    const next = markThreadUnread(initialState, ThreadId.makeUnsafe("thread-1"));
+    const next = markThreadUnread(initialState, ThreadId.make("thread-1"));
 
     expect(next).toEqual(initialState);
   });
 
   it("reorderProjects moves a project to a target index", () => {
-    const project1 = ProjectId.makeUnsafe("project-1");
-    const project2 = ProjectId.makeUnsafe("project-2");
-    const project3 = ProjectId.makeUnsafe("project-3");
+    const project1 = ProjectId.make("project-1");
+    const project2 = ProjectId.make("project-2");
+    const project3 = ProjectId.make("project-3");
     const state: AppState = {
       projects: [
         {
@@ -255,7 +255,7 @@ describe("store read model sync", () => {
       makeReadModelThread({
         model: "sonnet",
         session: {
-          threadId: ThreadId.makeUnsafe("thread-1"),
+          threadId: ThreadId.make("thread-1"),
           status: "ready",
           providerName: "claudeAgent",
           runtimeMode: "approval-required",
@@ -272,9 +272,9 @@ describe("store read model sync", () => {
   });
 
   it("preserves the current project order when syncing incoming read model updates", () => {
-    const project1 = ProjectId.makeUnsafe("project-1");
-    const project2 = ProjectId.makeUnsafe("project-2");
-    const project3 = ProjectId.makeUnsafe("project-3");
+    const project1 = ProjectId.make("project-1");
+    const project2 = ProjectId.make("project-2");
+    const project3 = ProjectId.make("project-3");
     const initialState: AppState = {
       projects: [
         {

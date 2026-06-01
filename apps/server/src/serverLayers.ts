@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, FileSystem, Layer, Path } from "effect";
+import { Crypto, Effect, FileSystem, Layer, Path } from "effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
@@ -35,6 +35,7 @@ import { GitLabCliLive } from "./git/Layers/GitLabCli";
 import { CodexTextGenerationLive } from "./git/Layers/CodexTextGeneration";
 import { PtyAdapter } from "./terminal/Services/PTY";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
+import { OpenCodeRuntimeLive } from "./provider/opencodeRuntime";
 
 type RuntimePtyAdapterLoader = {
   layer: Layer.Layer<PtyAdapter, never, FileSystem.FileSystem | Path.Path>;
@@ -77,6 +78,7 @@ export function makeServerProviderLayer(): Layer.Layer<
   | FileSystem.FileSystem
   | Path.Path
   | AnalyticsService
+  | Crypto.Crypto
   | ChildProcessSpawner.ChildProcessSpawner
 > {
   return Effect.gen(function* () {
@@ -94,7 +96,11 @@ export function makeServerProviderLayer(): Layer.Layer<
     const adapterRegistryLayer = ProviderAdapterRegistryFromInstanceRegistryLive;
     return makeProviderServiceLive(
       canonicalEventLogger ? { canonicalEventLogger } : undefined,
-    ).pipe(Layer.provide(adapterRegistryLayer), Layer.provide(providerSessionDirectoryLayer));
+    ).pipe(
+      Layer.provide(adapterRegistryLayer),
+      Layer.provide(providerSessionDirectoryLayer),
+      Layer.provideMerge(OpenCodeRuntimeLive),
+    );
   }).pipe(Layer.unwrap);
 }
 
@@ -127,6 +133,7 @@ export function makeServerRuntimeServicesLayer() {
     Layer.provide(runtimeServicesLayer),
     Layer.provide(GitCoreLive),
     Layer.provide(textGenerationLayer),
+    Layer.provideMerge(OpenCodeRuntimeLive),
   );
   const checkpointReactorLayer = CheckpointReactorLive.pipe(Layer.provide(runtimeServicesLayer));
   const orchestrationReactorLayer = OrchestrationReactorLive.pipe(
@@ -148,6 +155,7 @@ export function makeServerRuntimeServicesLayer() {
   return Layer.mergeAll(
     runtimeServicesLayer,
     orchestrationReactorLayer,
+    OpenCodeRuntimeLive,
     GitCoreLive,
     gitManagerLayer,
     terminalLayer,

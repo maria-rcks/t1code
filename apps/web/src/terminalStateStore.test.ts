@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { selectThreadTerminalState, useTerminalStateStore } from "./terminalStateStore";
 
-const THREAD_ID = ThreadId.makeUnsafe("thread-1");
+const THREAD_ID = ThreadId.make("thread-1");
 const TERMINAL_STATE_STORAGE_KEY = "t3code:terminal-state:v1";
 
 const testLocalStorage = vi.hoisted(() => {

@@ -130,6 +130,8 @@ export type ClaudeModelOptions = typeof ClaudeModelOptions.Type;
 export const ProviderModelOptions = Schema.Struct({
   codex: Schema.optional(CodexModelOptions),
   claudeAgent: Schema.optional(ClaudeModelOptions),
+  cursor: Schema.optional(Schema.Record(Schema.String, Schema.Any)),
+  opencode: Schema.optional(Schema.Record(Schema.String, Schema.Any)),
 });
 export type ProviderModelOptions = typeof ProviderModelOptions.Type;
 

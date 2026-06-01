@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { checkpointDiffQueryOptions, providerQueryKeys } from "./providerReactQuery";
 import * as nativeApi from "../nativeApi";
 
-const threadId = ThreadId.makeUnsafe("thread-id");
+const threadId = ThreadId.make("thread-id");
 
 function mockNativeApi(input: {
   getTurnDiff: ReturnType<typeof vi.fn>;

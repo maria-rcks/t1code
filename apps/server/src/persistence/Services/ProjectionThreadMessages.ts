@@ -14,7 +14,7 @@ import {
   TurnId,
   IsoDateTime,
 } from "@t3tools/contracts";
-import { Schema, ServiceMap } from "effect";
+import { Schema, Context } from "effect";
 import type { Effect } from "effect";
 
 import type { ProjectionRepositoryError } from "../Errors.ts";
@@ -75,7 +75,7 @@ export interface ProjectionThreadMessageRepositoryShape {
 /**
  * ProjectionThreadMessageRepository - Service tag for message projection persistence.
  */
-export class ProjectionThreadMessageRepository extends ServiceMap.Service<
+export class ProjectionThreadMessageRepository extends Context.Service<
   ProjectionThreadMessageRepository,
   ProjectionThreadMessageRepositoryShape
 >()("t3/persistence/Services/ProjectionThreadMessages/ProjectionThreadMessageRepository") {}

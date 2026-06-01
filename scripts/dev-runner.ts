@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { NetService } from "@t3tools/shared/Net";
+import { layer as NetServiceLayer, NetService } from "@t3tools/shared/Net";
 import { Config, Data, Effect, Hash, Layer, Logger, Option, Path, Schema } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { ChildProcess } from "effect/unstable/process";
@@ -392,7 +392,7 @@ const resolveOptionalBooleanOverride = (
 
 export function runDevRunnerWithInput(input: DevRunnerCliInput) {
   return Effect.gen(function* () {
-    const { portOffset, devInstance } = yield* OffsetConfig.asEffect().pipe(
+    const { portOffset, devInstance } = yield* Config.unwrap(OffsetConfig).pipe(
       Effect.mapError(
         (cause) =>
           new DevRunnerError({
@@ -553,7 +553,7 @@ const devRunnerCli = Command.make("dev-runner", {
 const cliRuntimeLayer = Layer.mergeAll(
   Logger.layer([Logger.consolePretty()]),
   NodeServices.layer,
-  NetService.layer,
+  NetServiceLayer,
 );
 
 const runtimeProgram = Command.run(devRunnerCli, { version: "0.0.0" }).pipe(

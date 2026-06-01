@@ -81,7 +81,7 @@ function buildUserTimelineEntry(text: string) {
     kind: "message" as const,
     createdAt: MESSAGE_CREATED_AT,
     message: {
-      id: MessageId.makeUnsafe("message-1"),
+      id: MessageId.make("message-1"),
       role: "user" as const,
       text,
       createdAt: MESSAGE_CREATED_AT,

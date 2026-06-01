@@ -7,7 +7,7 @@
  * @module ProviderHealth
  */
 import type { ServerProviderStatus } from "@t3tools/contracts";
-import { ServiceMap } from "effect";
+import { Context } from "effect";
 import type { Effect } from "effect";
 
 export interface ProviderHealthShape {
@@ -17,6 +17,6 @@ export interface ProviderHealthShape {
   readonly getStatuses: Effect.Effect<ReadonlyArray<ServerProviderStatus>>;
 }
 
-export class ProviderHealth extends ServiceMap.Service<ProviderHealth, ProviderHealthShape>()(
+export class ProviderHealth extends Context.Service<ProviderHealth, ProviderHealthShape>()(
   "t3/provider/Services/ProviderHealth",
 ) {}

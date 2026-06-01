@@ -7,12 +7,12 @@ import {
   providerUpdateNotificationKey,
 } from "./providerUpdateNotifications";
 
-const codex = ProviderDriverKind.makeUnsafe("codex");
-const claude = ProviderDriverKind.makeUnsafe("claudeAgent");
+const codex = ProviderDriverKind.make("codex");
+const claude = ProviderDriverKind.make("claudeAgent");
 
 function provider(overrides: Partial<ServerProvider> = {}): ServerProvider {
   return {
-    instanceId: ProviderInstanceId.makeUnsafe(String(overrides.driver ?? codex)),
+    instanceId: ProviderInstanceId.make(String(overrides.driver ?? codex)),
     driver: codex,
     enabled: true,
     installed: true,
@@ -47,11 +47,11 @@ describe("provider update notifications", () => {
   it("dedupes update candidates by driver and prefers the default instance", () => {
     const providers = [
       outdated({
-        instanceId: ProviderInstanceId.makeUnsafe("codex-custom"),
+        instanceId: ProviderInstanceId.make("codex-custom"),
         checkedAt: "2026-01-02T00:00:00.000Z",
       }),
       outdated({
-        instanceId: ProviderInstanceId.makeUnsafe("codex"),
+        instanceId: ProviderInstanceId.make("codex"),
         checkedAt: "2026-01-01T00:00:00.000Z",
       }),
     ];
@@ -65,7 +65,7 @@ describe("provider update notifications", () => {
   it("builds stable dismissal keys from provider and latest version", () => {
     const key = providerUpdateNotificationKey(
       collectProviderUpdateCandidates([
-        outdated({ driver: claude, instanceId: ProviderInstanceId.makeUnsafe("claudeAgent") }),
+        outdated({ driver: claude, instanceId: ProviderInstanceId.make("claudeAgent") }),
         outdated(),
       ]),
     );
@@ -108,7 +108,7 @@ describe("provider update notifications", () => {
   it("returns the most recent terminal update result and honors dismissed keys", () => {
     const failed = outdated({
       driver: claude,
-      instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
+      instanceId: ProviderInstanceId.make("claudeAgent"),
       updateState: {
         status: "failed",
         startedAt: "2026-01-01T00:00:00.000Z",

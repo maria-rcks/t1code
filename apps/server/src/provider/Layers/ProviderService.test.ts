@@ -46,10 +46,10 @@ import {
 } from "../../persistence/Layers/Sqlite.ts";
 import { AnalyticsService } from "../../telemetry/Services/AnalyticsService.ts";
 
-const asRequestId = (value: string): ApprovalRequestId => ApprovalRequestId.makeUnsafe(value);
-const asEventId = (value: string): EventId => EventId.makeUnsafe(value);
-const asThreadId = (value: string): ThreadId => ThreadId.makeUnsafe(value);
-const asTurnId = (value: string): TurnId => TurnId.makeUnsafe(value);
+const asRequestId = (value: string): ApprovalRequestId => ApprovalRequestId.make(value);
+const asEventId = (value: string): EventId => EventId.make(value);
+const asThreadId = (value: string): ThreadId => ThreadId.make(value);
+const asTurnId = (value: string): TurnId => TurnId.make(value);
 
 type LegacyProviderRuntimeEvent = {
   readonly type: string;
@@ -102,7 +102,7 @@ function makeFakeCodexAdapter(provider: ProviderKind = "codex") {
 
       return Effect.succeed({
         threadId: input.threadId,
-        turnId: TurnId.makeUnsafe(`turn-${String(input.threadId)}`),
+        turnId: TurnId.make(`turn-${String(input.threadId)}`),
       });
     },
   );
@@ -295,7 +295,7 @@ it.effect("ProviderServiceLive keeps persisted resumable sessions on startup", (
       const directory = yield* ProviderSessionDirectory;
       yield* directory.upsert({
         provider: "codex",
-        threadId: ThreadId.makeUnsafe("thread-stale"),
+        threadId: ThreadId.make("thread-stale"),
       });
     }).pipe(Effect.provide(directoryLayer));
 
@@ -1093,7 +1093,7 @@ validation.layer("ProviderServiceLive validation", (it) => {
     Effect.gen(function* () {
       const defaultCodex = makeFakeCodexAdapter();
       const customCodex = makeFakeCodexAdapter();
-      const customInstanceId = ProviderInstanceId.makeUnsafe("codex_custom");
+      const customInstanceId = ProviderInstanceId.make("codex_custom");
       const registry: typeof ProviderAdapterRegistry.Service = {
         getByProvider: (provider) =>
           provider === "codex"
@@ -1108,11 +1108,11 @@ validation.layer("ProviderServiceLive validation", (it) => {
           instanceId === customInstanceId
             ? Effect.succeed({
                 instanceId,
-                driverKind: ProviderDriverKind.makeUnsafe("codex"),
+                driverKind: ProviderDriverKind.make("codex"),
                 displayName: "Custom Codex",
                 enabled: true,
                 continuationIdentity: {
-                  driverKind: ProviderDriverKind.makeUnsafe("codex"),
+                  driverKind: ProviderDriverKind.make("codex"),
                   continuationKey: "codex:instance:codex_custom",
                 },
               })

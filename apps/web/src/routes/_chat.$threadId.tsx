@@ -166,7 +166,7 @@ function ChatThreadRouteView() {
   const threadsHydrated = useStore((store) => store.threadsHydrated);
   const navigate = useNavigate();
   const threadId = Route.useParams({
-    select: (params) => ThreadId.makeUnsafe(params.threadId),
+    select: (params) => ThreadId.make(params.threadId),
   });
   const search = Route.useSearch();
   const threadExists = useStore((store) => store.threads.some((thread) => thread.id === threadId));

@@ -5,7 +5,7 @@
  * provider instances. Driver-specific settings remain opaque at this layer so
  * the server can preserve unknown driver configs across version changes.
  */
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { TrimmedNonEmptyString } from "./baseSchemas";
 
 const PROVIDER_SLUG_MAX_CHARS = 64;
@@ -43,8 +43,8 @@ export type ProviderInstanceEnvironmentVariableName =
 
 export const ProviderInstanceEnvironmentVariable = Schema.Struct({
   name: ProviderInstanceEnvironmentVariableName,
-  value: Schema.String.pipe(Schema.withDecodingDefault(() => "")),
-  sensitive: Schema.Boolean.pipe(Schema.withDecodingDefault(() => false)),
+  value: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  sensitive: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   valueRedacted: Schema.optionalKey(Schema.Boolean),
 });
 export type ProviderInstanceEnvironmentVariable = typeof ProviderInstanceEnvironmentVariable.Type;

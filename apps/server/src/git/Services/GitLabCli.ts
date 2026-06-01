@@ -1,4 +1,4 @@
-import { ServiceMap } from "effect";
+import { Context } from "effect";
 import type { Effect } from "effect";
 import type { SourceControlRepositoryVisibility } from "@t3tools/contracts";
 
@@ -30,6 +30,6 @@ export interface GitLabCliShape {
   }) => Effect.Effect<GitLabRepositoryCloneUrls, GitLabCliError>;
 }
 
-export class GitLabCli extends ServiceMap.Service<GitLabCli, GitLabCliShape>()(
+export class GitLabCli extends Context.Service<GitLabCli, GitLabCliShape>()(
   "t3/git/Services/GitLabCli",
 ) {}

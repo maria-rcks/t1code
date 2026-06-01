@@ -6,7 +6,7 @@
  *
  * @module ServerConfig
  */
-import { Effect, FileSystem, Layer, Path, ServiceMap } from "effect";
+import { Effect, FileSystem, Layer, Path, Context } from "effect";
 
 export const DEFAULT_PORT = 3773;
 
@@ -83,7 +83,7 @@ export const deriveServerPaths = Effect.fn(function* (
 /**
  * ServerConfig - Service tag for server runtime configuration.
  */
-export class ServerConfig extends ServiceMap.Service<ServerConfig, ServerConfigShape>()(
+export class ServerConfig extends Context.Service<ServerConfig, ServerConfigShape>()(
   "t3/config/ServerConfig",
 ) {
   static readonly layerTest = (cwd: string, baseDirOrPrefix: string | { prefix: string }) =>

@@ -18,7 +18,7 @@ import {
   TerminalWriteInput,
 } from "@t3tools/contracts";
 import { PtyProcess } from "./PTY";
-import { Effect, Schema, ServiceMap } from "effect";
+import { Effect, Schema, Context } from "effect";
 
 export class TerminalError extends Schema.TaggedErrorClass<TerminalError>()("TerminalError", {
   message: Schema.String,
@@ -113,6 +113,6 @@ export interface TerminalManagerShape {
 /**
  * TerminalManager - Service tag for terminal session orchestration.
  */
-export class TerminalManager extends ServiceMap.Service<TerminalManager, TerminalManagerShape>()(
+export class TerminalManager extends Context.Service<TerminalManager, TerminalManagerShape>()(
   "t3/terminal/Services/Manager/TerminalManager",
 ) {}

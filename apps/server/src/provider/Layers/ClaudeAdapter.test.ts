@@ -237,8 +237,8 @@ async function readFirstPromptMessage(
   return next.value;
 }
 
-const THREAD_ID = ThreadId.makeUnsafe("thread-claude-1");
-const RESUME_THREAD_ID = ThreadId.makeUnsafe("thread-claude-resume");
+const THREAD_ID = ThreadId.make("thread-claude-1");
+const RESUME_THREAD_ID = ThreadId.make("thread-claude-resume");
 
 describe("ClaudeAdapterLive", () => {
   it.effect("returns validation error for non-claude provider on startSession", () => {
@@ -491,7 +491,7 @@ describe("ClaudeAdapterLive", () => {
         threadId: THREAD_ID,
         provider: "claudeAgent",
         modelSelection: createModelSelection(
-          ProviderInstanceId.makeUnsafe("claudeAgent"),
+          ProviderInstanceId.make("claudeAgent"),
           "claude-opus-4-6",
           [
             { id: "effort", value: "max" },
@@ -579,7 +579,7 @@ describe("ClaudeAdapterLive", () => {
   it.effect("treats ultrathink model selection as a prompt keyword", () => {
     const harness = makeHarness();
     const modelSelection = createModelSelection(
-      ProviderInstanceId.makeUnsafe("claudeAgent"),
+      ProviderInstanceId.make("claudeAgent"),
       "claude-sonnet-4-6",
       [{ id: "effort", value: "ultrathink" }],
     );
@@ -2302,7 +2302,7 @@ describe("ClaudeAdapterLive", () => {
         return;
       }
       assert.deepEqual(requested.value.providerRefs, {
-        providerItemId: ProviderItemId.makeUnsafe("tool-use-1"),
+        providerItemId: ProviderItemId.make("tool-use-1"),
       });
       const runtimeRequestId = requested.value.requestId;
       assert.equal(typeof runtimeRequestId, "string");
@@ -2312,7 +2312,7 @@ describe("ClaudeAdapterLive", () => {
 
       yield* adapter.respondToRequest(
         session.threadId,
-        ApprovalRequestId.makeUnsafe(runtimeRequestId),
+        ApprovalRequestId.make(runtimeRequestId),
         "accept",
       );
 
@@ -2328,7 +2328,7 @@ describe("ClaudeAdapterLive", () => {
       assert.equal(resolved.value.requestId, requested.value.requestId);
       assert.equal(resolved.value.payload.decision, "accept");
       assert.deepEqual(resolved.value.providerRefs, {
-        providerItemId: ProviderItemId.makeUnsafe("tool-use-1"),
+        providerItemId: ProviderItemId.make("tool-use-1"),
       });
 
       const permissionResult = yield* Effect.promise(() => permissionPromise);
@@ -2377,7 +2377,7 @@ describe("ClaudeAdapterLive", () => {
 
       yield* adapter.respondToRequest(
         session.threadId,
-        ApprovalRequestId.makeUnsafe(String(agentRequested.value.requestId)),
+        ApprovalRequestId.make(String(agentRequested.value.requestId)),
         "accept",
       );
       yield* Stream.runHead(adapter.streamEvents);
@@ -2401,7 +2401,7 @@ describe("ClaudeAdapterLive", () => {
 
       yield* adapter.respondToRequest(
         session.threadId,
-        ApprovalRequestId.makeUnsafe(String(grepRequested.value.requestId)),
+        ApprovalRequestId.make(String(grepRequested.value.requestId)),
         "accept",
       );
       yield* Stream.runHead(adapter.streamEvents);
@@ -2743,7 +2743,7 @@ describe("ClaudeAdapterLive", () => {
         threadId: session.threadId,
         input: "hello",
         modelSelection: createModelSelection(
-          ProviderInstanceId.makeUnsafe("claudeAgent"),
+          ProviderInstanceId.make("claudeAgent"),
           "claude-opus-4-6",
           [{ id: "contextWindow", value: "1m" }],
         ),
@@ -2753,7 +2753,7 @@ describe("ClaudeAdapterLive", () => {
         threadId: session.threadId,
         input: "hello again",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
+          instanceId: ProviderInstanceId.make("claudeAgent"),
           model: "claude-opus-4-6",
         },
         attachments: [],
@@ -2916,7 +2916,7 @@ describe("ClaudeAdapterLive", () => {
       }
       assert.equal(proposedEvent.value.payload.planMarkdown, "# Ship it\n\n- one\n- two");
       assert.deepEqual(proposedEvent.value.providerRefs, {
-        providerItemId: ProviderItemId.makeUnsafe("tool-exit-1"),
+        providerItemId: ProviderItemId.make("tool-exit-1"),
       });
 
       const permissionResult = yield* Effect.promise(() => permissionPromise);
@@ -2994,7 +2994,7 @@ describe("ClaudeAdapterLive", () => {
       }
       assert.equal(proposedEvent.value.payload.planMarkdown, "# Final plan\n\n- capture it");
       assert.deepEqual(proposedEvent.value.providerRefs, {
-        providerItemId: ProviderItemId.makeUnsafe("tool-exit-2"),
+        providerItemId: ProviderItemId.make("tool-exit-2"),
       });
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
@@ -3086,15 +3086,13 @@ describe("ClaudeAdapterLive", () => {
       assert.equal(requestedEvent.value.payload.questions[0]?.question, "Which framework?");
       assert.equal(requestedEvent.value.payload.questions[0]?.id, "Which framework?");
       assert.deepEqual(requestedEvent.value.providerRefs, {
-        providerItemId: ProviderItemId.makeUnsafe("tool-ask-1"),
+        providerItemId: ProviderItemId.make("tool-ask-1"),
       });
 
       // Respond with the user's answers.
-      yield* adapter.respondToUserInput(
-        session.threadId,
-        ApprovalRequestId.makeUnsafe(requestId!),
-        { "Which framework?": "React" },
-      );
+      yield* adapter.respondToUserInput(session.threadId, ApprovalRequestId.make(requestId!), {
+        "Which framework?": "React",
+      });
 
       // The adapter should emit a user-input.resolved event.
       const resolvedEvent = yield* Stream.runHead(adapter.streamEvents);
@@ -3110,7 +3108,7 @@ describe("ClaudeAdapterLive", () => {
         "Which framework?": "React",
       });
       assert.deepEqual(resolvedEvent.value.providerRefs, {
-        providerItemId: ProviderItemId.makeUnsafe("tool-ask-1"),
+        providerItemId: ProviderItemId.make("tool-ask-1"),
       });
 
       // The canUseTool promise should resolve with the answers in SDK format.
@@ -3190,11 +3188,9 @@ describe("ClaudeAdapterLive", () => {
       }
       const requestId = requestedEvent.value.requestId;
 
-      yield* adapter.respondToUserInput(
-        session.threadId,
-        ApprovalRequestId.makeUnsafe(requestId!),
-        { "Deploy to which env?": "Staging" },
-      );
+      yield* adapter.respondToUserInput(session.threadId, ApprovalRequestId.make(requestId!), {
+        "Deploy to which env?": "Staging",
+      });
 
       // Drain the resolved event.
       yield* Stream.runHead(adapter.streamEvents);

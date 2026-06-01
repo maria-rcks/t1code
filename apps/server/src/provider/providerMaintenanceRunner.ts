@@ -16,7 +16,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import { ServiceMap } from "effect";
+import { Context } from "effect";
 import { HttpClient } from "effect/unstable/http";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
@@ -53,7 +53,7 @@ export interface ProviderMaintenanceRunnerShape {
   ) => Effect.Effect<ServerProviderUpdatedPayload, ServerProviderUpdateError>;
 }
 
-export class ProviderMaintenanceRunner extends ServiceMap.Service<
+export class ProviderMaintenanceRunner extends Context.Service<
   ProviderMaintenanceRunner,
   ProviderMaintenanceRunnerShape
 >()("t3/provider/providerMaintenanceRunner") {}
@@ -209,7 +209,7 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
   const commandCoordinator = yield* makeProviderMaintenanceCommandCoordinator({
     makeAlreadyRunningError: () =>
       new ServerProviderUpdateError({
-        provider: ProviderDriverKind.makeUnsafe("unknown"),
+        provider: ProviderDriverKind.make("unknown"),
         reason: "An update is already running for this provider.",
       }),
   });

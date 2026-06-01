@@ -61,7 +61,7 @@ const upsertAnonymousId = Effect.gen(function* () {
   const anonymousId = yield* fileSystem.readFileString(anonymousIdPath).pipe(
     Effect.catch(() =>
       Effect.gen(function* () {
-        const randomId = yield* Random.nextUUIDv4;
+        const randomId = yield* Effect.sync(() => crypto.randomUUID());
         yield* fileSystem.writeFileString(anonymousIdPath, randomId);
         return randomId;
       }),

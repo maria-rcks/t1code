@@ -242,11 +242,7 @@ function EventRouter() {
       }
       useTerminalStateStore
         .getState()
-        .setTerminalActivity(
-          ThreadId.makeUnsafe(event.threadId),
-          event.terminalId,
-          hasRunningSubprocess,
-        );
+        .setTerminalActivity(ThreadId.make(event.threadId), event.terminalId, hasRunningSubprocess);
     });
     const unsubWelcome = onServerWelcome((payload) => {
       void (async () => {

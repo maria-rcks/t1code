@@ -52,7 +52,7 @@ function makeTerminalContext(input: {
 }): TerminalContextDraft {
   return {
     id: input.id,
-    threadId: ThreadId.makeUnsafe("thread-dedupe"),
+    threadId: ThreadId.make("thread-dedupe"),
     terminalId: input.terminalId ?? "default",
     terminalLabel: input.terminalLabel ?? "Terminal 1",
     lineStart: input.lineStart ?? 4,
@@ -73,7 +73,7 @@ function resetComposerDraftStore() {
 }
 
 describe("composerDraftStore addImages", () => {
-  const threadId = ThreadId.makeUnsafe("thread-dedupe");
+  const threadId = ThreadId.make("thread-dedupe");
   let originalRevokeObjectUrl: typeof URL.revokeObjectURL;
   let revokeSpy: ReturnType<typeof vi.fn<(url: string) => void>>;
 
@@ -158,7 +158,7 @@ describe("composerDraftStore addImages", () => {
 });
 
 describe("composerDraftStore clearComposerContent", () => {
-  const threadId = ThreadId.makeUnsafe("thread-clear");
+  const threadId = ThreadId.make("thread-clear");
   let originalRevokeObjectUrl: typeof URL.revokeObjectURL;
   let revokeSpy: ReturnType<typeof vi.fn<(url: string) => void>>;
 
@@ -189,7 +189,7 @@ describe("composerDraftStore clearComposerContent", () => {
 });
 
 describe("composerDraftStore syncPersistedAttachments", () => {
-  const threadId = ThreadId.makeUnsafe("thread-sync-persisted");
+  const threadId = ThreadId.make("thread-sync-persisted");
 
   beforeEach(() => {
     removeLocalStorageItem(COMPOSER_DRAFT_STORAGE_KEY);
@@ -246,7 +246,7 @@ describe("composerDraftStore syncPersistedAttachments", () => {
 });
 
 describe("composerDraftStore terminal contexts", () => {
-  const threadId = ThreadId.makeUnsafe("thread-dedupe");
+  const threadId = ThreadId.make("thread-dedupe");
 
   beforeEach(() => {
     useComposerDraftStore.setState({
@@ -419,10 +419,10 @@ describe("composerDraftStore terminal contexts", () => {
 });
 
 describe("composerDraftStore project draft thread mapping", () => {
-  const projectId = ProjectId.makeUnsafe("project-a");
-  const otherProjectId = ProjectId.makeUnsafe("project-b");
-  const threadId = ThreadId.makeUnsafe("thread-a");
-  const otherThreadId = ThreadId.makeUnsafe("thread-b");
+  const projectId = ProjectId.make("project-a");
+  const otherProjectId = ProjectId.make("project-b");
+  const threadId = ThreadId.make("thread-a");
+  const otherThreadId = ThreadId.make("thread-b");
 
   beforeEach(() => {
     resetComposerDraftStore();
@@ -596,7 +596,7 @@ describe("composerDraftStore project draft thread mapping", () => {
 });
 
 describe("composerDraftStore modelOptions", () => {
-  const threadId = ThreadId.makeUnsafe("thread-model-options");
+  const threadId = ThreadId.make("thread-model-options");
 
   beforeEach(() => {
     resetComposerDraftStore();
@@ -793,7 +793,7 @@ describe("composerDraftStore modelOptions", () => {
 });
 
 describe("composerDraftStore setModel", () => {
-  const threadId = ThreadId.makeUnsafe("thread-model");
+  const threadId = ThreadId.make("thread-model");
 
   beforeEach(() => {
     resetComposerDraftStore();
@@ -851,7 +851,7 @@ describe("composerDraftStore sticky composer settings", () => {
 });
 
 describe("composerDraftStore setProvider", () => {
-  const threadId = ThreadId.makeUnsafe("thread-provider");
+  const threadId = ThreadId.make("thread-provider");
 
   beforeEach(() => {
     resetComposerDraftStore();
@@ -876,7 +876,7 @@ describe("composerDraftStore setProvider", () => {
 });
 
 describe("composerDraftStore runtime and interaction settings", () => {
-  const threadId = ThreadId.makeUnsafe("thread-settings");
+  const threadId = ThreadId.make("thread-settings");
 
   beforeEach(() => {
     resetComposerDraftStore();

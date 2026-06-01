@@ -41,7 +41,7 @@ import {
   Result,
   Schema,
   Scope,
-  ServiceMap,
+  Context,
   Stream,
   Struct,
 } from "effect";
@@ -110,7 +110,7 @@ export interface ServerShape {
 /**
  * Server - Service tag for HTTP/WebSocket lifecycle management.
  */
-export class Server extends ServiceMap.Service<Server, ServerShape>()("t3/wsServer/Server") {}
+export class Server extends Context.Service<Server, ServerShape>()("t3/wsServer/Server") {}
 
 const isServerNotRunningError = (error: Error): boolean => {
   const maybeCode = (error as NodeJS.ErrnoException).code;
@@ -742,12 +742,12 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
       if (!existingProject) {
         const createdAt = new Date().toISOString();
-        bootstrapProjectId = ProjectId.makeUnsafe(crypto.randomUUID());
+        bootstrapProjectId = ProjectId.make(crypto.randomUUID());
         const bootstrapProjectTitle = path.basename(cwd) || "project";
         bootstrapProjectDefaultModel = "gpt-5-codex";
         yield* orchestrationEngine.dispatch({
           type: "project.create",
-          commandId: CommandId.makeUnsafe(crypto.randomUUID()),
+          commandId: CommandId.make(crypto.randomUUID()),
           projectId: bootstrapProjectId,
           title: bootstrapProjectTitle,
           workspaceRoot: cwd,
@@ -764,10 +764,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       );
       if (!existingThread) {
         const createdAt = new Date().toISOString();
-        const threadId = ThreadId.makeUnsafe(crypto.randomUUID());
+        const threadId = ThreadId.make(crypto.randomUUID());
         yield* orchestrationEngine.dispatch({
           type: "thread.create",
-          commandId: CommandId.makeUnsafe(crypto.randomUUID()),
+          commandId: CommandId.make(crypto.randomUUID()),
           threadId,
           projectId: bootstrapProjectId,
           title: "New thread",
@@ -791,7 +791,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     );
   }
 
-  const runtimeServices = yield* Effect.services<
+  const runtimeServices = yield* Effect.context<
     ServerRuntimeServices | ServerConfig | FileSystem.FileSystem | Path.Path
   >();
   const runPromise = Effect.runPromiseWith(runtimeServices);
