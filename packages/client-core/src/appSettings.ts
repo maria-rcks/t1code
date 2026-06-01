@@ -1,4 +1,4 @@
-import { Effect, Option, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import {
   DEFAULT_GIT_TEXT_GENERATION_MODEL,
   ProviderInstanceId,
@@ -74,7 +74,7 @@ const withDefaults =
   ) =>
   (schema: S) =>
     schema.pipe(
-      Schema.withConstructorDefault(Effect.succeed(Option.some(fallback()))),
+      Schema.withConstructorDefault(Effect.succeed(fallback())),
       Schema.withDecodingDefault(Effect.succeed(fallback())),
     );
 
