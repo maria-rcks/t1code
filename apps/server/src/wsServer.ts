@@ -87,6 +87,7 @@ import { expandHomePath } from "./os-jank.ts";
 import { makeServerPushBus } from "./wsServer/pushBus.ts";
 import { makeServerReadiness } from "./wsServer/readiness.ts";
 import { decodeJsonResult, formatSchemaError } from "@t3tools/shared/schemaJson";
+import { buildCoreAdvertisedEndpoints } from "./remoteAccess/AdvertisedEndpoints.ts";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -1030,6 +1031,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
       case WS_METHODS.serverDiscoverSourceControl:
         return yield* sourceControlDiscovery.discover({ cwd });
+
+      case WS_METHODS.serverGetAdvertisedEndpoints:
+        return {
+          endpoints: buildCoreAdvertisedEndpoints({ host, port }),
+        };
 
       case WS_METHODS.sourceControlLookupRepository: {
         const body = stripRequestTag(request.body);
