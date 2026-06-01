@@ -61,14 +61,24 @@ class SourceControlDiscoveryError extends Schema.TaggedErrorClass<SourceControlD
   },
 ) {}
 
-const GIT_SPEC: VcsCliDiscoverySpec = {
-  kind: "git",
-  implemented: true,
-  label: "Git",
-  executable: "git",
-  versionArgs: ["--version"],
-  installHint: "Install Git and make sure `git` is available on PATH.",
-};
+const VCS_SPECS: ReadonlyArray<VcsCliDiscoverySpec> = [
+  {
+    kind: "git",
+    implemented: true,
+    label: "Git",
+    executable: "git",
+    versionArgs: ["--version"],
+    installHint: "Install Git and make sure `git` is available on PATH.",
+  },
+  {
+    kind: "jj",
+    implemented: false,
+    label: "Jujutsu",
+    executable: "jj",
+    versionArgs: ["--version"],
+    installHint: "Install Jujutsu with `brew install jj` or from https://github.com/jj-vcs/jj.",
+  },
+];
 
 const PROVIDER_SPECS: ReadonlyArray<ProviderCliDiscoverySpec> = [
   {
@@ -405,9 +415,12 @@ export const layer = Layer.succeed(SourceControlDiscovery, {
   discover: (input) => {
     const cwd = input?.cwd ?? process.cwd();
     return Effect.all({
-      versionControlSystems: Effect.all([discoverVcs({ spec: GIT_SPEC, cwd })], {
-        concurrency: "unbounded",
-      }),
+      versionControlSystems: Effect.all(
+        VCS_SPECS.map((spec) => discoverVcs({ spec, cwd })),
+        {
+          concurrency: "unbounded",
+        },
+      ),
       sourceControlProviders: Effect.all(
         [
           ...PROVIDER_SPECS.map((spec) => discoverProvider({ spec, cwd })),

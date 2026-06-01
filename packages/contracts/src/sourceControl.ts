@@ -70,7 +70,7 @@ export const SourceControlPublishRepositoryResult = Schema.Struct({
 });
 export type SourceControlPublishRepositoryResult = typeof SourceControlPublishRepositoryResult.Type;
 
-export const VcsDriverKind = Schema.Literals(["git", "unknown"]);
+export const VcsDriverKind = Schema.Literals(["git", "jj", "unknown"]);
 export type VcsDriverKind = typeof VcsDriverKind.Type;
 
 export const SourceControlDiscoveryStatus = Schema.Literals(["available", "missing"]);
