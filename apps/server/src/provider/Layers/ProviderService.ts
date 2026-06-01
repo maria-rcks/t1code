@@ -154,16 +154,17 @@ function readPersistedCwd(
 function decodeRoutableProvider(
   provider: string,
   operation: string,
-): Effect.Effect<ProviderKind, ProviderValidationError> {
+): Effect.Effect<ProviderKind | string, ProviderValidationError> {
   if (provider === "codex" || provider === "claudeAgent") {
     return Effect.succeed(provider);
   }
-  return Effect.fail(
-    toValidationError(operation, `Provider '${provider}' is not supported by this server build.`),
-  );
+  if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(provider)) {
+    return Effect.succeed(provider);
+  }
+  return Effect.fail(toValidationError(operation, `Provider '${provider}' is invalid.`));
 }
 
-function defaultProviderInstanceId(provider: ProviderKind): ProviderInstanceId {
+function defaultProviderInstanceId(provider: ProviderKind | string): ProviderInstanceId {
   return defaultInstanceIdForDriver(provider as ProviderDriverKind);
 }
 
@@ -278,7 +279,7 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           registry.getByInstance !== undefined
             ? yield* registry.getByInstance(instanceId)
             : instanceId === defaultProviderInstanceId(input.binding.provider)
-              ? yield* registry.getByProvider(input.binding.provider)
+              ? yield* registry.getByProvider(input.binding.provider as ProviderKind)
               : yield* toValidationError(
                   input.operation,
                   `Provider instance '${instanceId}' is not supported by this server build.`,
@@ -363,7 +364,7 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           registry.getByInstance !== undefined
             ? yield* registry.getByInstance(instanceId)
             : instanceId === defaultProviderInstanceId(binding.provider)
-              ? yield* registry.getByProvider(binding.provider)
+              ? yield* registry.getByProvider(binding.provider as ProviderKind)
               : yield* toValidationError(
                   input.operation,
                   `Provider instance '${instanceId}' is not supported by this server build.`,
@@ -443,7 +444,7 @@ const makeProviderService = (options?: ProviderServiceLiveOptions) =>
           registry.getByInstance !== undefined
             ? yield* registry.getByInstance(requestedInstanceId)
             : requestedInstanceId === defaultProviderInstanceId(provider)
-              ? yield* registry.getByProvider(provider)
+              ? yield* registry.getByProvider(provider as ProviderKind)
               : yield* toValidationError(
                   "ProviderService.startSession",
                   `Provider instance '${requestedInstanceId}' is not supported by this server build.`,

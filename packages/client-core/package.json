@@ -43,7 +43,7 @@
   },
   "scripts": {
     "build": "tsdown",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {

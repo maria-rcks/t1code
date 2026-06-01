@@ -39,7 +39,7 @@ function decodeProviderKind(
   );
 }
 
-function defaultProviderInstanceId(provider: ProviderKind): ProviderInstanceId {
+function defaultProviderInstanceId(provider: ProviderKind | string): ProviderInstanceId {
   return defaultInstanceIdForDriver(provider as ProviderDriverKind);
 }
 

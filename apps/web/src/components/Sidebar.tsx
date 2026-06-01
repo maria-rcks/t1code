@@ -327,7 +327,7 @@ export default function Sidebar() {
   const { handleNewThread } = useHandleNewThread();
   const routeThreadId = useParams({
     strict: false,
-    select: (params) => (params.threadId ? ThreadId.makeUnsafe(params.threadId) : null),
+    select: (params) => (params.threadId ? ThreadId.make(params.threadId) : null),
   });
   const { data: keybindings = EMPTY_KEYBINDINGS } = useQuery({
     ...serverConfigQueryOptions(),

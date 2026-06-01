@@ -21,18 +21,7 @@ import { createModelSelection } from "@t3tools/shared/model";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it, vi } from "@effect/vitest";
 
-import {
-  Effect,
-  Exit,
-  Fiber,
-  Layer,
-  Option,
-  Queue,
-  Schema,
-  Scope,
-  ServiceMap,
-  Stream,
-} from "effect";
+import { Effect, Exit, Fiber, Layer, Option, Queue, Schema, Scope, Context, Stream } from "effect";
 import * as CodexErrors from "effect-codex-app-server/errors";
 
 import { ServerConfig } from "../../config.ts";
@@ -50,14 +39,14 @@ import { makeCodexAdapter } from "./CodexAdapter.ts";
 const decodeCodexSettings = Schema.decodeSync(CodexSettings);
 
 // Test-local service tag so the rest of the file can keep using `yield* CodexAdapter`.
-class CodexAdapter extends ServiceMap.Service<CodexAdapter, CodexAdapterShape>()(
+class CodexAdapter extends Context.Service<CodexAdapter, CodexAdapterShape>()(
   "t3/provider/Layers/CodexAdapter.test/CodexAdapter",
 ) {}
 
-const asThreadId = (value: string): ThreadId => ThreadId.makeUnsafe(value);
-const asTurnId = (value: string): TurnId => TurnId.makeUnsafe(value);
-const asEventId = (value: string): EventId => EventId.makeUnsafe(value);
-const asItemId = (value: string): ProviderItemId => ProviderItemId.makeUnsafe(value);
+const asThreadId = (value: string): ThreadId => ThreadId.make(value);
+const asTurnId = (value: string): TurnId => TurnId.make(value);
+const asEventId = (value: string): EventId => EventId.make(value);
+const asItemId = (value: string): ProviderItemId => ProviderItemId.make(value);
 
 class FakeCodexRuntime implements CodexSessionRuntimeShape {
   private readonly eventQueue = Effect.runSync(Queue.unbounded<ProviderEvent>());
@@ -271,11 +260,9 @@ validationLayer("CodexAdapterLive validation", (it) => {
       yield* adapter.startSession({
         provider: "codex" as const,
         threadId: asThreadId("thread-1"),
-        modelSelection: createModelSelection(
-          ProviderInstanceId.makeUnsafe("codex"),
-          "gpt-5.3-codex",
-          [{ id: "fastMode", value: true }],
-        ),
+        modelSelection: createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.3-codex", [
+          { id: "fastMode", value: true },
+        ]),
         runtimeMode: "full-access",
       });
 
@@ -283,7 +270,7 @@ validationLayer("CodexAdapterLive validation", (it) => {
         binaryPath: "codex",
         cwd: process.cwd(),
         model: "gpt-5.3-codex",
-        providerInstanceId: ProviderInstanceId.makeUnsafe("codex"),
+        providerInstanceId: ProviderInstanceId.make("codex"),
         serviceTier: "fast",
         threadId: asThreadId("thread-1"),
         runtimeMode: "full-access",
@@ -345,14 +332,10 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
         adapter.sendTurn({
           threadId: asThreadId("sess-missing"),
           input: "hello",
-          modelSelection: createModelSelection(
-            ProviderInstanceId.makeUnsafe("codex"),
-            "gpt-5.3-codex",
-            [
-              { id: "reasoningEffort", value: "high" },
-              { id: "fastMode", value: true },
-            ],
-          ),
+          modelSelection: createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.3-codex", [
+            { id: "reasoningEffort", value: "high" },
+            { id: "fastMode", value: true },
+          ]),
           attachments: [],
         }),
       );
@@ -367,7 +350,7 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
   );
 
   it.effect("maps codex model options for the adapter's bound custom instance id", () => {
-    const customInstanceId = ProviderInstanceId.makeUnsafe("codex_personal");
+    const customInstanceId = ProviderInstanceId.make("codex_personal");
     const customRuntimeFactory = makeRuntimeFactory();
     const customLayer = Layer.effect(
       CodexAdapter,
@@ -401,7 +384,7 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
           threadId: asThreadId("sess-custom-instance"),
           input: "hello",
           modelSelection: createModelSelection(
-            ProviderInstanceId.makeUnsafe("codex_personal"),
+            ProviderInstanceId.make("codex_personal"),
             "gpt-5.3-codex",
             [
               { id: "reasoningEffort", value: "high" },
@@ -763,7 +746,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
         createdAt: "2026-01-01T00:00:00.000Z",
         method: "serverRequest/resolved",
         requestKind: "command",
-        requestId: ApprovalRequestId.makeUnsafe("req-1"),
+        requestId: ApprovalRequestId.make("req-1"),
         payload: {
           threadId: "thread-1",
           requestId: "req-1",
@@ -798,7 +781,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
         createdAt: "2026-01-01T00:00:00.000Z",
         method: "serverRequest/resolved",
         requestKind: "file-read",
-        requestId: ApprovalRequestId.makeUnsafe("req-file-read-1"),
+        requestId: ApprovalRequestId.make("req-file-read-1"),
         payload: {
           threadId: "thread-1",
           requestId: "req-file-read-1",
@@ -917,7 +900,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
           threadId: asThreadId("thread-1"),
           createdAt: "2026-01-01T00:00:00.000Z",
           method: "item/tool/requestUserInput",
-          requestId: ApprovalRequestId.makeUnsafe("req-user-input-1"),
+          requestId: ApprovalRequestId.make("req-user-input-1"),
           payload: {
             itemId: "item-user-input-1",
             threadId: "thread-1",
@@ -944,7 +927,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
           threadId: asThreadId("thread-1"),
           createdAt: "2026-01-01T00:00:00.000Z",
           method: "item/tool/requestUserInput/answered",
-          requestId: ApprovalRequestId.makeUnsafe("req-user-input-1"),
+          requestId: ApprovalRequestId.make("req-user-input-1"),
           payload: {
             answers: {
               sandbox_mode: {

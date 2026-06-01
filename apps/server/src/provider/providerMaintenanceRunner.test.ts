@@ -13,8 +13,8 @@ import {
 } from "./providerMaintenanceRunner";
 
 const encoder = new TextEncoder();
-const codexDriver = ProviderDriverKind.makeUnsafe("codex");
-const codexInstanceId = ProviderInstanceId.makeUnsafe("codex");
+const codexDriver = ProviderDriverKind.make("codex");
+const codexInstanceId = ProviderInstanceId.make("codex");
 
 function provider(overrides: Partial<ServerProvider> = {}): ServerProvider {
   return {
@@ -40,6 +40,7 @@ function makeHandle(result: { stdout: string; stderr: string; code: number }) {
     exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(result.code)),
     isRunning: Effect.succeed(false),
     kill: () => Effect.void,
+    unref: Effect.succeed(Effect.void),
     stdin: Sink.drain,
     stdout: Stream.make(encoder.encode(result.stdout)),
     stderr: Stream.make(encoder.encode(result.stderr)),

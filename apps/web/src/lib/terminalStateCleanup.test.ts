@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { collectActiveTerminalThreadIds } from "./terminalStateCleanup";
 
-const threadId = (id: string): ThreadId => ThreadId.makeUnsafe(id);
+const threadId = (id: string): ThreadId => ThreadId.make(id);
 
 describe("collectActiveTerminalThreadIds", () => {
   it("retains non-deleted server threads", () => {

@@ -1,4 +1,4 @@
-import { ServiceMap } from "effect";
+import { Context } from "effect";
 import type { Effect } from "effect";
 import type { SourceControlRepositoryVisibility } from "@t3tools/contracts";
 
@@ -30,6 +30,6 @@ export interface AzureDevOpsCliShape {
   }) => Effect.Effect<AzureDevOpsRepositoryCloneUrls, AzureDevOpsCliError>;
 }
 
-export class AzureDevOpsCli extends ServiceMap.Service<AzureDevOpsCli, AzureDevOpsCliShape>()(
+export class AzureDevOpsCli extends Context.Service<AzureDevOpsCli, AzureDevOpsCliShape>()(
   "t3/git/Services/AzureDevOpsCli",
 ) {}

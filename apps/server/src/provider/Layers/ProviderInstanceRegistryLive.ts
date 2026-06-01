@@ -12,7 +12,7 @@ import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
-import { Result, ServiceMap } from "effect";
+import { Result, Context } from "effect";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -302,11 +302,11 @@ export const ProviderInstanceRegistryMutableLayer = <R>(input: {
   readonly drivers: ReadonlyArray<AnyProviderDriver<R>>;
   readonly configMap: ProviderInstanceConfigMap;
 }): Layer.Layer<ProviderInstanceRegistry | ProviderInstanceRegistryMutator, never, R> =>
-  Layer.effectServices(
+  Layer.effectContext(
     makeProviderInstanceRegistry(input).pipe(
       Effect.map(({ registry, mutator }) =>
-        ServiceMap.make(ProviderInstanceRegistry, registry).pipe(
-          ServiceMap.add(ProviderInstanceRegistryMutator, mutator),
+        Context.make(ProviderInstanceRegistry, registry).pipe(
+          Context.add(ProviderInstanceRegistryMutator, mutator),
         ),
       ),
     ),

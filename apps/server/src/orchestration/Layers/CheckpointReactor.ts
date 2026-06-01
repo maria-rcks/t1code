@@ -37,7 +37,7 @@ type ReactorInput =
     };
 
 function toTurnId(value: string | undefined): TurnId | null {
-  return value === undefined ? null : TurnId.makeUnsafe(String(value));
+  return value === undefined ? null : TurnId.make(String(value));
 }
 
 function sameId(left: string | null | undefined, right: string | null | undefined): boolean {
@@ -61,7 +61,7 @@ function checkpointStatusFromRuntime(status: string | undefined): "ready" | "mis
 }
 
 const serverCommandId = (tag: string): CommandId =>
-  CommandId.makeUnsafe(`server:${tag}:${crypto.randomUUID()}`);
+  CommandId.make(`server:${tag}:${crypto.randomUUID()}`);
 
 const make = Effect.gen(function* () {
   const orchestrationEngine = yield* OrchestrationEngineService;
@@ -80,7 +80,7 @@ const make = Effect.gen(function* () {
       commandId: serverCommandId("checkpoint-revert-failure"),
       threadId: input.threadId,
       activity: {
-        id: EventId.makeUnsafe(crypto.randomUUID()),
+        id: EventId.make(crypto.randomUUID()),
         tone: "error",
         kind: "checkpoint.revert.failed",
         summary: "Checkpoint revert failed",
@@ -105,7 +105,7 @@ const make = Effect.gen(function* () {
       commandId: serverCommandId("checkpoint-capture-failure"),
       threadId: input.threadId,
       activity: {
-        id: EventId.makeUnsafe(crypto.randomUUID()),
+        id: EventId.make(crypto.randomUUID()),
         tone: "error",
         kind: "checkpoint.capture.failed",
         summary: "Checkpoint capture failed",
@@ -267,7 +267,7 @@ const make = Effect.gen(function* () {
       input.thread.messages
         .toReversed()
         .find((entry) => entry.role === "assistant" && entry.turnId === input.turnId)?.id ??
-      MessageId.makeUnsafe(`assistant:${input.turnId}`);
+      MessageId.make(`assistant:${input.turnId}`);
 
     yield* orchestrationEngine.dispatch({
       type: "thread.turn.diff.complete",
@@ -304,7 +304,7 @@ const make = Effect.gen(function* () {
       commandId: serverCommandId("checkpoint-captured-activity"),
       threadId: input.threadId,
       activity: {
-        id: EventId.makeUnsafe(crypto.randomUUID()),
+        id: EventId.make(crypto.randomUUID()),
         tone: "info",
         kind: "checkpoint.captured",
         summary: "Checkpoint captured",

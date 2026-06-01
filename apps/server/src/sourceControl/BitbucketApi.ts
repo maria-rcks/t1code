@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { Config, Effect, Layer, Option, Schema, ServiceMap } from "effect";
+import { Config, Effect, Layer, Option, Schema, Context } from "effect";
 import { TrimmedNonEmptyString, type SourceControlRepositoryVisibility } from "@t3tools/contracts";
 
 const DEFAULT_API_BASE_URL = "https://api.bitbucket.org/2.0";
@@ -47,7 +47,7 @@ export interface BitbucketApiShape {
   }) => Effect.Effect<BitbucketRepositoryCloneUrls, BitbucketApiError>;
 }
 
-export class BitbucketApi extends ServiceMap.Service<BitbucketApi, BitbucketApiShape>()(
+export class BitbucketApi extends Context.Service<BitbucketApi, BitbucketApiShape>()(
   "t3/sourceControl/BitbucketApi",
 ) {}
 

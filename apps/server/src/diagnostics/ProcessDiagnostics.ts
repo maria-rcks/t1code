@@ -4,7 +4,7 @@ import type {
   ServerProcessSignal,
   ServerSignalProcessResult,
 } from "@t3tools/contracts";
-import { ServiceMap } from "effect";
+import { Context } from "effect";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -38,7 +38,7 @@ export interface ProcessDiagnosticsShape {
   }) => Effect.Effect<ServerSignalProcessResult>;
 }
 
-export class ProcessDiagnostics extends ServiceMap.Service<
+export class ProcessDiagnostics extends Context.Service<
   ProcessDiagnostics,
   ProcessDiagnosticsShape
 >()("t3/diagnostics/ProcessDiagnostics") {}

@@ -25,13 +25,6 @@ import {
   RuntimeMode,
 } from "./orchestration";
 
-const PROVIDER_DRIVER_KIND_MAX_CHARS = 64;
-const PROVIDER_DRIVER_KIND_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
-const ProviderDriverKindName = TrimmedNonEmptyString.check(
-  Schema.isMaxLength(PROVIDER_DRIVER_KIND_MAX_CHARS),
-  Schema.isPattern(PROVIDER_DRIVER_KIND_PATTERN),
-);
-
 const ProviderSessionStatus = Schema.Literals([
   "connecting",
   "ready",
@@ -39,6 +32,13 @@ const ProviderSessionStatus = Schema.Literals([
   "error",
   "closed",
 ]);
+
+const PROVIDER_DRIVER_KIND_MAX_CHARS = 64;
+const PROVIDER_DRIVER_KIND_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
+const ProviderDriverKindName = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(PROVIDER_DRIVER_KIND_MAX_CHARS),
+  Schema.isPattern(PROVIDER_DRIVER_KIND_PATTERN),
+);
 
 export const ProviderSession = Schema.Struct({
   provider: ProviderDriverKindName,

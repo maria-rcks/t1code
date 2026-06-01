@@ -4,7 +4,7 @@ import type {
   ServerProvider,
   ServerProviderUpdateState,
 } from "@t3tools/contracts";
-import { ServiceMap } from "effect";
+import { Context } from "effect";
 import type * as Effect from "effect/Effect";
 import type * as Stream from "effect/Stream";
 import type { ProviderMaintenanceCapabilities } from "../providerMaintenance.ts";
@@ -29,6 +29,6 @@ export interface ProviderRegistryShape {
   readonly streamChanges: Stream.Stream<ReadonlyArray<ServerProvider>>;
 }
 
-export class ProviderRegistry extends ServiceMap.Service<ProviderRegistry, ProviderRegistryShape>()(
+export class ProviderRegistry extends Context.Service<ProviderRegistry, ProviderRegistryShape>()(
   "t3/provider/Services/ProviderRegistry",
 ) {}

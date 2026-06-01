@@ -148,8 +148,8 @@ describe("wsNativeApi", () => {
     emitPush(WS_CHANNELS.serverWelcome, {
       cwd: "/tmp/workspace",
       projectName: "t3-code",
-      bootstrapProjectId: ProjectId.makeUnsafe("project-1"),
-      bootstrapThreadId: ThreadId.makeUnsafe("thread-1"),
+      bootstrapProjectId: ProjectId.make("project-1"),
+      bootstrapThreadId: ThreadId.make("thread-1"),
     });
 
     expect(listener).toHaveBeenCalledTimes(1);
@@ -256,9 +256,9 @@ describe("wsNativeApi", () => {
 
     const orchestrationEvent = {
       sequence: 1,
-      eventId: EventId.makeUnsafe("event-1"),
+      eventId: EventId.make("event-1"),
       aggregateKind: "project",
-      aggregateId: ProjectId.makeUnsafe("project-1"),
+      aggregateId: ProjectId.make("project-1"),
       occurredAt: "2026-02-24T00:00:00.000Z",
       commandId: null,
       causationEventId: null,
@@ -266,7 +266,7 @@ describe("wsNativeApi", () => {
       metadata: {},
       type: "project.created",
       payload: {
-        projectId: ProjectId.makeUnsafe("project-1"),
+        projectId: ProjectId.make("project-1"),
         title: "Project",
         workspaceRoot: "/tmp/workspace",
         defaultModel: null,
@@ -307,8 +307,8 @@ describe("wsNativeApi", () => {
     const api = createWsNativeApi();
     const command = {
       type: "project.create",
-      commandId: CommandId.makeUnsafe("cmd-1"),
-      projectId: ProjectId.makeUnsafe("project-1"),
+      commandId: CommandId.make("cmd-1"),
+      projectId: ProjectId.make("project-1"),
       title: "Project",
       workspaceRoot: "/tmp/project",
       defaultModel: "gpt-5-codex",
@@ -365,7 +365,7 @@ describe("wsNativeApi", () => {
 
     const api = createWsNativeApi();
     await api.orchestration.getFullThreadDiff({
-      threadId: ThreadId.makeUnsafe("thread-1"),
+      threadId: ThreadId.make("thread-1"),
       toTurnCount: 1,
     });
 

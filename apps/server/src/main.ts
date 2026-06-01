@@ -6,7 +6,7 @@
  *
  * @module CliConfig
  */
-import { Config, Data, Effect, FileSystem, Layer, Option, Path, Schema, ServiceMap } from "effect";
+import { Config, Data, Effect, FileSystem, Layer, Option, Path, Schema, Context } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import { NetService } from "@t3tools/shared/Net";
 import {
@@ -19,6 +19,7 @@ import {
 } from "./config";
 import { fixPath, resolveBaseDir } from "./os-jank";
 import { Open } from "./open";
+import { OpenCodeRuntimeLive } from "./provider/opencodeRuntime";
 import * as SqlitePersistence from "./persistence/Layers/Sqlite";
 import { makeServerProviderLayer, makeServerRuntimeServicesLayer } from "./serverLayers";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery";
@@ -97,9 +98,7 @@ export interface CliConfigShape {
 /**
  * CliConfig - Service tag for startup CLI/runtime helpers.
  */
-export class CliConfig extends ServiceMap.Service<CliConfig, CliConfigShape>()(
-  "t3/main/CliConfig",
-) {
+export class CliConfig extends Context.Service<CliConfig, CliConfigShape>()("t3/main/CliConfig") {
   static readonly layer = Layer.effect(
     CliConfig,
     Effect.gen(function* () {
@@ -166,7 +165,7 @@ const ServerConfigLive = (input: CliInput) =>
     Effect.gen(function* () {
       const cliConfig = yield* CliConfig;
       const { findAvailablePort } = yield* NetService;
-      const env = yield* CliEnvConfig.asEffect().pipe(
+      const env = yield* CliEnvConfig.pipe(
         Effect.mapError(
           (cause) =>
             new StartupError({ message: "Failed to read environment configuration", cause }),
@@ -322,6 +321,7 @@ const LayerLive = (input: CliInput) =>
       ),
     ),
     Layer.provideMerge(ProviderEventLoggersLive),
+    Layer.provideMerge(OpenCodeRuntimeLive),
     Layer.provideMerge(ServerSettingsLive),
     Layer.provideMerge(ProviderHealthLive),
     Layer.provideMerge(SqlitePersistence.layerConfig),

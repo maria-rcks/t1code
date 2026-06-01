@@ -1,4 +1,4 @@
-import { ServiceMap } from "effect";
+import { Context } from "effect";
 import { Effect } from "effect";
 import { Layer } from "effect";
 import { Schema } from "effect";
@@ -72,7 +72,7 @@ export interface CodexAppServerClientShape {
   ) => Effect.Effect<void>;
 }
 
-export class CodexAppServerClient extends ServiceMap.Service<
+export class CodexAppServerClient extends Context.Service<
   CodexAppServerClient,
   CodexAppServerClientShape
 >()("effect-codex-app-server/client/CodexAppServerClient") {}

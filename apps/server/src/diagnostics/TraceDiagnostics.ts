@@ -7,7 +7,7 @@ import type {
   ServerTraceDiagnosticsSpanOccurrence,
   ServerTraceDiagnosticsSpanSummary,
 } from "@t3tools/contracts";
-import { FileSystem, ServiceMap } from "effect";
+import { FileSystem, Context } from "effect";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -46,7 +46,7 @@ export interface TraceDiagnosticsShape {
   readonly read: (options: TraceDiagnosticsOptions) => Effect.Effect<ServerTraceDiagnosticsResult>;
 }
 
-export class TraceDiagnostics extends ServiceMap.Service<TraceDiagnostics, TraceDiagnosticsShape>()(
+export class TraceDiagnostics extends Context.Service<TraceDiagnostics, TraceDiagnosticsShape>()(
   "t3/diagnostics/TraceDiagnostics",
 ) {}
 

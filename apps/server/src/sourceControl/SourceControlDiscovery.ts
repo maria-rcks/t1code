@@ -6,7 +6,7 @@ import type {
   VcsDiscoveryItem,
   VcsDriverKind,
 } from "@t3tools/contracts";
-import { Effect, Layer, Schema, ServiceMap } from "effect";
+import { Effect, Layer, Schema, Context } from "effect";
 
 import { runProcess, type ProcessRunResult } from "../processRunner";
 
@@ -47,7 +47,7 @@ export interface SourceControlDiscoveryShape {
   }) => Effect.Effect<SourceControlDiscoveryResult>;
 }
 
-export class SourceControlDiscovery extends ServiceMap.Service<
+export class SourceControlDiscovery extends Context.Service<
   SourceControlDiscovery,
   SourceControlDiscoveryShape
 >()("t3/sourceControl/SourceControlDiscovery") {}

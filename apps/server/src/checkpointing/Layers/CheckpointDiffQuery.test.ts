@@ -53,7 +53,7 @@ function makeSnapshot(input: {
         branch: null,
         worktreePath: input.worktreePath,
         latestTurn: {
-          turnId: TurnId.makeUnsafe("turn-1"),
+          turnId: TurnId.make("turn-1"),
           state: "completed",
           requestedAt: "2026-01-01T00:00:00.000Z",
           startedAt: "2026-01-01T00:00:00.000Z",
@@ -68,7 +68,7 @@ function makeSnapshot(input: {
         proposedPlans: [],
         checkpoints: [
           {
-            turnId: TurnId.makeUnsafe("turn-1"),
+            turnId: TurnId.make("turn-1"),
             checkpointTurnCount: input.checkpointTurnCount,
             checkpointRef: input.checkpointRef,
             status: "ready",
@@ -112,8 +112,8 @@ describe("CheckpointDiffQueryLive", () => {
   });
 
   it("computes diffs using canonical turn-0 checkpoint refs", async () => {
-    const projectId = ProjectId.makeUnsafe("project-1");
-    const threadId = ThreadId.makeUnsafe("thread-1");
+    const projectId = ProjectId.make("project-1");
+    const threadId = ThreadId.make("thread-1");
     const toCheckpointRef = checkpointRefForThreadTurn(threadId, 1);
     const hasCheckpointRefCalls: Array<CheckpointRef> = [];
     const diffCheckpointsCalls: Array<{
@@ -189,8 +189,8 @@ describe("CheckpointDiffQueryLive", () => {
   });
 
   it("prefers the active provider session cwd for worktree diffs", async () => {
-    const projectId = ProjectId.makeUnsafe("project-session");
-    const threadId = ThreadId.makeUnsafe("thread-session");
+    const projectId = ProjectId.make("project-session");
+    const threadId = ThreadId.make("thread-session");
     const toCheckpointRef = checkpointRefForThreadTurn(threadId, 1);
     const diffCheckpointsCalls: Array<{
       readonly fromCheckpointRef: CheckpointRef;
@@ -258,7 +258,7 @@ describe("CheckpointDiffQueryLive", () => {
   });
 
   it("fails when the thread is missing from the snapshot", async () => {
-    const threadId = ThreadId.makeUnsafe("thread-missing");
+    const threadId = ThreadId.make("thread-missing");
 
     const checkpointStore: CheckpointStoreShape = {
       isGitRepository: () => Effect.succeed(true),

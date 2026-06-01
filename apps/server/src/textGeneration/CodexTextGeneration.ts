@@ -70,7 +70,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     content: string,
   ): Effect.Effect<string, TextGenerationError, Scope.Scope> => {
     return Effect.gen(function* () {
-      const tempFileId = yield* Random.nextUUIDv4;
+      const tempFileId = yield* Effect.sync(() => crypto.randomUUID());
       return yield* fileSystem
         .makeTempFileScoped({
           prefix: `t3code-${prefix}-${process.pid}-${tempFileId}.tmp`,

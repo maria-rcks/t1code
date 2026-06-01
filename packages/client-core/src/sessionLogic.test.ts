@@ -51,7 +51,7 @@ describe("sessionLogic", () => {
       ]),
     ).toEqual([
       {
-        requestId: ApprovalRequestId.makeUnsafe("approval-1"),
+        requestId: ApprovalRequestId.make("approval-1"),
         requestKind: "command",
         createdAt: "2026-03-24T10:00:00.000Z",
         detail: "Run git status",
@@ -78,7 +78,7 @@ describe("sessionLogic", () => {
       ]),
     ).toEqual([
       {
-        requestId: ApprovalRequestId.makeUnsafe("approval-dynamic-tool-call"),
+        requestId: ApprovalRequestId.make("approval-dynamic-tool-call"),
         requestKind: "command",
         createdAt: "2026-03-24T10:00:00.000Z",
         detail: "Run dynamic tool",

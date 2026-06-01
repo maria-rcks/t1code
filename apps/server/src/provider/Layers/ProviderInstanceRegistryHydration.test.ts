@@ -5,7 +5,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
 } from "@t3tools/contracts";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer, Schema, Scope } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 
 import { ServerConfig } from "../../config";
@@ -16,6 +16,7 @@ import {
   ProviderInstanceRegistryHydrationLive,
 } from "./ProviderInstanceRegistryHydration";
 import { ProviderInstanceRegistry } from "../Services/ProviderInstanceRegistry";
+import { OpenCodeRuntimeLive } from "../opencodeRuntime";
 
 const decodeProviderInstanceId = Schema.decodeUnknownSync(ProviderInstanceId);
 const decodeProviderDriverKind = Schema.decodeUnknownSync(ProviderDriverKind);
@@ -36,6 +37,8 @@ const TestLayer = (settingsOverrides: Parameters<typeof ServerSettingsService.la
     Layer.provide(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
     Layer.provide(FetchHttpClient.layer),
     Layer.provide(NodeServices.layer),
+    Layer.provide(OpenCodeRuntimeLive),
+    Layer.provide(NodeServices.layer),
   );
 
 describe("ProviderInstanceRegistryHydration", () => {
@@ -47,31 +50,37 @@ describe("ProviderInstanceRegistryHydration", () => {
     assert.equal(map[opencodeInstanceId]?.driver, "opencode");
   });
 
-  it.effect("hydrates registered legacy providers and shadows missing drivers", () =>
-    Effect.gen(function* () {
-      const registry = yield* ProviderInstanceRegistry;
-      const instances = yield* registry.listInstances;
-      assert.deepEqual(
-        instances.map((instance) => instance.instanceId),
-        ["codex", "claudeAgent"],
-      );
-      const unavailable = yield* registry.listUnavailable;
-      assert.deepEqual(
-        unavailable.map((provider) => provider.instanceId),
-        ["cursor", "opencode"],
-      );
-      assert.deepEqual(
-        unavailable.map((provider) => provider.driver),
-        ["cursor", "opencode"],
-      );
-      assert.ok(
-        unavailable.every(
-          (provider) =>
-            provider.availability === "unavailable" &&
-            provider.unavailableReason?.includes("is not registered in this build"),
-        ),
-      );
-    }).pipe(Effect.scoped, Effect.provide(TestLayer({}))),
+  it.effect(
+    "hydrates registered legacy providers and shadows missing drivers",
+    () =>
+      Effect.gen(function* () {
+        const registry = yield* ProviderInstanceRegistry;
+        const instances = yield* registry.listInstances;
+        assert.deepEqual(
+          instances.map((instance) => instance.instanceId),
+          ["codex", "claudeAgent"],
+        );
+        const unavailable = yield* registry.listUnavailable;
+        assert.deepEqual(
+          unavailable.map((provider) => provider.instanceId),
+          ["cursor", "opencode"],
+        );
+        assert.deepEqual(
+          unavailable.map((provider) => provider.driver),
+          ["cursor", "opencode"],
+        );
+        assert.ok(
+          unavailable.every(
+            (provider) =>
+              provider.availability === "unavailable" &&
+              provider.unavailableReason?.includes("is not registered in this build"),
+          ),
+        );
+      }).pipe(Effect.scoped, Effect.provide(TestLayer({}))) as unknown as Effect.Effect<
+        void,
+        never,
+        Scope.Scope
+      >,
   );
 
   it("derives explicit entries without overwriting them", () => {

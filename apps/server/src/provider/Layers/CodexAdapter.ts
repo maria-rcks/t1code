@@ -61,7 +61,7 @@ const isCodexSessionRuntimeThreadIdMissingError = Schema.is(
 );
 const isCodexResumeCursorSchema = Schema.is(CodexResumeCursorSchema);
 
-const PROVIDER = ProviderDriverKind.makeUnsafe("codex");
+const PROVIDER = ProviderDriverKind.make("codex");
 const decodeCodexSettings = Schema.decodeUnknownSync(CodexSettings);
 const decodeProviderInstanceId = Schema.decodeUnknownSync(ProviderInstanceId);
 
@@ -398,11 +398,11 @@ function contentStreamKindFromMethod(
 }
 
 function asRuntimeItemId(itemId: ProviderEvent["itemId"] & string): RuntimeItemId {
-  return RuntimeItemId.makeUnsafe(itemId);
+  return RuntimeItemId.make(itemId);
 }
 
 function asRuntimeRequestId(requestId: string): RuntimeRequestId {
-  return RuntimeRequestId.makeUnsafe(requestId);
+  return RuntimeRequestId.make(requestId);
 }
 
 function eventRawSource(event: ProviderEvent): NonNullable<ProviderRuntimeEvent["raw"]>["source"] {

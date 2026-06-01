@@ -15,7 +15,7 @@ async function mountPicker(props?: {
   thinkingEnabled?: boolean | null;
   fastModeEnabled?: boolean;
 }) {
-  const threadId = ThreadId.makeUnsafe("thread-claude-traits");
+  const threadId = ThreadId.make("thread-claude-traits");
   const draftsByThreadId = {} as ReturnType<
     typeof useComposerDraftStore.getState
   >["draftsByThreadId"];

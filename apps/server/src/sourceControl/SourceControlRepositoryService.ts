@@ -10,7 +10,7 @@ import {
   type SourceControlRepositoryInfo,
   type SourceControlRepositoryLookupInput,
 } from "@t3tools/contracts";
-import { Effect, FileSystem, Layer, Path, Schema, ServiceMap } from "effect";
+import { Effect, FileSystem, Layer, Path, Schema, Context } from "effect";
 
 import { ServerConfig } from "../config";
 import { AzureDevOpsCli } from "../git/Services/AzureDevOpsCli";
@@ -33,7 +33,7 @@ export interface SourceControlRepositoryServiceShape {
   ) => Effect.Effect<SourceControlPublishRepositoryResult, SourceControlRepositoryError>;
 }
 
-export class SourceControlRepositoryService extends ServiceMap.Service<
+export class SourceControlRepositoryService extends Context.Service<
   SourceControlRepositoryService,
   SourceControlRepositoryServiceShape
 >()("t3/sourceControl/SourceControlRepositoryService") {}

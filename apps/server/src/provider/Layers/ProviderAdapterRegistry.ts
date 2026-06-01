@@ -29,7 +29,9 @@ const makeLegacyProviderAdapterRegistry = (options?: ProviderAdapterRegistryLive
       options?.adapters !== undefined
         ? options.adapters
         : [yield* CodexAdapter, yield* ClaudeAdapter];
-    const byProvider = new Map(adapters.map((adapter) => [adapter.provider, adapter]));
+    const byProvider = new Map(
+      adapters.map((adapter) => [adapter.provider as ProviderKind, adapter] as const),
+    );
 
     const getByProvider: ProviderAdapterRegistryShape["getByProvider"] = (provider) => {
       const adapter = byProvider.get(provider);

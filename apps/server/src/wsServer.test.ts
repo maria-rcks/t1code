@@ -11,6 +11,7 @@ import { createServer } from "./wsServer";
 import WebSocket from "ws";
 import { deriveServerPaths, ServerConfig, type ServerConfigShape } from "./config";
 import { makeServerProviderLayer, makeServerRuntimeServicesLayer } from "./serverLayers";
+import { OpenCodeRuntimeLive } from "./provider/opencodeRuntime";
 
 import {
   DEFAULT_TERMINAL_ID,
@@ -87,10 +88,10 @@ import { ProviderEventLoggersLive } from "./provider/Layers/ProviderEventLoggers
 import { ProviderInstanceRegistryHydrationLive } from "./provider/Layers/ProviderInstanceRegistryHydration.ts";
 import { ServerSettingsLive } from "./serverSettings.ts";
 
-const asEventId = (value: string): EventId => EventId.makeUnsafe(value);
-const asProviderItemId = (value: string): ProviderItemId => ProviderItemId.makeUnsafe(value);
-const asThreadId = (value: string): ThreadId => ThreadId.makeUnsafe(value);
-const asTurnId = (value: string): TurnId => TurnId.makeUnsafe(value);
+const asEventId = (value: string): EventId => EventId.make(value);
+const asProviderItemId = (value: string): ProviderItemId => ProviderItemId.make(value);
+const asThreadId = (value: string): ThreadId => ThreadId.make(value);
+const asTurnId = (value: string): TurnId => TurnId.make(value);
 
 const defaultOpenService: OpenShape = {
   openBrowser: () => Effect.void,
@@ -707,6 +708,7 @@ describe("WebSocket Server", () => {
       Layer.provideMerge(sourceControlDiscoveryLayer),
       Layer.provideMerge(sourceControlRepositoryServiceLayer),
       Layer.provideMerge(ProviderEventLoggersLive),
+      Layer.provideMerge(OpenCodeRuntimeLive),
       Layer.provideMerge(ServerSettingsLive),
       Layer.provideMerge(openLayer),
       Layer.provideMerge(serverConfigLayer),
@@ -1071,8 +1073,8 @@ describe("WebSocket Server", () => {
   it("responds to server.refreshProviders", async () => {
     let refreshCount = 0;
     const initialSnapshot: ServerProvider = {
-      instanceId: ProviderInstanceId.makeUnsafe("codex"),
-      driver: ProviderDriverKind.makeUnsafe("codex"),
+      instanceId: ProviderInstanceId.make("codex"),
+      driver: ProviderDriverKind.make("codex"),
       enabled: true,
       installed: true,
       version: "1.0.0",
@@ -1089,10 +1091,10 @@ describe("WebSocket Server", () => {
       checkedAt: "2026-01-01T00:01:00.000Z",
     };
     const providerInstance = {
-      instanceId: ProviderInstanceId.makeUnsafe("codex"),
-      driverKind: ProviderDriverKind.makeUnsafe("codex"),
+      instanceId: ProviderInstanceId.make("codex"),
+      driverKind: ProviderDriverKind.make("codex"),
       continuationIdentity: {
-        driverKind: ProviderDriverKind.makeUnsafe("codex"),
+        driverKind: ProviderDriverKind.make("codex"),
         continuationKey: "codex:instance:codex",
       },
       displayName: undefined,
@@ -1163,8 +1165,8 @@ describe("WebSocket Server", () => {
 
   it("responds to server.updateProvider", async () => {
     const updatedProvider: ServerProvider = {
-      instanceId: ProviderInstanceId.makeUnsafe("codex"),
-      driver: ProviderDriverKind.makeUnsafe("codex"),
+      instanceId: ProviderInstanceId.make("codex"),
+      driver: ProviderDriverKind.make("codex"),
       enabled: true,
       installed: true,
       version: "1.0.1",
@@ -1184,10 +1186,10 @@ describe("WebSocket Server", () => {
       },
     };
     const providerInstance = {
-      instanceId: ProviderInstanceId.makeUnsafe("codex"),
-      driverKind: ProviderDriverKind.makeUnsafe("codex"),
+      instanceId: ProviderInstanceId.make("codex"),
+      driverKind: ProviderDriverKind.make("codex"),
       continuationIdentity: {
-        driverKind: ProviderDriverKind.makeUnsafe("codex"),
+        driverKind: ProviderDriverKind.make("codex"),
         continuationKey: "codex:instance:codex",
       },
       displayName: undefined,
@@ -1261,8 +1263,8 @@ describe("WebSocket Server", () => {
     });
     expect(response.error).toBeUndefined();
     expect(updateProvider).toHaveBeenCalledWith({
-      provider: ProviderDriverKind.makeUnsafe("codex"),
-      instanceId: ProviderInstanceId.makeUnsafe("codex"),
+      provider: ProviderDriverKind.make("codex"),
+      instanceId: ProviderInstanceId.make("codex"),
     });
     expect((response.result as { providers: ReadonlyArray<ServerProvider> }).providers).toEqual([
       expect.objectContaining({
@@ -1629,7 +1631,7 @@ describe("WebSocket Server", () => {
 
   it("responds to server settings RPC methods with redacted provider secrets", async () => {
     const baseDir = makeTempDir("t3code-state-server-settings-rpc-");
-    const instanceId = ProviderInstanceId.makeUnsafe("codex_secret");
+    const instanceId = ProviderInstanceId.make("codex_secret");
 
     server = await createTestServer({ cwd: "/my/workspace", baseDir });
     const addr = server.address();
@@ -1659,7 +1661,7 @@ describe("WebSocket Server", () => {
       },
       providerInstances: {
         [instanceId]: {
-          driver: ProviderDriverKind.makeUnsafe("codex"),
+          driver: ProviderDriverKind.make("codex"),
           displayName: "Secret Codex",
           environment: [
             {
