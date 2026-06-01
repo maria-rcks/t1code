@@ -7,6 +7,8 @@ export type SidebarContextMenuActionId =
   | "open-folder"
   | "copy-path"
   | "copy-thread-id"
+  | "archive"
+  | "unarchive"
   | "delete";
 
 export type ThreadSelectionState = {
@@ -28,7 +30,9 @@ export type ProjectRemovalConfirmStep = {
 
 type ThreadReadModel = OrchestrationReadModel["threads"][number];
 
-export function buildThreadContextMenuItems(): readonly SidebarContextMenuItem[] {
+export function buildThreadContextMenuItems(input: {
+  archived: boolean;
+}): readonly SidebarContextMenuItem[] {
   return [
     { id: "rename", label: "Rename thread" },
     { id: "mark-unread", label: "Mark unread" },
@@ -36,6 +40,7 @@ export function buildThreadContextMenuItems(): readonly SidebarContextMenuItem[]
     { id: "open-folder", label: "Open Folder" },
     { id: "copy-path", label: "Copy Path" },
     { id: "copy-thread-id", label: "Copy Thread ID" },
+    input.archived ? { id: "unarchive", label: "Unarchive" } : { id: "archive", label: "Archive" },
     { id: "delete", label: "Delete", destructive: true },
   ];
 }
@@ -79,6 +84,7 @@ export function buildProjectRemovalConfirmSteps(
 export function buildMultiSelectContextMenuItems(count: number): readonly SidebarContextMenuItem[] {
   return [
     { id: "mark-unread", label: `Mark unread (${count})` },
+    { id: "archive", label: `Archive (${count})` },
     { id: "delete", label: `Delete (${count})`, destructive: true },
   ];
 }

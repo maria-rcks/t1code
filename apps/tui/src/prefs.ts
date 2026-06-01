@@ -51,7 +51,7 @@ export interface TuiPrefs {
   readonly threadLastVisitedAtById?: Readonly<Record<string, string>>;
   readonly draftThreadsByProjectId?: Readonly<Record<string, PersistedDraftThreadState>>;
   readonly composerDraftsByThreadId?: Readonly<Record<string, PersistedComposerDraft>>;
-  readonly mainView?: "thread" | "settings" | "keybindings";
+  readonly mainView?: "thread" | "settings" | "keybindings" | "archive";
   readonly draftProvider?: ProviderKind;
   readonly draftProviderInstanceId?: ProviderInstanceId;
   readonly draftModel?: string;

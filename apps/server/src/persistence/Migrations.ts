@@ -29,6 +29,7 @@ import Migration0014 from "./Migrations/014_ProjectionThreadProposedPlanImplemen
 import Migration0015 from "./Migrations/015_ProjectionTurnsSourceProposedPlan.ts";
 import Migration0016 from "./Migrations/016_ProviderSessionRuntimeInstanceId.ts";
 import Migration0017 from "./Migrations/017_ProjectionThreadSessionInstanceId.ts";
+import Migration0018 from "./Migrations/018_ProjectionThreadsArchivedAt.ts";
 import { Effect } from "effect";
 
 /**
@@ -59,6 +60,7 @@ const loader = Migrator.fromRecord({
   "15_ProjectionTurnsSourceProposedPlan": Migration0015,
   "16_ProviderSessionRuntimeInstanceId": Migration0016,
   "17_ProjectionThreadSessionInstanceId": Migration0017,
+  "18_ProjectionThreadsArchivedAt": Migration0018,
 });
 
 /**
