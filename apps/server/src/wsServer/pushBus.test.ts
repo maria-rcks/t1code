@@ -2,9 +2,26 @@ import type { WebSocket } from "ws";
 import { it } from "@effect/vitest";
 import { describe, expect } from "vitest";
 import { Effect, Ref } from "effect";
-import { WS_CHANNELS } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  type ExecutionEnvironmentDescriptor,
+  WS_CHANNELS,
+} from "@t3tools/contracts";
 
 import { makeServerPushBus } from "./pushBus";
+
+const testEnvironment: ExecutionEnvironmentDescriptor = {
+  environmentId: EnvironmentId.make("environment-push-bus-test"),
+  label: "Push bus test environment",
+  platform: {
+    os: "linux",
+    arch: "x64",
+  },
+  serverVersion: "0.0.0-test",
+  capabilities: {
+    repositoryIdentity: false,
+  },
+};
 
 class MockWebSocket {
   static readonly OPEN = 1;
@@ -61,6 +78,7 @@ describe("makeServerPushBus", () => {
           client as unknown as WebSocket,
           WS_CHANNELS.serverWelcome,
           {
+            environment: testEnvironment,
             cwd: "/tmp/project",
             projectName: "project",
           },
@@ -87,6 +105,7 @@ describe("makeServerPushBus", () => {
           sequence: 2,
           channel: WS_CHANNELS.serverWelcome,
           data: {
+            environment: testEnvironment,
             cwd: "/tmp/project",
             projectName: "project",
           },

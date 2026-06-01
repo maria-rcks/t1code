@@ -1,7 +1,9 @@
 import {
   CommandId,
   type ContextMenuItem,
+  EnvironmentId,
   EventId,
+  type ExecutionEnvironmentDescriptor,
   ORCHESTRATION_WS_CHANNELS,
   ORCHESTRATION_WS_METHODS,
   type OrchestrationEvent,
@@ -102,6 +104,19 @@ const defaultProviders: ReadonlyArray<ServerProviderStatus> = [
   },
 ];
 
+const testEnvironment: ExecutionEnvironmentDescriptor = {
+  environmentId: EnvironmentId.make("environment-native-api-test"),
+  label: "Native API test environment",
+  platform: {
+    os: "linux",
+    arch: "x64",
+  },
+  serverVersion: "0.0.0-test",
+  capabilities: {
+    repositoryIdentity: false,
+  },
+};
+
 beforeEach(() => {
   vi.resetModules();
   requestMock.mockReset();
@@ -125,7 +140,11 @@ describe("wsNativeApi", () => {
     const listener = vi.fn();
     onServerWelcome(listener);
 
-    const payload = { cwd: "/tmp/workspace", projectName: "t3-code" };
+    const payload = {
+      environment: testEnvironment,
+      cwd: "/tmp/workspace",
+      projectName: "t3-code",
+    };
     emitPush(WS_CHANNELS.serverWelcome, payload);
 
     expect(listener).toHaveBeenCalledTimes(1);
@@ -146,6 +165,7 @@ describe("wsNativeApi", () => {
     onServerWelcome(listener);
 
     emitPush(WS_CHANNELS.serverWelcome, {
+      environment: testEnvironment,
       cwd: "/tmp/workspace",
       projectName: "t3-code",
       bootstrapProjectId: ProjectId.make("project-1"),
@@ -170,8 +190,16 @@ describe("wsNativeApi", () => {
     const listener = vi.fn();
     onServerWelcome(listener);
 
-    emitPush(WS_CHANNELS.serverWelcome, { cwd: "/tmp/one", projectName: "one" });
-    emitPush(WS_CHANNELS.serverWelcome, { cwd: "/tmp/workspace", projectName: "t3-code" });
+    emitPush(WS_CHANNELS.serverWelcome, {
+      environment: testEnvironment,
+      cwd: "/tmp/one",
+      projectName: "one",
+    });
+    emitPush(WS_CHANNELS.serverWelcome, {
+      environment: testEnvironment,
+      cwd: "/tmp/workspace",
+      projectName: "t3-code",
+    });
 
     expect(listener).toHaveBeenCalledTimes(2);
     expect(listener).toHaveBeenLastCalledWith(

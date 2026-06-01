@@ -1,7 +1,9 @@
 import "../index.css";
 
 import {
+  EnvironmentId,
   ORCHESTRATION_WS_METHODS,
+  type ExecutionEnvironmentDescriptor,
   type MessageId,
   type OrchestrationReadModel,
   type ProjectId,
@@ -24,6 +26,18 @@ import { useStore } from "../store";
 const THREAD_ID = "thread-kb-toast-test" as ThreadId;
 const PROJECT_ID = "project-1" as ProjectId;
 const NOW_ISO = "2026-03-04T12:00:00.000Z";
+const TEST_ENVIRONMENT: ExecutionEnvironmentDescriptor = {
+  environmentId: EnvironmentId.make("environment-browser-test"),
+  label: "Browser test environment",
+  platform: {
+    os: "linux" as const,
+    arch: "x64" as const,
+  },
+  serverVersion: "0.0.0-test",
+  capabilities: {
+    repositoryIdentity: false,
+  },
+};
 
 interface TestFixture {
   snapshot: OrchestrationReadModel;
@@ -39,6 +53,7 @@ const wsLink = ws.link(/ws(s)?:\/\/.*/);
 
 function createBaseServerConfig(): ServerConfig {
   return {
+    environment: TEST_ENVIRONMENT,
     cwd: "/repo/project",
     keybindingsConfigPath: "/repo/project/.t3code-keybindings.json",
     keybindings: [],
@@ -126,6 +141,7 @@ function buildFixture(): TestFixture {
     snapshot: createMinimalSnapshot(),
     serverConfig: createBaseServerConfig(),
     welcome: {
+      environment: TEST_ENVIRONMENT,
       cwd: "/repo/project",
       projectName: "Project",
       bootstrapProjectId: PROJECT_ID,
