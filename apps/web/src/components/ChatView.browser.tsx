@@ -2,7 +2,9 @@
 import "../index.css";
 
 import {
+  EnvironmentId,
   ORCHESTRATION_WS_METHODS,
+  type ExecutionEnvironmentDescriptor,
   type MessageId,
   type OrchestrationReadModel,
   type ProjectId,
@@ -37,6 +39,18 @@ const PROJECT_ID = "project-1" as ProjectId;
 const NOW_ISO = "2026-03-04T12:00:00.000Z";
 const BASE_TIME_MS = Date.parse(NOW_ISO);
 const ATTACHMENT_SVG = "<svg xmlns='http://www.w3.org/2000/svg' width='120' height='300'></svg>";
+const TEST_ENVIRONMENT: ExecutionEnvironmentDescriptor = {
+  environmentId: EnvironmentId.make("environment-browser-test"),
+  label: "Browser test environment",
+  platform: {
+    os: "linux" as const,
+    arch: "x64" as const,
+  },
+  serverVersion: "0.0.0-test",
+  capabilities: {
+    repositoryIdentity: false,
+  },
+};
 
 interface WsRequestEnvelope {
   id: string;
@@ -103,6 +117,7 @@ function isoAt(offsetSeconds: number): string {
 
 function createBaseServerConfig(): ServerConfig {
   return {
+    environment: TEST_ENVIRONMENT,
     cwd: "/repo/project",
     keybindingsConfigPath: "/repo/project/.t3code-keybindings.json",
     keybindings: [],
@@ -274,6 +289,7 @@ function buildFixture(snapshot: OrchestrationReadModel): TestFixture {
     snapshot,
     serverConfig: createBaseServerConfig(),
     welcome: {
+      environment: TEST_ENVIRONMENT,
       cwd: "/repo/project",
       projectName: "Project",
       bootstrapProjectId: PROJECT_ID,

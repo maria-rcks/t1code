@@ -87,6 +87,7 @@ import { expandHomePath } from "./os-jank.ts";
 import { makeServerPushBus } from "./wsServer/pushBus.ts";
 import { makeServerReadiness } from "./wsServer/readiness.ts";
 import { decodeJsonResult, formatSchemaError } from "@t3tools/shared/schemaJson";
+import { buildServerEnvironmentDescriptor } from "./environment/ServerEnvironmentDescriptor.ts";
 import { buildCoreAdvertisedEndpoints } from "./remoteAccess/AdvertisedEndpoints.ts";
 
 /**
@@ -271,6 +272,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     autoBootstrapProjectFromCwd,
   } = serverConfig;
   const availableEditors = resolveAvailableEditors();
+  const environment = yield* buildServerEnvironmentDescriptor(serverConfig).pipe(
+    Effect.mapError(
+      (cause) => new ServerLifecycleError({ operation: "serverEnvironmentDescriptor", cause }),
+    ),
+  );
 
   const gitManager = yield* GitManager;
   const terminalManager = yield* TerminalManager;
@@ -987,6 +993,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         const otlpTracesUrl = settings.observability.otlpTracesUrl.trim() || undefined;
         const otlpMetricsUrl = settings.observability.otlpMetricsUrl.trim() || undefined;
         return {
+          environment,
           cwd,
           keybindingsConfigPath,
           keybindings: keybindingsConfig.keybindings,
@@ -1150,6 +1157,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     const projectName = segments[segments.length - 1] ?? "project";
 
     const welcomeData = {
+      environment,
       cwd,
       projectName,
       ...(welcomeBootstrapProjectId ? { bootstrapProjectId: welcomeBootstrapProjectId } : {}),

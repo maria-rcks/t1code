@@ -51,6 +51,7 @@ const serverConfigLayer = Layer.succeed(ServerConfig, {
   providerEventLogPath: "/tmp/t3code-test/logs/provider/events.ndjson",
   terminalLogsDir: "/tmp/t3code-test/logs/terminal",
   anonymousIdPath: "/tmp/t3code-test/anonymous-id",
+  environmentIdPath: "/tmp/t3code-test/environment-id",
   secretsDir: "/tmp/t3code-test/secrets",
   staticDir: undefined,
   devUrl: undefined,

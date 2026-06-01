@@ -1108,6 +1108,16 @@ function formatDiagnosticsDescription(input: {
   return `${mode}.`;
 }
 
+function formatEnvironmentPlatform(environment: ServerConfig["environment"]): string {
+  return `${environment.platform.os}/${environment.platform.arch}`;
+}
+
+function formatEnvironmentCapabilities(environment: ServerConfig["environment"]): string {
+  return environment.capabilities.repositoryIdentity
+    ? "Repository identity supported"
+    : "Repository identity unavailable";
+}
+
 function isProviderUpdateActive(provider: ServerProvider | null | undefined): boolean {
   const status = provider?.updateState?.status;
   return status === "queued" || status === "running";
@@ -13409,6 +13419,15 @@ export function App({
                         <>
                           <SettingsSection title="Local backend access">
                             <SettingsRow
+                              title="Local environment"
+                              description="Stable environment identity advertised by this backend."
+                              status={
+                                serverConfig?.environment
+                                  ? `${serverConfig.environment.label} · ${formatEnvironmentPlatform(serverConfig.environment)} · ${formatEnvironmentCapabilities(serverConfig.environment)}`
+                                  : "Environment identity is still resolving."
+                              }
+                            />
+                            <SettingsRow
                               title="Backend endpoint"
                               description="Current HTTP/WebSocket endpoint for this TUI session."
                               status={
@@ -13527,6 +13546,15 @@ export function App({
                             title="Version"
                             description="Current application version."
                             control={<text content={APP_VERSION} style={{ fg: PALETTE.muted }} />}
+                          />
+                          <SettingsRow
+                            title="Environment"
+                            description="Current local execution environment."
+                            status={
+                              serverConfig?.environment
+                                ? `${serverConfig.environment.environmentId} · ${serverConfig.environment.label} · ${formatEnvironmentPlatform(serverConfig.environment)}`
+                                : "Environment identity is still resolving."
+                            }
                           />
                         </SettingsSection>
                       ) : null}

@@ -1,5 +1,6 @@
 import { Schema, Struct } from "effect";
 import { NonNegativeInt, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas";
+import { ExecutionEnvironmentDescriptor } from "./environment";
 
 import {
   ClientOrchestrationCommand,
@@ -204,6 +205,7 @@ export const WsPushSequence = NonNegativeInt;
 export type WsPushSequence = typeof WsPushSequence.Type;
 
 export const WsWelcomePayload = Schema.Struct({
+  environment: ExecutionEnvironmentDescriptor,
   cwd: TrimmedNonEmptyString,
   projectName: TrimmedNonEmptyString,
   bootstrapProjectId: Schema.optional(ProjectId),

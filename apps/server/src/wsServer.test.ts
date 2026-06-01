@@ -763,6 +763,18 @@ describe("WebSocket Server", () => {
 
     expect(welcome.type).toBe("push");
     expect(welcome.data).toEqual({
+      environment: expect.objectContaining({
+        environmentId: expect.any(String),
+        label: expect.any(String),
+        platform: {
+          os: expect.stringMatching(/^(darwin|linux|windows|unknown)$/),
+          arch: expect.stringMatching(/^(arm64|x64|other)$/),
+        },
+        serverVersion: expect.any(String),
+        capabilities: {
+          repositoryIdentity: false,
+        },
+      }),
       cwd: "/test/project",
       projectName: "project",
     });
@@ -1043,6 +1055,18 @@ describe("WebSocket Server", () => {
     const response = await sendRequest(ws, WS_METHODS.serverGetConfig);
     expect(response.error).toBeUndefined();
     expect(response.result).toEqual({
+      environment: expect.objectContaining({
+        environmentId: expect.any(String),
+        label: expect.any(String),
+        platform: {
+          os: expect.stringMatching(/^(darwin|linux|windows|unknown)$/),
+          arch: expect.stringMatching(/^(arm64|x64|other)$/),
+        },
+        serverVersion: expect.any(String),
+        capabilities: {
+          repositoryIdentity: false,
+        },
+      }),
       cwd: "/my/workspace",
       keybindingsConfigPath: keybindingsPath,
       keybindings: DEFAULT_RESOLVED_KEYBINDINGS,

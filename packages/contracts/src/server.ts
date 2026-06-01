@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect";
 import { IsoDateTime, NonNegativeInt, PositiveInt, TrimmedNonEmptyString } from "./baseSchemas";
 import { KeybindingRule, ResolvedKeybindingsConfig } from "./keybindings";
 import { EditorId } from "./editor";
+import { ExecutionEnvironmentDescriptor } from "./environment";
 import { ProviderKind } from "./orchestration";
 import { ModelCapabilities } from "./model";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance";
@@ -181,6 +182,7 @@ export const ServerObservability = Schema.Struct({
 export type ServerObservability = typeof ServerObservability.Type;
 
 export const ServerConfig = Schema.Struct({
+  environment: ExecutionEnvironmentDescriptor,
   cwd: TrimmedNonEmptyString,
   keybindingsConfigPath: TrimmedNonEmptyString,
   keybindings: ResolvedKeybindingsConfig,
