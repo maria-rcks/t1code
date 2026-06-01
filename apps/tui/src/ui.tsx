@@ -61,8 +61,11 @@ import {
   type SourceControlCloneRepositoryInput,
   type SourceControlCloneProtocol,
   type SourceControlDiscoveryResult,
+  type SourceControlProviderAuth,
+  type SourceControlProviderDiscoveryItem,
   type SourceControlProviderKind,
   type SourceControlRepositoryVisibility,
+  type VcsDiscoveryItem,
 } from "@t3tools/contracts";
 import {
   DEFAULT_APP_SETTINGS,
@@ -305,6 +308,7 @@ type SettingsSelectKind =
   | "theme-preset"
   | "timestamp-format"
   | "thread-env"
+  | "git-fetch-interval"
   | "git-model-provider"
   | "git-model"
   | "model-preferences-provider"
@@ -335,7 +339,7 @@ const EMPTY_PROVIDER_ENVIRONMENT_DRAFT: ProviderEnvironmentDraft = {
   sensitive: true,
 };
 const PROVIDER_ENVIRONMENT_VARIABLE_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-const GIT_FETCH_INTERVAL_STEP_SECONDS = 5;
+const GIT_FETCH_INTERVAL_OPTIONS_SECONDS = [0, 30, 60, 120, 300, 600] as const;
 type T1Api = ReturnType<typeof createTransportNativeApi>["api"];
 type ThreadReadModel = OrchestrationReadModel["threads"][number];
 type ProjectReadModel = OrchestrationReadModel["projects"][number];
@@ -1012,6 +1016,44 @@ function formatCpuPercent(value: number): string {
   if (!Number.isFinite(value)) return "0%";
   const precision = value >= 10 ? 0 : 1;
   return `${value.toFixed(precision)}%`;
+}
+
+function authStatusLabel(auth: SourceControlProviderAuth): string {
+  switch (auth.status) {
+    case "authenticated":
+      return "Authenticated";
+    case "unauthenticated":
+      return "Sign-in needed";
+    case "unknown":
+      return "Unknown auth";
+  }
+}
+
+function sourceControlStatusColor(input: {
+  readonly status: "available" | "missing";
+  readonly implemented?: boolean;
+  readonly auth?: SourceControlProviderAuth;
+}): TuiColor {
+  if (input.implemented === false) return PALETTE.subtle;
+  if (input.status !== "available") return PALETTE.warning;
+  if (input.auth && input.auth.status !== "authenticated") return PALETTE.warning;
+  return PALETTE.success;
+}
+
+function vcsSummary(item: VcsDiscoveryItem): string {
+  if (!item.implemented) return `Support for ${item.label} is coming soon.`;
+  if (item.status !== "available") return `Not available on this server: ${item.installHint}`;
+  return "Available";
+}
+
+function sourceControlProviderSummary(item: SourceControlProviderDiscoveryItem): string {
+  if (item.status !== "available") return `Not available on this server: ${item.installHint}`;
+  if (item.auth.status === "authenticated") {
+    return item.auth.account
+      ? `${item.auth.account}${item.auth.host ? ` on ${item.auth.host}` : ""}`
+      : "Authenticated";
+  }
+  return item.auth.detail ?? item.detail ?? item.installHint;
 }
 
 function formatDurationMs(value: number): string {
@@ -4903,6 +4945,21 @@ export function App({
   const defaultAutomaticGitFetchIntervalSeconds = durationToSeconds(
     DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL,
   );
+  const updateAutomaticGitFetchInterval = useCallback(
+    (seconds: number) => {
+      const automaticGitFetchInterval = Duration.seconds(normalizeFetchIntervalSeconds(seconds));
+      setServerSettings((current) =>
+        current
+          ? {
+              ...current,
+              automaticGitFetchInterval,
+            }
+          : current,
+      );
+      updateServerSettings({ automaticGitFetchInterval });
+    },
+    [updateServerSettings],
+  );
   const sidebarThreadPreviewCount =
     appSettings.sidebarThreadPreviewCount ?? DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT;
   const composerEnvMenuItems: ComposerEnvMenuItem[] = ENV_MODE_OPTIONS.map((option) => ({
@@ -5098,6 +5155,16 @@ export function App({
             setOverlayMenu(null);
           },
         }));
+      case "git-fetch-interval":
+        return GIT_FETCH_INTERVAL_OPTIONS_SECONDS.map((option) => ({
+          id: String(option),
+          label: option === 0 ? "Manual only" : `${option}s`,
+          selected: automaticGitFetchIntervalSeconds === option,
+          onSelect: () => {
+            updateAutomaticGitFetchInterval(option);
+            setOverlayMenu(null);
+          },
+        }));
       case "git-model-provider":
         return modelMenuEntries.map((entry) => ({
           id: entry.instanceId,
@@ -5155,6 +5222,7 @@ export function App({
   }, [
     appSettings.theme,
     appSettings.timestampFormat,
+    automaticGitFetchIntervalSeconds,
     currentGitTextGenerationInstanceId,
     currentGitTextGenerationModel,
     customModelsByProvider,
@@ -5168,6 +5236,7 @@ export function App({
     tuiThemeId,
     updateAppSettings,
     updateDefaultThreadEnvModeSetting,
+    updateAutomaticGitFetchInterval,
     updateGitTextGenerationModel,
   ]);
   const sidebarSortItems = useMemo<SidebarSortMenuItem[]>(
@@ -7499,23 +7568,6 @@ export function App({
         Math.max(MIN_SIDEBAR_THREAD_PREVIEW_COUNT, sidebarThreadPreviewCount + delta),
       ),
     });
-  }
-
-  function updateAutomaticGitFetchInterval(seconds: number) {
-    const automaticGitFetchInterval = Duration.seconds(normalizeFetchIntervalSeconds(seconds));
-    setServerSettings((current) =>
-      current
-        ? {
-            ...current,
-            automaticGitFetchInterval,
-          }
-        : current,
-    );
-    updateServerSettings({ automaticGitFetchInterval });
-  }
-
-  function updateAutomaticGitFetchIntervalBy(deltaSeconds: number) {
-    updateAutomaticGitFetchInterval(automaticGitFetchIntervalSeconds + deltaSeconds);
   }
 
   function updateProviderModelPreferences(
@@ -10256,13 +10308,15 @@ export function App({
           ? "Time format"
           : settingsSelectKind === "thread-env"
             ? "New threads"
-            : settingsSelectKind === "custom-model-provider"
-              ? "Custom model provider"
-              : settingsSelectKind === "git-model-provider"
-                ? "Text generation provider"
-                : settingsSelectKind === "model-preferences-provider"
-                  ? "Model preferences"
-                  : "Text generation model";
+            : settingsSelectKind === "git-fetch-interval"
+              ? "Fetch interval"
+              : settingsSelectKind === "custom-model-provider"
+                ? "Custom model provider"
+                : settingsSelectKind === "git-model-provider"
+                  ? "Text generation provider"
+                  : settingsSelectKind === "model-preferences-provider"
+                    ? "Model preferences"
+                    : "Text generation model";
   const settingsSelectPopupWidth = Math.max(
     14,
     settingsSelectItems.reduce(
@@ -11236,48 +11290,6 @@ export function App({
                                   updateAssistantStreamingSetting(!assistantStreamingEnabled)
                                 }
                               />
-                            }
-                          />
-                          <SettingsRow
-                            title="Git fetch interval"
-                            description="Refresh remote branch status in the background. Set to 0 seconds to only fetch during explicit Git actions."
-                            status={`${automaticGitFetchIntervalSeconds}s`}
-                            resetAction={
-                              automaticGitFetchIntervalSeconds !==
-                              defaultAutomaticGitFetchIntervalSeconds ? (
-                                <SettingResetButton
-                                  onPress={() =>
-                                    updateAutomaticGitFetchInterval(
-                                      defaultAutomaticGitFetchIntervalSeconds,
-                                    )
-                                  }
-                                />
-                              ) : null
-                            }
-                            control={
-                              <box style={{ flexDirection: "row", alignItems: "center" }}>
-                                <ToolbarButton
-                                  label="-"
-                                  disabled={automaticGitFetchIntervalSeconds <= 0}
-                                  onPress={() =>
-                                    updateAutomaticGitFetchIntervalBy(
-                                      -GIT_FETCH_INTERVAL_STEP_SECONDS,
-                                    )
-                                  }
-                                />
-                                <text
-                                  content={`${automaticGitFetchIntervalSeconds}s`}
-                                  style={{ fg: PALETTE.text, marginLeft: 1, marginRight: 1 }}
-                                />
-                                <ToolbarButton
-                                  label="+"
-                                  onPress={() =>
-                                    updateAutomaticGitFetchIntervalBy(
-                                      GIT_FETCH_INTERVAL_STEP_SECONDS,
-                                    )
-                                  }
-                                />
-                              </box>
                             }
                           />
                           <SettingsRow
@@ -12840,51 +12852,51 @@ export function App({
                       ) : null}
 
                       {mainView === "source-control" ? (
-                        <SettingsSection title="Source Control">
-                          <SettingsRow
-                            title="Source control"
-                            description="Discover Git and hosted source-control CLI integrations available to the server."
-                            status={
-                              <>
-                                <text
-                                  content={
-                                    sourceControlDiscovery
-                                      ? `${sourceControlDiscovery.versionControlSystems.filter((item) => item.status === "available").length}/${sourceControlDiscovery.versionControlSystems.length} VCS · ${sourceControlDiscovery.sourceControlProviders.filter((item) => item.status === "available").length}/${sourceControlDiscovery.sourceControlProviders.length} providers`
-                                      : "No source-control snapshot loaded."
-                                  }
-                                  style={{ fg: PALETTE.text }}
-                                />
-                                <text
-                                  content={
-                                    sourceControlDiscovery
-                                      ? "Provider auth is checked through local CLI status commands and server env."
-                                      : "Refresh to probe git, gh, glab, az, and Bitbucket env auth."
-                                  }
-                                  style={{ fg: PALETTE.subtle }}
-                                />
-                                {sourceControlDiscoveryError ? (
+                        <>
+                          <SettingsSection title="Version Control">
+                            <SettingsRow
+                              title="Server environment"
+                              description="Discover Git-compatible version-control tools available to this backend."
+                              status={
+                                <>
                                   <text
-                                    content={sourceControlDiscoveryError}
-                                    style={{ fg: PALETTE.warning }}
+                                    content={
+                                      sourceControlDiscovery
+                                        ? `${sourceControlDiscovery.versionControlSystems.filter((item) => item.status === "available").length}/${sourceControlDiscovery.versionControlSystems.length} available`
+                                        : "No version-control snapshot loaded."
+                                    }
+                                    style={{ fg: PALETTE.text }}
                                   />
-                                ) : null}
-                              </>
-                            }
-                            control={
-                              <ToolbarButton
-                                label={
-                                  isLoadingSourceControlDiscovery ? "Refreshing..." : "Refresh"
-                                }
-                                disabled={!api || isLoadingSourceControlDiscovery}
-                                onPress={() => {
-                                  void refreshSourceControlDiscovery();
-                                }}
-                              />
-                            }
-                          >
-                            {sourceControlDiscovery ? (
-                              <>
-                                {sourceControlDiscovery.versionControlSystems.map((item) => (
+                                  <text
+                                    content={
+                                      sourceControlDiscovery
+                                        ? "Git is enabled now; Jujutsu appears here as a coming-soon integration."
+                                        : "Refresh to probe git and jj on the server host."
+                                    }
+                                    style={{ fg: PALETTE.subtle }}
+                                  />
+                                  {sourceControlDiscoveryError ? (
+                                    <text
+                                      content={sourceControlDiscoveryError}
+                                      style={{ fg: PALETTE.warning }}
+                                    />
+                                  ) : null}
+                                </>
+                              }
+                              control={
+                                <ToolbarButton
+                                  label={
+                                    isLoadingSourceControlDiscovery ? "Refreshing..." : "Refresh"
+                                  }
+                                  disabled={!api || isLoadingSourceControlDiscovery}
+                                  onPress={() => {
+                                    void refreshSourceControlDiscovery();
+                                  }}
+                                />
+                              }
+                            >
+                              {sourceControlDiscovery ? (
+                                sourceControlDiscovery.versionControlSystems.map((item) => (
                                   <box
                                     key={`vcs:${item.kind}`}
                                     style={{
@@ -12895,22 +12907,120 @@ export function App({
                                       marginBottom: 1,
                                     }}
                                   >
+                                    <box style={{ flexDirection: "row", alignItems: "center" }}>
+                                      <text
+                                        content="●"
+                                        style={{
+                                          fg: sourceControlStatusColor({
+                                            status: item.status,
+                                            implemented: item.implemented,
+                                          }),
+                                          marginRight: 1,
+                                        }}
+                                      />
+                                      <text content={item.label} style={{ fg: PALETTE.text }} />
+                                      {item.version ? (
+                                        <text
+                                          content={` · ${item.version}`}
+                                          style={{ fg: PALETTE.subtle }}
+                                        />
+                                      ) : null}
+                                      {!item.implemented ? (
+                                        <text
+                                          content=" · Coming Soon"
+                                          style={{ fg: PALETTE.warning }}
+                                        />
+                                      ) : null}
+                                    </box>
                                     <text
-                                      content={`${item.label} · ${item.status}${item.implemented ? "" : " · not implemented"}`}
-                                      style={{
-                                        fg:
-                                          item.status === "available"
-                                            ? PALETTE.text
-                                            : PALETTE.warning,
-                                      }}
-                                    />
-                                    <text
-                                      content={item.version ?? item.detail ?? item.installHint}
+                                      content={vcsSummary(item)}
                                       style={{ fg: PALETTE.subtle }}
                                     />
+                                    {item.detail && item.detail !== item.installHint ? (
+                                      <text content={item.detail} style={{ fg: PALETTE.subtle }} />
+                                    ) : null}
                                   </box>
-                                ))}
-                                {sourceControlDiscovery.sourceControlProviders.map((item) => (
+                                ))
+                              ) : (
+                                <text
+                                  content="No version-control tools discovered yet."
+                                  style={{ fg: PALETTE.subtle }}
+                                />
+                              )}
+                            </SettingsRow>
+                            <SettingsRow
+                              title="Fetch interval"
+                              description="Refresh remote branch status in the background. Set to manual-only to avoid credential prompts except explicit Git actions."
+                              status={`${automaticGitFetchIntervalSeconds}s`}
+                              resetAction={
+                                automaticGitFetchIntervalSeconds !==
+                                defaultAutomaticGitFetchIntervalSeconds ? (
+                                  <SettingResetButton
+                                    onPress={() =>
+                                      updateAutomaticGitFetchInterval(
+                                        defaultAutomaticGitFetchIntervalSeconds,
+                                      )
+                                    }
+                                  />
+                                ) : null
+                              }
+                              control={
+                                <ToolbarButton
+                                  label={
+                                    automaticGitFetchIntervalSeconds === 0
+                                      ? "Manual ▾"
+                                      : `${automaticGitFetchIntervalSeconds}s ▾`
+                                  }
+                                  surface="inset"
+                                  active={
+                                    overlayMenu === "settings-select" &&
+                                    settingsSelectKind === "git-fetch-interval"
+                                  }
+                                  onPress={(event) =>
+                                    openSettingsSelectMenu("git-fetch-interval", event)
+                                  }
+                                />
+                              }
+                            />
+                          </SettingsSection>
+                          <SettingsSection title="Source Control Providers">
+                            <SettingsRow
+                              title="Hosted integrations"
+                              description="Discover GitHub, GitLab, Azure DevOps, and Bitbucket access available to this server."
+                              status={
+                                <>
+                                  <text
+                                    content={
+                                      sourceControlDiscovery
+                                        ? `${sourceControlDiscovery.sourceControlProviders.filter((item) => item.status === "available").length}/${sourceControlDiscovery.sourceControlProviders.length} providers available`
+                                        : "No provider snapshot loaded."
+                                    }
+                                    style={{ fg: PALETTE.text }}
+                                  />
+                                  <text
+                                    content={
+                                      sourceControlDiscovery
+                                        ? "Provider auth is checked through local CLI status commands and server env."
+                                        : "Refresh to probe gh, glab, az, and Bitbucket env auth."
+                                    }
+                                    style={{ fg: PALETTE.subtle }}
+                                  />
+                                </>
+                              }
+                              control={
+                                <ToolbarButton
+                                  label={
+                                    isLoadingSourceControlDiscovery ? "Refreshing..." : "Refresh"
+                                  }
+                                  disabled={!api || isLoadingSourceControlDiscovery}
+                                  onPress={() => {
+                                    void refreshSourceControlDiscovery();
+                                  }}
+                                />
+                              }
+                            >
+                              {sourceControlDiscovery ? (
+                                sourceControlDiscovery.sourceControlProviders.map((item) => (
                                   <box
                                     key={`source-control:${item.kind}`}
                                     style={{
@@ -12921,38 +13031,49 @@ export function App({
                                       marginBottom: 1,
                                     }}
                                   >
+                                    <box style={{ flexDirection: "row", alignItems: "center" }}>
+                                      <text
+                                        content="●"
+                                        style={{
+                                          fg: sourceControlStatusColor({
+                                            status: item.status,
+                                            auth: item.auth,
+                                          }),
+                                          marginRight: 1,
+                                        }}
+                                      />
+                                      <text content={item.label} style={{ fg: PALETTE.text }} />
+                                      {item.version ? (
+                                        <text
+                                          content={` · ${item.version}`}
+                                          style={{ fg: PALETTE.subtle }}
+                                        />
+                                      ) : null}
+                                      {item.auth.status !== "authenticated" ? (
+                                        <text
+                                          content={` · ${authStatusLabel(item.auth)}`}
+                                          style={{ fg: PALETTE.warning }}
+                                        />
+                                      ) : null}
+                                    </box>
                                     <text
-                                      content={`${item.label} · ${item.status} · auth ${item.auth.status}`}
-                                      style={{
-                                        fg:
-                                          item.status === "available" &&
-                                          item.auth.status === "authenticated"
-                                            ? PALETTE.text
-                                            : PALETTE.warning,
-                                      }}
-                                    />
-                                    <text
-                                      content={
-                                        item.auth.account
-                                          ? `${item.auth.account}${item.auth.host ? ` on ${item.auth.host}` : ""}`
-                                          : (item.version ??
-                                            item.auth.detail ??
-                                            item.detail ??
-                                            item.installHint)
-                                      }
+                                      content={sourceControlProviderSummary(item)}
                                       style={{ fg: PALETTE.subtle }}
                                     />
+                                    {item.detail && item.detail !== item.installHint ? (
+                                      <text content={item.detail} style={{ fg: PALETTE.subtle }} />
+                                    ) : null}
                                   </box>
-                                ))}
-                              </>
-                            ) : (
-                              <text
-                                content="No source-control tools discovered yet."
-                                style={{ fg: PALETTE.subtle }}
-                              />
-                            )}
-                          </SettingsRow>
-                        </SettingsSection>
+                                ))
+                              ) : (
+                                <text
+                                  content="No source-control providers discovered yet."
+                                  style={{ fg: PALETTE.subtle }}
+                                />
+                              )}
+                            </SettingsRow>
+                          </SettingsSection>
+                        </>
                       ) : null}
 
                       {mainView === "diagnostics" ? (
