@@ -22,8 +22,16 @@ describe("sidebarContextMenu", () => {
       { id: "open-folder", label: "Open Folder" },
       { id: "copy-path", label: "Copy Path" },
       { id: "copy-thread-id", label: "Copy Thread ID" },
+      { id: "archive", label: "Archive" },
       { id: "delete", label: "Delete", destructive: true },
     ]);
+  });
+
+  it("builds archived thread context menu items", () => {
+    expect(buildThreadContextMenuItems({ archived: true })).toContainEqual({
+      id: "unarchive",
+      label: "Unarchive",
+    });
   });
 
   it("matches the web project context menu item", () => {
@@ -74,10 +82,18 @@ describe("sidebarContextMenu", () => {
   });
 
   it("matches the web multi-select context menu items", () => {
-    expect(buildMultiSelectContextMenuItems(3)).toEqual([
+    expect(buildMultiSelectContextMenuItems({ count: 3 })).toEqual([
       { id: "mark-unread", label: "Mark unread (3)" },
+      { id: "archive", label: "Archive (3)" },
       { id: "delete", label: "Delete (3)", destructive: true },
     ]);
+  });
+
+  it("builds archived multi-select context menu items", () => {
+    expect(buildMultiSelectContextMenuItems({ count: 3, archived: true })).toContainEqual({
+      id: "unarchive",
+      label: "Unarchive (3)",
+    });
   });
 
   it("only marks completed threads unread locally", () => {

@@ -30,9 +30,9 @@ export type ProjectRemovalConfirmStep = {
 
 type ThreadReadModel = OrchestrationReadModel["threads"][number];
 
-export function buildThreadContextMenuItems(input: {
-  archived: boolean;
-}): readonly SidebarContextMenuItem[] {
+export function buildThreadContextMenuItems(
+  input: { archived?: boolean } = {},
+): readonly SidebarContextMenuItem[] {
   return [
     { id: "rename", label: "Rename thread" },
     { id: "mark-unread", label: "Mark unread" },
@@ -40,7 +40,9 @@ export function buildThreadContextMenuItems(input: {
     { id: "open-folder", label: "Open Folder" },
     { id: "copy-path", label: "Copy Path" },
     { id: "copy-thread-id", label: "Copy Thread ID" },
-    input.archived ? { id: "unarchive", label: "Unarchive" } : { id: "archive", label: "Archive" },
+    input.archived === true
+      ? { id: "unarchive", label: "Unarchive" }
+      : { id: "archive", label: "Archive" },
     { id: "delete", label: "Delete", destructive: true },
   ];
 }
@@ -81,11 +83,16 @@ export function buildProjectRemovalConfirmSteps(
   ];
 }
 
-export function buildMultiSelectContextMenuItems(count: number): readonly SidebarContextMenuItem[] {
+export function buildMultiSelectContextMenuItems(input: {
+  count: number;
+  archived?: boolean;
+}): readonly SidebarContextMenuItem[] {
   return [
-    { id: "mark-unread", label: `Mark unread (${count})` },
-    { id: "archive", label: `Archive (${count})` },
-    { id: "delete", label: `Delete (${count})`, destructive: true },
+    { id: "mark-unread", label: `Mark unread (${input.count})` },
+    input.archived === true
+      ? { id: "unarchive", label: `Unarchive (${input.count})` }
+      : { id: "archive", label: `Archive (${input.count})` },
+    { id: "delete", label: `Delete (${input.count})`, destructive: true },
   ];
 }
 
