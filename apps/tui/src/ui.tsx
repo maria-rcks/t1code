@@ -2666,7 +2666,7 @@ function groupThreadsByProject(
   readonly threads: readonly ThreadReadModel[];
 }> {
   const projectsById = new Map(projects.map((project) => [project.id, project]));
-  const buckets = new Map<string, ThreadReadModel[]>();
+  const buckets = new Map<ThreadReadModel["projectId"], ThreadReadModel[]>();
   for (const thread of threads) {
     const bucket = buckets.get(thread.projectId);
     if (bucket) {
@@ -6381,7 +6381,20 @@ export function App({
       commandId: newCommandId(),
       threadId: threadId as never,
     });
+    removeThreadsFromSelection([threadId]);
     setStatus("Thread restored");
+  }
+
+  async function unarchiveThreads(threadIds: readonly string[]) {
+    for (const threadId of threadIds) {
+      await dispatch({
+        type: "thread.unarchive",
+        commandId: newCommandId(),
+        threadId: threadId as never,
+      });
+    }
+    removeThreadsFromSelection(threadIds);
+    setStatus("Threads restored");
   }
 
   async function removeProject(projectId: string) {
@@ -6614,6 +6627,10 @@ export function App({
           await archiveThreads(threadIds);
         },
       });
+      return;
+    }
+    if (actionId === "unarchive") {
+      await unarchiveThreads(threadIds);
       return;
     }
 
@@ -6882,7 +6899,12 @@ export function App({
         sidebarContextMenu.kind === "thread"
           ? getThreadContextMenuItems(sidebarContextMenu.threadId)
           : sidebarContextMenu.kind === "multi-thread"
-            ? buildMultiSelectContextMenuItems(sidebarContextMenu.threadIds.length)
+            ? buildMultiSelectContextMenuItems({
+                count: sidebarContextMenu.threadIds.length,
+                archived: sidebarContextMenu.threadIds.some((threadId) =>
+                  archivedThreads.some((thread) => thread.id === threadId),
+                ),
+              })
             : buildProjectContextMenuItems();
       if (isNavUp) {
         setSidebarContextMenu((current) =>
@@ -10236,7 +10258,12 @@ export function App({
     ? sidebarContextMenu.kind === "thread"
       ? getThreadContextMenuItems(sidebarContextMenu.threadId)
       : sidebarContextMenu.kind === "multi-thread"
-        ? buildMultiSelectContextMenuItems(sidebarContextMenu.threadIds.length)
+        ? buildMultiSelectContextMenuItems({
+            count: sidebarContextMenu.threadIds.length,
+            archived: sidebarContextMenu.threadIds.some((threadId) =>
+              archivedThreads.some((thread) => thread.id === threadId),
+            ),
+          })
         : buildProjectContextMenuItems()
     : [];
   const viewportRows =
