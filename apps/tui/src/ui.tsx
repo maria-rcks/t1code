@@ -6679,6 +6679,18 @@ export function App({
     setComposerResetKey((current) => current + 1);
   }
 
+  function focusComposerAtEndSoon() {
+    setTimeout(() => {
+      const composerTextarea = composerRef.current;
+      if (!composerTextarea) {
+        return;
+      }
+      composerTextarea.focus();
+      composerTextarea.clearSelection();
+      composerTextarea.cursorOffset = composerTextarea.plainText.length;
+    }, 0);
+  }
+
   const requestAppExit = useCallback(() => {
     setConfirmDialog({
       title: "Quit T1 Code?",
@@ -11135,9 +11147,7 @@ export function App({
     resetComposerTextarea(`/publish ${publishAccount ? `${publishAccount}/` : ""}`);
     setFocusArea("composer");
     setStatus("Enter owner/repo, then optionally provider=gitlab, public, https, or remote=<name>");
-    setTimeout(() => {
-      composerRef.current?.focus();
-    }, 0);
+    focusComposerAtEndSoon();
   }
 
   function prefillCloneCommand() {
@@ -11147,9 +11157,7 @@ export function App({
     setStatus(
       "Enter owner/repo or clone URL, then optionally path, provider=gitlab, https, or ssh",
     );
-    setTimeout(() => {
-      composerRef.current?.focus();
-    }, 0);
+    focusComposerAtEndSoon();
   }
 
   async function publishRepositoryFromCommand(args: string) {
