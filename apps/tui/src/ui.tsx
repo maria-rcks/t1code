@@ -5984,8 +5984,29 @@ export function App({
         section: "Actions",
         icon: "󰉋",
         label: "Add project",
-        description: "Add a workspace path",
+        description: "Add a local workspace path",
         keywords: ["workspace", "folder", "path"],
+      },
+      {
+        id: "project:clone",
+        section: "Actions",
+        icon: "󰊢",
+        label: "Clone repository",
+        description: "Prefill /clone owner/repo or URL",
+        keywords: [
+          "add project",
+          "clone",
+          "remote",
+          "repository",
+          "repo",
+          "git",
+          "github",
+          "gitlab",
+          "bitbucket",
+          "azure",
+          "devops",
+          "url",
+        ],
       },
       {
         id: "model:picker",
@@ -9877,7 +9898,8 @@ export function App({
       }
       case "project": {
         if (args === "cwd") {
-          await createProject(process.cwd());
+          const projectId = await createProject(process.cwd());
+          openDraftThread(projectId);
           return true;
         }
         const match = /^add\s+(.+)$/i.exec(args);
@@ -9885,7 +9907,8 @@ export function App({
           setStatus("Use /project add <path> or /project cwd");
           return true;
         }
-        await createProject(match[1]);
+        const projectId = await createProject(match[1]);
+        openDraftThread(projectId);
         return true;
       }
       case "clone": {
@@ -10593,6 +10616,10 @@ export function App({
       openProjectPathPrompt();
       return;
     }
+    if (item.id === "project:clone") {
+      prefillCloneCommand();
+      return;
+    }
     if (item.id === "model:picker") {
       toggleModelMenu();
       return;
@@ -11108,6 +11135,21 @@ export function App({
     resetComposerTextarea(`/publish ${publishAccount ? `${publishAccount}/` : ""}`);
     setFocusArea("composer");
     setStatus("Enter owner/repo, then optionally provider=gitlab, public, https, or remote=<name>");
+    setTimeout(() => {
+      composerRef.current?.focus();
+    }, 0);
+  }
+
+  function prefillCloneCommand() {
+    closeOverlayMenu();
+    resetComposerTextarea("/clone ");
+    setFocusArea("composer");
+    setStatus(
+      "Enter owner/repo or clone URL, then optionally path, provider=gitlab, https, or ssh",
+    );
+    setTimeout(() => {
+      composerRef.current?.focus();
+    }, 0);
   }
 
   async function publishRepositoryFromCommand(args: string) {
@@ -11161,9 +11203,7 @@ export function App({
     const defaultCloneParent = activeProjectCwd ? path.dirname(activeProjectCwd) : process.cwd();
     const cloneInput = parseCloneCommandArgs(args, defaultCloneParent);
     if (!cloneInput) {
-      resetComposerTextarea("/clone ");
-      setFocusArea("composer");
-      setStatus("Use /clone owner/repo [path] [provider=gitlab] or /clone <url> [path]");
+      prefillCloneCommand();
       return;
     }
 
@@ -11171,7 +11211,8 @@ export function App({
     setGitActionStatus("Cloning repository...");
     try {
       const result = await api.sourceControl.cloneRepository(cloneInput);
-      await createProject(result.cwd);
+      const projectId = await createProject(result.cwd);
+      openDraftThread(projectId);
       setStatus(`Cloned ${result.repository?.nameWithOwner ?? result.remoteUrl}`);
       await refreshGitState();
     } catch (error) {
