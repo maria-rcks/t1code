@@ -168,6 +168,7 @@ import { resolveTuiPaths } from "./config";
 import { resolveComposerPrimaryAction } from "./composerAction";
 import { parseStandaloneComposerModeCommand } from "./composerCommands";
 import { isCommandPaletteProjectPathQuery } from "./commandPaletteProjects";
+import { expandUserPath, normalizeWorkspaceRoot } from "./workspacePaths";
 import { clampSlashCommandMenuIndex, resolveTuiSlashCommandMenu } from "./composerSlashMenu";
 import { formatReasoningEffortLabel, truncateToolbarLabel } from "./composerControlLabels";
 import {
@@ -981,20 +982,6 @@ function nowIso(): string {
 function basename(input: string): string {
   const base = path.basename(input);
   return base.length > 0 ? base : input;
-}
-
-function expandUserPath(input: string, homeDir: string): string {
-  if (input === "~") return homeDir;
-  if (input.startsWith("~/") || input.startsWith("~\\")) {
-    return path.join(homeDir, input.slice(2));
-  }
-  return input;
-}
-
-function normalizeWorkspaceRoot(input: string, homeDir: string): string {
-  const trimmed = input.trim();
-  if (!trimmed) return "";
-  return path.resolve(expandUserPath(trimmed, homeDir));
 }
 
 function scoreDirectorySuggestion(candidate: string, query: string): number {
@@ -4747,6 +4734,7 @@ export function App({
       try {
         logger.log("app.boot", {
           cwd: process.cwd(),
+          userHomeDir: paths.userHomeDir,
           homeDir: paths.homeDir,
           configHomeDir: paths.configHomeDir,
           logPath: paths.logPath,
@@ -6066,7 +6054,7 @@ export function App({
       return null;
     }
 
-    const workspaceRoot = normalizeWorkspaceRoot(rawQuery, paths.homeDir);
+    const workspaceRoot = normalizeWorkspaceRoot(rawQuery, paths.userHomeDir);
     const existingProject = projects.find((project) => project.workspaceRoot === workspaceRoot);
     return {
       id: "project:path",
@@ -6078,7 +6066,7 @@ export function App({
       keywords: ["add project", "workspace", "folder", "path", rawQuery, workspaceRoot],
       disabled: projectPathBusy,
     };
-  }, [commandPaletteQuery, paths.homeDir, projectPathBusy, projects]);
+  }, [commandPaletteQuery, paths.userHomeDir, projectPathBusy, projects]);
   const visibleCommandPaletteItems = useMemo(() => {
     const filteredItems = commandPaletteItems.filter((item) =>
       commandPaletteTextMatches(item, commandPaletteQuery),
@@ -6469,7 +6457,7 @@ export function App({
 
     const timer = setTimeout(() => {
       void (async () => {
-        const suggestions = await listDirectorySuggestions(projectPathDraft, paths.homeDir);
+        const suggestions = await listDirectorySuggestions(projectPathDraft, paths.userHomeDir);
         if (!cancelled) {
           setProjectPathSuggestions(suggestions);
         }
@@ -6480,7 +6468,7 @@ export function App({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [paths.homeDir, projectPathDraft, projectPathPromptOpen]);
+  }, [paths.userHomeDir, projectPathDraft, projectPathPromptOpen]);
 
   useEffect(() => {
     if (!projectPathPromptOpen) return;
@@ -7059,7 +7047,7 @@ export function App({
 
       const attachment = await resolveImageAttachmentFromPath({
         filePath,
-        homeDir: paths.homeDir,
+        homeDir: paths.userHomeDir,
       });
       if (!attachment) {
         throw new Error(`Clipboard image could not be resolved from ${filePath}.`);
@@ -7095,7 +7083,7 @@ export function App({
       event.preventDefault();
       const resolvedSubmission = await resolveComposerSubmission({
         text: fallbackText,
-        homeDir: paths.homeDir,
+        homeDir: paths.userHomeDir,
       });
       if (resolvedSubmission.attachments.length > 0) {
         addComposerAttachments(resolvedSubmission.attachments);
@@ -9470,7 +9458,7 @@ export function App({
   }
 
   async function resolveProjectWorkspaceRoot(rawWorkspaceRoot: string): Promise<string> {
-    const workspaceRoot = normalizeWorkspaceRoot(rawWorkspaceRoot, paths.homeDir);
+    const workspaceRoot = normalizeWorkspaceRoot(rawWorkspaceRoot, paths.userHomeDir);
     if (!workspaceRoot) {
       throw new Error("Enter a directory path to add a project.");
     }
@@ -10051,7 +10039,7 @@ export function App({
       }
       const resolvedSubmission = await resolveComposerSubmission({
         text: promptTextForSend,
-        homeDir: paths.homeDir,
+        homeDir: paths.userHomeDir,
       });
       const trimmed = resolvedSubmission.promptText.trim();
       const pendingAttachments = mergeChatAttachments(

@@ -12,6 +12,7 @@ describe("resolveTuiPaths", () => {
     });
 
     expect(paths).toEqual({
+      userHomeDir: os.homedir(),
       homeDir: "/tmp/t1-home",
       configHomeDir: "/tmp/t1-config",
       stateHomeDir: "/tmp/t1-state",
@@ -32,6 +33,7 @@ describe("resolveTuiPaths", () => {
     });
 
     expect(paths).toEqual({
+      userHomeDir: "/Users/tester",
       homeDir: "/var/data/t1code",
       configHomeDir: "/var/config/t1code",
       stateHomeDir: "/var/state/t1code",
@@ -48,6 +50,7 @@ describe("resolveTuiPaths", () => {
     const paths = resolveTuiPaths({});
 
     expect(paths).toEqual({
+      userHomeDir: "/Users/tester",
       homeDir: "/Users/tester/.t1",
       configHomeDir: "/Users/tester/.config/t1code",
       stateHomeDir: "/Users/tester/.config/t1code",
