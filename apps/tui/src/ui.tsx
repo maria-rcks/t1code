@@ -11260,18 +11260,6 @@ export function App({
               </>
             )}
           </box>
-          {showPlanPanel ? (
-            <PlanDetailsPanel
-              activePlan={activePlan}
-              activeProposedPlan={latestProposedPlan}
-              timestampFormat={appSettings.timestampFormat}
-              width={planPanelWidth}
-              onClose={() => setPlanPanelOpen(false)}
-              onCopyCodeBlock={(value) => {
-                void copyToClipboard(value, "Code copied");
-              }}
-            />
-          ) : null}
         </box>
 
         <box style={{ flexDirection: "row", flexGrow: 1 }}>
@@ -14843,6 +14831,18 @@ export function App({
               </>
             )}
           </box>
+          {showPlanPanel ? (
+            <PlanDetailsPanel
+              activePlan={activePlan}
+              activeProposedPlan={latestProposedPlan}
+              timestampFormat={appSettings.timestampFormat}
+              width={planPanelWidth}
+              onClose={() => setPlanPanelOpen(false)}
+              onCopyCodeBlock={(value) => {
+                void copyToClipboard(value, "Code copied");
+              }}
+            />
+          ) : null}
         </box>
       </box>
 
