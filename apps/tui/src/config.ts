@@ -4,6 +4,7 @@ import path from "node:path";
 const APP_DIR_NAME = "t1code";
 
 export interface TuiPaths {
+  readonly userHomeDir: string;
   readonly homeDir: string;
   readonly configHomeDir: string;
   readonly stateHomeDir: string;
@@ -34,6 +35,7 @@ export function resolveTuiPaths(env: NodeJS.ProcessEnv = process.env): TuiPaths 
       ? resolveAppDir(env.XDG_STATE_HOME, path.join(home, ".local", "state", APP_DIR_NAME))
       : configHomeDir);
   return {
+    userHomeDir: home,
     homeDir,
     configHomeDir,
     stateHomeDir,

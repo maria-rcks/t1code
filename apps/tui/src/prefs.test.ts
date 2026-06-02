@@ -11,6 +11,7 @@ async function makePaths(): Promise<{ root: string; paths: TuiPaths }> {
   return {
     root,
     paths: {
+      userHomeDir: path.join(root, "user-home"),
       homeDir: path.join(root, "home"),
       configHomeDir: path.join(root, "config"),
       stateHomeDir: path.join(root, "state"),
