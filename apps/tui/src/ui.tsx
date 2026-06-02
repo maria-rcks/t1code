@@ -4171,6 +4171,7 @@ export function App({
   const selectedProjectIdRef = useRef<string | undefined>(undefined);
   const selectedThreadIdRef = useRef<string | undefined>(undefined);
   const handledWelcomeBootstrapRef = useRef(false);
+  const [pendingCreatedProjectId, setPendingCreatedProjectId] = useState<string | null>(null);
   const [pendingCreatedThreadId, setPendingCreatedThreadId] = useState<string | null>(null);
   const [draftThreadsByProjectId, setDraftThreadsByProjectId] = useState<
     Readonly<Record<string, DraftThreadState>>
@@ -6222,6 +6223,16 @@ export function App({
     if (!snapshot) {
       return;
     }
+    if (
+      pendingCreatedProjectId &&
+      projects.some((project) => project.id === pendingCreatedProjectId)
+    ) {
+      setPendingCreatedProjectId(null);
+      return;
+    }
+    if (pendingCreatedProjectId && selectedProjectId === pendingCreatedProjectId) {
+      return;
+    }
     if (projects.length === 0) {
       if (selectedProjectId) setSelectedProjectId(undefined);
       return;
@@ -6229,7 +6240,7 @@ export function App({
     if (selectedProjectId && !projects.some((project) => project.id === selectedProjectId)) {
       setSelectedProjectId(sortedProjects[0]?.id);
     }
-  }, [projects, selectedProjectId, snapshot, sortedProjects]);
+  }, [pendingCreatedProjectId, projects, selectedProjectId, snapshot, sortedProjects]);
 
   useEffect(() => {
     if (!snapshot) {
@@ -9554,15 +9565,21 @@ export function App({
 
     const projectId = newProjectId();
     logger.log("project.create", { workspaceRoot, projectId });
-    await dispatch({
-      type: "project.create",
-      commandId: newCommandId(),
-      projectId,
-      title: basename(workspaceRoot),
-      workspaceRoot,
-      defaultModel: DEFAULT_MODEL_BY_PROVIDER.codex,
-      createdAt: nowIso(),
-    });
+    setPendingCreatedProjectId(projectId);
+    try {
+      await dispatch({
+        type: "project.create",
+        commandId: newCommandId(),
+        projectId,
+        title: basename(workspaceRoot),
+        workspaceRoot,
+        defaultModel: DEFAULT_MODEL_BY_PROVIDER.codex,
+        createdAt: nowIso(),
+      });
+    } catch (error) {
+      setPendingCreatedProjectId(null);
+      throw error;
+    }
     setSelectedProjectId(projectId);
     setSelectedThreadId(undefined);
     setExpandedProjectIds((current) => ensureProjectExpanded(current, projectId));
