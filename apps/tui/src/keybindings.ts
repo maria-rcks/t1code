@@ -35,12 +35,21 @@ function isMacPlatform(platform: NodeJS.Platform): boolean {
   return platform === "darwin";
 }
 
+function controlKeyFromSequence(sequence: string | undefined): string | null {
+  if (!sequence || sequence.length !== 1) return null;
+  const code = sequence.charCodeAt(0);
+  if (code < 1 || code > 26 || code === 13) return null;
+  return String.fromCharCode(code + 96);
+}
+
 function normalizeEventKey(event: TuiShortcutEventLike): string {
   const { keyName, sequence } = event;
   const normalizedName = keyName.toLowerCase();
   if (normalizedName === "esc") return "escape";
   if (normalizedName === "space") return " ";
   if (event.ctrl || event.meta || event.super || event.alt) return normalizedName;
+  const controlKey = controlKeyFromSequence(sequence);
+  if (controlKey) return controlKey;
   if (sequence && sequence.length === 1) return sequence.toLowerCase();
   return normalizedName;
 }
@@ -55,11 +64,14 @@ function matchesShortcut(
 
   const useMetaForMod = isMacPlatform(platform);
   const eventMeta = Boolean(event.meta || event.super);
+  const eventCtrl = Boolean(
+    event.ctrl || (!useMetaForMod && controlKeyFromSequence(event.sequence)),
+  );
   const expectedMeta = shortcut.metaKey || (shortcut.modKey && useMetaForMod);
   const expectedCtrl = shortcut.ctrlKey || (shortcut.modKey && !useMetaForMod);
   return (
     eventMeta === expectedMeta &&
-    Boolean(event.ctrl) === expectedCtrl &&
+    eventCtrl === expectedCtrl &&
     Boolean(event.shift) === shortcut.shiftKey &&
     Boolean(event.alt) === shortcut.altKey
   );
