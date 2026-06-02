@@ -134,6 +134,7 @@ import {
   WsTransport,
   formatContextWindowTokens,
   type ContextWindowSnapshot,
+  type SlashCommandDefinition,
 } from "@t3tools/client-core";
 import {
   applyClaudePromptEffortPrefix,
@@ -166,6 +167,7 @@ import { CODE_BLOCK_TREE_SITTER_PARSERS } from "./codeBlockParsers";
 import { resolveTuiPaths } from "./config";
 import { resolveComposerPrimaryAction } from "./composerAction";
 import { parseStandaloneComposerModeCommand } from "./composerCommands";
+import { clampSlashCommandMenuIndex, resolveTuiSlashCommandMenu } from "./composerSlashMenu";
 import { formatReasoningEffortLabel, truncateToolbarLabel } from "./composerControlLabels";
 import {
   createDeferredComposerSyncState,
@@ -2118,6 +2120,48 @@ function PathSuggestionRow(props: {
       <box style={{ width: 44, flexShrink: 1, overflow: "hidden", height: 1 }}>
         <text content={props.entry.parentPath ?? ""} style={{ fg: PALETTE.subtle }} />
       </box>
+    </box>
+  );
+}
+
+function SlashCommandSuggestionRow(props: {
+  command: SlashCommandDefinition;
+  active?: boolean;
+  onHover?: () => void;
+  onPress: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const active = props.active || hovered;
+  return (
+    <box
+      onMouseOver={() => {
+        setHovered(true);
+        props.onHover?.();
+      }}
+      onMouseOut={() => setHovered(false)}
+      onMouseDown={(event) => {
+        event.preventDefault();
+        event.stopPropagation?.();
+        props.onPress();
+      }}
+      style={{
+        backgroundColor: active ? PALETTE.controlActive : PALETTE.surfaceAlt,
+        paddingLeft: 1,
+        paddingRight: 1,
+        height: 2,
+        flexDirection: "column",
+        justifyContent: "center",
+      }}
+    >
+      <box style={{ flexDirection: "row", alignItems: "center" }}>
+        <text
+          content={props.command.usage}
+          style={{ fg: active ? PALETTE.text : PALETTE.muted, marginRight: 1 }}
+        />
+        <box style={{ flexGrow: 1 }} />
+        <text content="Tab" style={{ fg: PALETTE.subtle }} />
+      </box>
+      <text content={props.command.description} style={{ fg: PALETTE.subtle }} />
     </box>
   );
 }
@@ -4130,6 +4174,7 @@ export function App({
   const [composerMentions, setComposerMentions] = useState<ComposerMention[]>([]);
   const [pathSuggestionEntries, setPathSuggestionEntries] = useState<ProjectEntry[]>([]);
   const [pathSuggestionIndex, setPathSuggestionIndex] = useState(0);
+  const [slashCommandIndex, setSlashCommandIndex] = useState(0);
   const [pathSuggestionsLoading, setPathSuggestionsLoading] = useState(false);
   const [projectPathPromptOpen, setProjectPathPromptOpen] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>();
@@ -6621,6 +6666,16 @@ export function App({
     setPathSuggestionIndex(0);
     setFocusArea("composer");
     setStatus("File tagged");
+    setTimeout(() => {
+      composerRef.current?.focus();
+    }, 0);
+  }
+
+  function applyComposerSlashCommand(command: SlashCommandDefinition) {
+    resetComposerTextarea(command.template);
+    setSlashCommandIndex(0);
+    setFocusArea("composer");
+    setStatus(`Inserted ${command.usage}`);
     setTimeout(() => {
       composerRef.current?.focus();
     }, 0);
@@ -11057,6 +11112,16 @@ export function App({
     composerPathTrigger !== null &&
     composerPathTrigger.query.trim().length > 0 &&
     composerSearchCwd !== null;
+  const slashCommandMenu = resolveTuiSlashCommandMenu({
+    composer,
+    focused: composerIsFocused,
+    blocked: Boolean(activePendingUserInput || activePendingApproval || showPathSuggestions),
+  });
+  const slashCommandItems = slashCommandMenu?.items ?? [];
+  const showSlashCommandMenu = slashCommandMenu !== null;
+  const selectedSlashCommand =
+    slashCommandItems[clampSlashCommandMenuIndex(slashCommandIndex, slashCommandItems.length)] ??
+    slashCommandItems[0];
   const composerTextareaHeight = estimateComposerTextareaHeight({
     text: composer,
     placeholder: composerPlaceholder,
@@ -11366,6 +11431,16 @@ export function App({
       clearTimeout(timer);
     };
   }, [api, composerPathTrigger, composerSearchCwd, logger, showPathSuggestions]);
+
+  useEffect(() => {
+    setSlashCommandIndex(0);
+  }, [slashCommandMenu?.query]);
+
+  useEffect(() => {
+    setSlashCommandIndex((current) =>
+      clampSlashCommandMenuIndex(current, slashCommandItems.length),
+    );
+  }, [slashCommandItems.length]);
 
   useEffect(() => {
     if (overlayMenu === null && overlayAnchor !== null) {
@@ -15315,6 +15390,44 @@ export function App({
                   ) : null}
                 </scrollbox>
 
+                {showSlashCommandMenu ? (
+                  <box
+                    style={{
+                      position: "absolute",
+                      left: 2,
+                      right: mainView === "thread" && diffOpen ? 2 : 3,
+                      bottom: Math.max(1, composerDrawerOffset - 1),
+                      backgroundColor: PALETTE.surfaceAlt,
+                      flexDirection: "column",
+                      zIndex: 10,
+                    }}
+                  >
+                    {slashCommandItems.length > 0 ? (
+                      slashCommandItems.map((command, index) => (
+                        <SlashCommandSuggestionRow
+                          key={command.command}
+                          command={command}
+                          active={index === slashCommandIndex}
+                          onHover={() => setSlashCommandIndex(index)}
+                          onPress={() => applyComposerSlashCommand(command)}
+                        />
+                      ))
+                    ) : (
+                      <box
+                        style={{
+                          paddingLeft: 1,
+                          paddingRight: 1,
+                          height: 1,
+                          flexDirection: "row",
+                          alignItems: "center",
+                        }}
+                      >
+                        <text content="No matching commands" style={{ fg: PALETTE.subtle }} />
+                      </box>
+                    )}
+                  </box>
+                ) : null}
+
                 {showPathSuggestions ? (
                   <box
                     style={{
@@ -15789,6 +15902,42 @@ export function App({
                             key.preventDefault();
                             void attachClipboardImage();
                             return;
+                          }
+                          if (showSlashCommandMenu && slashCommandItems.length > 0) {
+                            if (key.name === "up" || (key.ctrl && key.name === "k")) {
+                              key.preventDefault();
+                              setSlashCommandIndex((current) => Math.max(0, current - 1));
+                              return;
+                            }
+                            if (key.name === "down" || (key.ctrl && key.name === "j")) {
+                              key.preventDefault();
+                              setSlashCommandIndex((current) =>
+                                Math.min(slashCommandItems.length - 1, current + 1),
+                              );
+                              return;
+                            }
+                            if (key.name === "tab") {
+                              key.preventDefault();
+                              applyComposerSlashCommand(
+                                selectedSlashCommand ?? slashCommandItems[0]!,
+                              );
+                              return;
+                            }
+                            if (
+                              key.name === "return" ||
+                              key.name === "enter" ||
+                              key.name === "kpenter" ||
+                              key.name === "linefeed"
+                            ) {
+                              const parsedCommand = parseSlashCommandInput(readComposerValue());
+                              if (!parsedCommand) {
+                                key.preventDefault();
+                                applyComposerSlashCommand(
+                                  selectedSlashCommand ?? slashCommandItems[0]!,
+                                );
+                                return;
+                              }
+                            }
                           }
                           if (showPathSuggestions && pathSuggestionEntries.length > 0) {
                             if (key.name === "up" || (key.ctrl && key.name === "k")) {
