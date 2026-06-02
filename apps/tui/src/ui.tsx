@@ -320,6 +320,7 @@ type MainView =
 type ThreadEnvMode = "local" | "worktree";
 type OverlayMenu =
   | null
+  | "command-palette"
   | "model"
   | "traits"
   | "settings-select"
@@ -343,6 +344,16 @@ type SidebarSortMenuItem = {
   label: string;
   selected: boolean;
   onSelect: () => void;
+};
+type CommandPaletteItem = {
+  readonly id: string;
+  readonly section: string;
+  readonly icon: string;
+  readonly label: string;
+  readonly description?: string | undefined;
+  readonly trailingLabel?: string | undefined;
+  readonly keywords: readonly string[];
+  readonly disabled?: boolean;
 };
 type ProviderEnvironmentDraft = {
   readonly name: string;
@@ -378,6 +389,7 @@ const PROJECT_SCRIPT_ICON_OPTIONS = [
 }>;
 const SCRIPT_TERMINAL_COLS = 120;
 const SCRIPT_TERMINAL_ROWS = 30;
+const COMMAND_PALETTE_MAX_ITEMS = 12;
 type T1Api = ReturnType<typeof createTransportNativeApi>["api"];
 type ThreadReadModel = OrchestrationReadModel["threads"][number];
 type ProjectReadModel = OrchestrationReadModel["projects"][number];
@@ -1040,6 +1052,21 @@ function formatRelativeTime(iso: string | null | undefined): string {
 function formatRelativeTimeLabel(iso: string | null | undefined): string {
   const relativeTime = formatRelativeTime(iso);
   return relativeTime === "now" ? "now" : `${relativeTime} ago`;
+}
+
+function commandPaletteTextMatches(item: CommandPaletteItem, query: string): boolean {
+  const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+  const haystack = [
+    item.section,
+    item.label,
+    item.description ?? "",
+    item.trailingLabel ?? "",
+    ...item.keywords,
+  ]
+    .join(" ")
+    .toLowerCase();
+  return tokens.every((token) => haystack.includes(token));
 }
 
 function formatCheckedRelativeTime(iso: string | null | undefined): string {
@@ -4149,6 +4176,9 @@ export function App({
   const [modelSubmenuOpen, setModelSubmenuOpen] = useState(false);
   const [modelMenuIndex, setModelMenuIndex] = useState(0);
   const [modelSearchQuery, setModelSearchQuery] = useState("");
+  const [commandPaletteQuery, setCommandPaletteQuery] = useState("");
+  const [commandPaletteIndex, setCommandPaletteIndex] = useState(0);
+  const commandPaletteInputRef = useRef<InputRenderable | null>(null);
   const [gitMenuIndex, setGitMenuIndex] = useState(0);
   const [composerEnvMenuIndex, setComposerEnvMenuIndex] = useState(0);
   const [composerBranchMenuIndex, setComposerBranchMenuIndex] = useState(0);
@@ -5864,6 +5894,99 @@ export function App({
       updateAppSettings,
     ],
   );
+  const commandPaletteStaticItems = useMemo<CommandPaletteItem[]>(
+    () => [
+      {
+        id: "thread:new",
+        section: "Actions",
+        icon: "+",
+        label: "New thread",
+        description: activeProject
+          ? `Create a draft in ${activeProject.title}`
+          : "Select a project first",
+        trailingLabel: "mod+n",
+        keywords: ["chat", "conversation", "draft", "local"],
+        disabled: !activeProjectId,
+      },
+      {
+        id: "project:add",
+        section: "Actions",
+        icon: "󰉋",
+        label: "Add project",
+        description: "Add a workspace path",
+        keywords: ["workspace", "folder", "path"],
+      },
+      {
+        id: "model:picker",
+        section: "Actions",
+        icon: "󱚣",
+        label: "Switch model",
+        description: "Open provider and model picker",
+        trailingLabel: "mod+shift+m",
+        keywords: ["provider", "codex", "claude", "cursor", "opencode"],
+      },
+      {
+        id: "thread:view",
+        section: "Navigate",
+        icon: "󰭹",
+        label: "Current thread",
+        description: "Return to the conversation",
+        keywords: ["chat", "conversation", "timeline"],
+      },
+      ...SETTINGS_NAV_ITEMS.map((item) => ({
+        id: `settings:${item.view}`,
+        section: "Navigate",
+        icon: item.icon,
+        label: item.label,
+        description: `Open ${MAIN_VIEW_TITLES[item.view]}`,
+        keywords: [MAIN_VIEW_TITLES[item.view], "settings", "panel"],
+      })),
+    ],
+    [activeProject, activeProjectId],
+  );
+  const commandPaletteProjectItems = useMemo<CommandPaletteItem[]>(
+    () =>
+      sortedProjects.map((project) => ({
+        id: `project:${project.id}`,
+        section: "Projects",
+        icon: "󰉋",
+        label: project.title,
+        description: project.workspaceRoot,
+        keywords: ["project", "workspace", project.workspaceRoot],
+      })),
+    [sortedProjects],
+  );
+  const commandPaletteThreadItems = useMemo<CommandPaletteItem[]>(
+    () =>
+      allThreads.map((thread) => {
+        const project = projects.find((entry) => entry.id === thread.projectId);
+        return {
+          id: `thread:${thread.id}`,
+          section: "Threads",
+          icon: "󰭹",
+          label: thread.title,
+          description: project?.title ?? "Thread",
+          trailingLabel: formatRelativeTime(thread.updatedAt),
+          keywords: ["thread", "conversation", project?.workspaceRoot ?? ""],
+        };
+      }),
+    [allThreads, projects],
+  );
+  const commandPaletteItems = useMemo<CommandPaletteItem[]>(
+    () => [
+      ...commandPaletteStaticItems,
+      ...commandPaletteProjectItems,
+      ...commandPaletteThreadItems,
+    ],
+    [commandPaletteProjectItems, commandPaletteStaticItems, commandPaletteThreadItems],
+  );
+  const visibleCommandPaletteItems = useMemo(
+    () =>
+      commandPaletteItems
+        .filter((item) => commandPaletteTextMatches(item, commandPaletteQuery))
+        .slice(0, COMMAND_PALETTE_MAX_ITEMS),
+    [commandPaletteItems, commandPaletteQuery],
+  );
   const changedSettingLabels = [
     ...(appSettings.theme !== DEFAULT_APP_THEME ? ["Theme"] : []),
     ...(tuiThemeId !== DEFAULT_TUI_THEME_ID ? ["Theme preset"] : []),
@@ -6239,6 +6362,13 @@ export function App({
       projectPathRef.current?.selectAll();
     }, 0);
   }, [projectPathPromptOpen, projectPathResetKey]);
+
+  useEffect(() => {
+    if (overlayMenu !== "command-palette") return;
+    setTimeout(() => {
+      commandPaletteInputRef.current?.focus();
+    }, 0);
+  }, [overlayMenu]);
 
   const refreshDiff = useMemo(
     () => async () => {
@@ -7572,6 +7702,11 @@ export function App({
     if (projectPathPromptOpen && key.name === "tab") {
       return;
     }
+    if (shortcutCommand === "commandPalette.toggle" && !confirmDialog && !renameThreadDialog) {
+      key.preventDefault();
+      toggleCommandPalette();
+      return;
+    }
     if (overlayMenu && key.name === "escape") {
       logger.log("overlay.close", { menu: overlayMenu, reason: "escape" });
       setOverlayMenu(null);
@@ -7792,6 +7927,30 @@ export function App({
         if (!isModelSearchActive && selected) {
           applyDraftProviderModel(modelMenuInstanceId, selected.slug);
         }
+        return;
+      }
+    }
+    if (overlayMenu === "command-palette") {
+      if (isNavUp) {
+        key.preventDefault();
+        setCommandPaletteIndex((current) => Math.max(0, current - 1));
+        return;
+      }
+      if (isNavDown) {
+        key.preventDefault();
+        setCommandPaletteIndex((current) =>
+          Math.min(visibleCommandPaletteItems.length - 1, current + 1),
+        );
+        return;
+      }
+      if (
+        key.name === "return" ||
+        key.name === "enter" ||
+        key.name === "kpenter" ||
+        key.name === "linefeed"
+      ) {
+        key.preventDefault();
+        runCommandPaletteItem(visibleCommandPaletteItems[commandPaletteIndex]);
         return;
       }
     }
@@ -9982,6 +10141,67 @@ export function App({
     });
   }
 
+  function toggleCommandPalette() {
+    closeSidebarContextMenu();
+    setOverlayMenu((current) => {
+      const next = current === "command-palette" ? null : "command-palette";
+      if (next === "command-palette") {
+        setOverlayAnchor(null);
+        setCommandPaletteQuery("");
+        setCommandPaletteIndex(0);
+        setFocusArea("settings");
+      } else {
+        setCommandPaletteQuery("");
+        setFocusArea("composer");
+      }
+      logger.log(next ? "overlay.open" : "overlay.close", { menu: "command-palette" });
+      return next;
+    });
+  }
+
+  function runCommandPaletteItem(item: CommandPaletteItem | undefined) {
+    if (!item || item.disabled) return;
+    setOverlayMenu(null);
+    setCommandPaletteQuery("");
+    if (item.id === "thread:new") {
+      if (activeProjectId) {
+        openDraftThread(activeProjectId);
+      }
+      return;
+    }
+    if (item.id === "project:add") {
+      openProjectPathPrompt();
+      return;
+    }
+    if (item.id === "model:picker") {
+      toggleModelMenu();
+      return;
+    }
+    if (item.id === "thread:view") {
+      returnToThreadView();
+      setTimeout(() => {
+        composerRef.current?.focus();
+      }, 0);
+      return;
+    }
+    if (item.id.startsWith("settings:")) {
+      openMainView(item.id.slice("settings:".length) as MainViewNavigationTarget);
+      return;
+    }
+    if (item.id.startsWith("project:")) {
+      selectProject(item.id.slice("project:".length));
+      return;
+    }
+    if (item.id.startsWith("thread:")) {
+      const threadId = item.id.slice("thread:".length);
+      const thread = allThreads.find((entry) => entry.id === threadId);
+      if (!thread) return;
+      clearSelection();
+      setSelectionAnchorThreadId(thread.id);
+      selectThread(thread.projectId, thread.id);
+    }
+  }
+
   function toggleModelMenu(event?: SidebarMouseEvent) {
     setFocusArea("controls");
     closeSidebarContextMenu();
@@ -10234,6 +10454,12 @@ export function App({
       Math.min(current, Math.max(composerBranchMenuItems.length - 1, 0)),
     );
   }, [composerBranchMenuItems.length]);
+
+  useEffect(() => {
+    setCommandPaletteIndex((current) =>
+      Math.min(current, Math.max(visibleCommandPaletteItems.length - 1, 0)),
+    );
+  }, [visibleCommandPaletteItems.length]);
 
   useEffect(() => {
     if (overlayMenu !== "git-actions") {
@@ -10943,7 +11169,7 @@ export function App({
   }, [overlayMenu, sidebarSortItems]);
 
   useEffect(() => {
-    if (focusArea === "composer" && overlayMenu !== null) {
+    if (focusArea === "composer" && overlayMenu !== null && overlayMenu !== "command-palette") {
       setOverlayMenu((current) => {
         if (current !== null) {
           logger.log("overlay.close", { menu: current, reason: "composer-focus" });
@@ -11054,6 +11280,11 @@ export function App({
     (process.stdout.rows ?? Number(process.env.T1CODE_HEADLESS_HEIGHT ?? 0)) || 48;
   const viewportColumns =
     (process.stdout.columns ?? Number(process.env.T1CODE_HEADLESS_WIDTH ?? 0)) || 160;
+  const commandPaletteWidth = Math.min(Math.max(54, Math.floor(viewportColumns * 0.58)), 72);
+  const commandPaletteRows = Math.min(Math.max(visibleCommandPaletteItems.length, 1), 10);
+  const commandPaletteHeight = commandPaletteRows * 2 + 6;
+  const commandPaletteTop = Math.max(2, Math.floor((viewportRows - commandPaletteHeight) / 3));
+  const commandPaletteLeft = Math.max(2, Math.floor((viewportColumns - commandPaletteWidth) / 2));
   const mainPanelLeft = responsiveLayout.showSidebar ? responsiveLayout.sidebarWidth + 1 : 0;
   const imagePreviewModalWidth = Math.max(48, Math.min(110, viewportColumns - 8));
   const imagePreviewModalHeight = Math.max(18, Math.min(36, viewportRows - 6));
@@ -11589,6 +11820,14 @@ export function App({
                             paddingBottom: 0,
                           }}
                         >
+                          <ToolbarButton
+                            icon="󰍉"
+                            label={responsiveLayout.showComposerModeLabels ? "Palette" : undefined}
+                            compact={!responsiveLayout.showComposerModeLabels}
+                            active={overlayMenu === "command-palette"}
+                            onPress={toggleCommandPalette}
+                          />
+                          {responsiveLayout.showComposerDividers ? <FooterDivider /> : null}
                           <text content="No threads yet" style={{ fg: PALETTE.subtle }} />
                         </box>
                       )}
@@ -15581,6 +15820,128 @@ export function App({
               )}
             </box>
           ) : null}
+        </box>
+      ) : null}
+
+      {overlayMenu === "command-palette" ? (
+        <box
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: viewportColumns,
+            height: viewportRows,
+            backgroundColor: PALETTE.scrim,
+            zIndex: 190,
+          }}
+          onMouseDown={() => {
+            setOverlayMenu(null);
+            setCommandPaletteQuery("");
+          }}
+        >
+          <box
+            style={{
+              position: "absolute",
+              top: commandPaletteTop,
+              left: commandPaletteLeft,
+              width: commandPaletteWidth,
+              backgroundColor: PALETTE.popup,
+              border: true,
+              borderStyle: "rounded",
+              borderColor: PALETTE.border,
+              paddingTop: 1,
+              paddingBottom: 1,
+              paddingLeft: 1,
+              paddingRight: 1,
+              flexDirection: "column",
+            }}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation?.();
+            }}
+          >
+            <box
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 1,
+              }}
+            >
+              <text content="󰍉" style={{ fg: PALETTE.accent, marginRight: 1 }} />
+              <input
+                ref={commandPaletteInputRef}
+                focused={overlayMenu === "command-palette"}
+                value={commandPaletteQuery}
+                placeholder="Search actions, projects, threads..."
+                cursorColor={PALETTE.cursor}
+                onInput={(value) => {
+                  setCommandPaletteQuery(value);
+                  setCommandPaletteIndex(0);
+                }}
+                onKeyDown={(key) => {
+                  if (key.name === "escape") {
+                    key.preventDefault();
+                    setOverlayMenu(null);
+                    setCommandPaletteQuery("");
+                  }
+                }}
+                style={{
+                  flexGrow: 1,
+                  backgroundColor: PALETTE.input,
+                  focusedBackgroundColor: PALETTE.input,
+                  textColor: PALETTE.text,
+                  focusedTextColor: PALETTE.text,
+                  placeholderColor: PALETTE.subtle,
+                }}
+              />
+            </box>
+            {visibleCommandPaletteItems.length === 0 ? (
+              <box style={{ paddingLeft: 1, paddingRight: 1 }}>
+                <text content="No matching commands" style={{ fg: PALETTE.subtle }} />
+              </box>
+            ) : (
+              visibleCommandPaletteItems.map((item, index) => {
+                const active = index === commandPaletteIndex;
+                return (
+                  <box key={`command-palette:${item.id}`} style={{ flexDirection: "column" }}>
+                    {index === 0 ||
+                    visibleCommandPaletteItems[index - 1]?.section !== item.section ? (
+                      <text
+                        content={item.section}
+                        style={{
+                          fg: PALETTE.subtle,
+                          marginTop: index === 0 ? 0 : 1,
+                          marginLeft: 1,
+                        }}
+                      />
+                    ) : null}
+                    <PopupRow
+                      icon={item.icon}
+                      label={item.label}
+                      active={active}
+                      {...(item.disabled !== undefined ? { disabled: item.disabled } : {})}
+                      {...(item.trailingLabel ? { trailingLabel: item.trailingLabel } : {})}
+                      onHover={() => setCommandPaletteIndex(index)}
+                      onPress={() => runCommandPaletteItem(item)}
+                    />
+                    {item.description ? (
+                      <text
+                        content={`  ${truncateTitleForDisplay(item.description, commandPaletteWidth - 6)}`}
+                        style={{
+                          fg: active ? PALETTE.text : PALETTE.subtle,
+                          marginLeft: 2,
+                        }}
+                      />
+                    ) : null}
+                  </box>
+                );
+              })
+            )}
+            <text
+              content="↑↓ navigate · Enter run · Esc close"
+              style={{ fg: PALETTE.subtle, marginTop: 1, marginLeft: 1 }}
+            />
+          </box>
         </box>
       ) : null}
 
