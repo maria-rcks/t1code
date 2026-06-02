@@ -167,6 +167,7 @@ import { CODE_BLOCK_TREE_SITTER_PARSERS } from "./codeBlockParsers";
 import { resolveTuiPaths } from "./config";
 import { resolveComposerPrimaryAction } from "./composerAction";
 import { parseStandaloneComposerModeCommand } from "./composerCommands";
+import { isCommandPaletteProjectPathQuery } from "./commandPaletteProjects";
 import { clampSlashCommandMenuIndex, resolveTuiSlashCommandMenu } from "./composerSlashMenu";
 import { formatReasoningEffortLabel, truncateToolbarLabel } from "./composerControlLabels";
 import {
@@ -6059,13 +6060,34 @@ export function App({
     ],
     [commandPaletteProjectItems, commandPaletteStaticItems, commandPaletteThreadItems],
   );
-  const visibleCommandPaletteItems = useMemo(
-    () =>
-      commandPaletteItems
-        .filter((item) => commandPaletteTextMatches(item, commandPaletteQuery))
-        .slice(0, COMMAND_PALETTE_MAX_ITEMS),
-    [commandPaletteItems, commandPaletteQuery],
-  );
+  const commandPaletteProjectPathItem = useMemo<CommandPaletteItem | null>(() => {
+    const rawQuery = commandPaletteQuery.trim();
+    if (!isCommandPaletteProjectPathQuery(rawQuery)) {
+      return null;
+    }
+
+    const workspaceRoot = normalizeWorkspaceRoot(rawQuery, paths.homeDir);
+    const existingProject = projects.find((project) => project.workspaceRoot === workspaceRoot);
+    return {
+      id: "project:path",
+      section: "Projects",
+      icon: "󰉋",
+      label: existingProject ? `Open ${existingProject.title}` : "Add project from path",
+      description: workspaceRoot,
+      trailingLabel: "Enter",
+      keywords: ["add project", "workspace", "folder", "path", rawQuery, workspaceRoot],
+      disabled: projectPathBusy,
+    };
+  }, [commandPaletteQuery, paths.homeDir, projectPathBusy, projects]);
+  const visibleCommandPaletteItems = useMemo(() => {
+    const filteredItems = commandPaletteItems.filter((item) =>
+      commandPaletteTextMatches(item, commandPaletteQuery),
+    );
+    const items = commandPaletteProjectPathItem
+      ? [commandPaletteProjectPathItem, ...filteredItems]
+      : filteredItems;
+    return items.slice(0, COMMAND_PALETTE_MAX_ITEMS);
+  }, [commandPaletteItems, commandPaletteProjectPathItem, commandPaletteQuery]);
   const changedSettingLabels = [
     ...(appSettings.theme !== DEFAULT_APP_THEME ? ["Theme"] : []),
     ...(tuiThemeId !== DEFAULT_TUI_THEME_ID ? ["Theme preset"] : []),
@@ -8101,7 +8123,7 @@ export function App({
         key.name === "linefeed"
       ) {
         key.preventDefault();
-        runCommandPaletteItem(visibleCommandPaletteItems[commandPaletteIndex]);
+        void runCommandPaletteItem(visibleCommandPaletteItems[commandPaletteIndex]);
         return;
       }
     }
@@ -9499,13 +9521,47 @@ export function App({
     return projectId;
   }
 
+  function openProjectChat(projectId: string) {
+    const latestThread = threadsByProject.get(projectId)?.[0];
+    if (latestThread) {
+      clearSelection();
+      setSelectionAnchorThreadId(latestThread.id);
+      selectThread(projectId, latestThread.id);
+      setStatus("Ready");
+      return;
+    }
+
+    openDraftThread(projectId);
+  }
+
+  async function submitCommandPaletteProjectPath(rawWorkspaceRoot: string): Promise<void> {
+    if (projectPathBusy) return;
+    setProjectPathBusy(true);
+    setProjectPathError(null);
+
+    try {
+      const projectId = await createProject(rawWorkspaceRoot);
+      openProjectChat(projectId);
+      setOverlayMenu(null);
+      setCommandPaletteQuery("");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to add project from that path.";
+      setProjectPathError(message);
+      setStatus(message);
+    } finally {
+      setProjectPathBusy(false);
+    }
+  }
+
   async function submitProjectPath(rawWorkspaceRoot: string): Promise<void> {
     if (projectPathBusy) return;
     setProjectPathBusy(true);
     setProjectPathError(null);
 
     try {
-      await createProject(rawWorkspaceRoot);
+      const projectId = await createProject(rawWorkspaceRoot);
+      openProjectChat(projectId);
       closeProjectPathPrompt();
     } catch (error) {
       const message =
@@ -10433,9 +10489,11 @@ export function App({
         setOverlayAnchor(null);
         setCommandPaletteQuery("");
         setCommandPaletteIndex(0);
+        setProjectPathError(null);
         setFocusArea("settings");
       } else {
         setCommandPaletteQuery("");
+        setProjectPathError(null);
         setFocusArea("composer");
       }
       logger.log(next ? "overlay.open" : "overlay.close", { menu: "command-palette" });
@@ -10443,8 +10501,12 @@ export function App({
     });
   }
 
-  function runCommandPaletteItem(item: CommandPaletteItem | undefined) {
+  async function runCommandPaletteItem(item: CommandPaletteItem | undefined): Promise<void> {
     if (!item || item.disabled) return;
+    if (item.id === "project:path") {
+      await submitCommandPaletteProjectPath(commandPaletteQuery);
+      return;
+    }
     setOverlayMenu(null);
     setCommandPaletteQuery("");
     if (item.id === "thread:new") {
@@ -16378,6 +16440,7 @@ export function App({
           onMouseDown={() => {
             setOverlayMenu(null);
             setCommandPaletteQuery("");
+            setProjectPathError(null);
           }}
         >
           <box
@@ -16418,12 +16481,14 @@ export function App({
                 onInput={(value) => {
                   setCommandPaletteQuery(value);
                   setCommandPaletteIndex(0);
+                  setProjectPathError(null);
                 }}
                 onKeyDown={(key) => {
                   if (key.name === "escape") {
                     key.preventDefault();
                     setOverlayMenu(null);
                     setCommandPaletteQuery("");
+                    setProjectPathError(null);
                   }
                 }}
                 style={{
@@ -16463,7 +16528,9 @@ export function App({
                       {...(item.disabled !== undefined ? { disabled: item.disabled } : {})}
                       {...(item.trailingLabel ? { trailingLabel: item.trailingLabel } : {})}
                       onHover={() => setCommandPaletteIndex(index)}
-                      onPress={() => runCommandPaletteItem(item)}
+                      onPress={() => {
+                        void runCommandPaletteItem(item);
+                      }}
                     />
                     {item.description ? (
                       <text
@@ -16478,6 +16545,12 @@ export function App({
                 );
               })
             )}
+            {projectPathError && commandPaletteProjectPathItem ? (
+              <text
+                content={truncateTitleForDisplay(projectPathError, commandPaletteWidth - 4)}
+                style={{ fg: PALETTE.warning, marginTop: 1, marginLeft: 1 }}
+              />
+            ) : null}
             <text
               content="↑↓ navigate · Enter run · Esc close"
               style={{ fg: PALETTE.subtle, marginTop: 1, marginLeft: 1 }}
