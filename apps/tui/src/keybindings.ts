@@ -35,10 +35,12 @@ function isMacPlatform(platform: NodeJS.Platform): boolean {
   return platform === "darwin";
 }
 
-function normalizeEventKey(keyName: string, sequence: string | undefined): string {
+function normalizeEventKey(event: TuiShortcutEventLike): string {
+  const { keyName, sequence } = event;
   const normalizedName = keyName.toLowerCase();
   if (normalizedName === "esc") return "escape";
   if (normalizedName === "space") return " ";
+  if (event.ctrl || event.meta || event.super || event.alt) return normalizedName;
   if (sequence && sequence.length === 1) return sequence.toLowerCase();
   return normalizedName;
 }
@@ -48,7 +50,7 @@ function matchesShortcut(
   shortcut: KeybindingShortcut,
   platform: NodeJS.Platform,
 ): boolean {
-  const key = normalizeEventKey(event.keyName, event.sequence);
+  const key = normalizeEventKey(event);
   if (key !== shortcut.key) return false;
 
   const useMetaForMod = isMacPlatform(platform);

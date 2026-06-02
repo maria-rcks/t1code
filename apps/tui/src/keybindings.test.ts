@@ -24,6 +24,10 @@ function modShortcut(
 
 const keybindings: ResolvedKeybindingsConfig = [
   {
+    command: "commandPalette.toggle",
+    shortcut: modShortcut("k"),
+  },
+  {
     command: "thread.jump.1",
     shortcut: modShortcut("1"),
   },
@@ -46,6 +50,14 @@ describe("resolveTuiShortcutCommand", () => {
         platform: "linux",
       }),
     ).toBe("modelPicker.toggle");
+  });
+
+  it("uses the event key name for modified control sequences", () => {
+    expect(
+      resolveTuiShortcutCommand({ keyName: "k", ctrl: true, sequence: "\u000b" }, keybindings, {
+        platform: "linux",
+      }),
+    ).toBe("commandPalette.toggle");
   });
 
   it("matches mod shortcuts using meta or super on macOS", () => {
