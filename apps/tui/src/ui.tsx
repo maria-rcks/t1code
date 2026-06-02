@@ -4716,6 +4716,7 @@ export function App({
           prefs.mainView === "keybindings" ||
           prefs.mainView === "providers" ||
           prefs.mainView === "source-control" ||
+          prefs.mainView === "scripts" ||
           prefs.mainView === "connections" ||
           prefs.mainView === "diagnostics" ||
           prefs.mainView === "archive"
