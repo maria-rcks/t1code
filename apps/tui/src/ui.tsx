@@ -10523,7 +10523,7 @@ export function App({
       return;
     }
     if (item.id.startsWith("project:")) {
-      selectProject(item.id.slice("project:".length));
+      openProjectChat(item.id.slice("project:".length));
       return;
     }
     if (item.id.startsWith("thread:")) {
