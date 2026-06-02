@@ -111,6 +111,14 @@ describe("resolveTuiShortcutCommand", () => {
       }),
     ).toBe("terminal.toggle");
   });
+
+  it("infers ctrl letter shortcuts from raw control sequences", () => {
+    expect(
+      resolveTuiShortcutCommand({ keyName: "linefeed", ctrl: false, sequence: "\n" }, keybindings, {
+        platform: "linux",
+      }),
+    ).toBe("terminal.toggle");
+  });
 });
 
 describe("modelPickerJumpIndexFromCommand", () => {
