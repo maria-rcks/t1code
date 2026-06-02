@@ -366,6 +366,7 @@ type CommandPaletteItem = {
   readonly trailingLabel?: string | undefined;
   readonly keywords: readonly string[];
   readonly disabled?: boolean;
+  readonly workspaceRoot?: string | undefined;
 };
 type ProviderEnvironmentDraft = {
   readonly name: string;
@@ -4226,6 +4227,7 @@ export function App({
   const [modelSearchQuery, setModelSearchQuery] = useState("");
   const [commandPaletteQuery, setCommandPaletteQuery] = useState("");
   const [commandPaletteIndex, setCommandPaletteIndex] = useState(0);
+  const [commandPalettePathSuggestions, setCommandPalettePathSuggestions] = useState<string[]>([]);
   const commandPaletteInputRef = useRef<InputRenderable | null>(null);
   const [gitMenuIndex, setGitMenuIndex] = useState(0);
   const [composerEnvMenuIndex, setComposerEnvMenuIndex] = useState(0);
@@ -6067,15 +6069,48 @@ export function App({
       disabled: projectPathBusy,
     };
   }, [commandPaletteQuery, paths.userHomeDir, projectPathBusy, projects]);
+  const commandPaletteProjectPathSuggestionItems = useMemo<CommandPaletteItem[]>(() => {
+    if (!commandPaletteProjectPathItem) {
+      return [];
+    }
+    const directWorkspaceRoot = commandPaletteProjectPathItem.description;
+    return commandPalettePathSuggestions
+      .filter((workspaceRoot) => workspaceRoot !== directWorkspaceRoot)
+      .map((workspaceRoot) => {
+        const existingProject = projects.find((project) => project.workspaceRoot === workspaceRoot);
+        return {
+          id: `project:path-suggestion:${workspaceRoot}`,
+          section: "Folders",
+          icon: "󰉋",
+          label: existingProject
+            ? `Open ${existingProject.title}`
+            : `Add ${path.basename(workspaceRoot) || workspaceRoot}`,
+          description: workspaceRoot,
+          trailingLabel: "Enter",
+          keywords: ["add project", "workspace", "folder", "path", workspaceRoot],
+          disabled: projectPathBusy,
+          workspaceRoot,
+        };
+      });
+  }, [commandPalettePathSuggestions, commandPaletteProjectPathItem, projectPathBusy, projects]);
   const visibleCommandPaletteItems = useMemo(() => {
     const filteredItems = commandPaletteItems.filter((item) =>
       commandPaletteTextMatches(item, commandPaletteQuery),
     );
     const items = commandPaletteProjectPathItem
-      ? [commandPaletteProjectPathItem, ...filteredItems]
+      ? [
+          ...commandPaletteProjectPathSuggestionItems,
+          commandPaletteProjectPathItem,
+          ...filteredItems,
+        ]
       : filteredItems;
     return items.slice(0, COMMAND_PALETTE_MAX_ITEMS);
-  }, [commandPaletteItems, commandPaletteProjectPathItem, commandPaletteQuery]);
+  }, [
+    commandPaletteItems,
+    commandPaletteProjectPathItem,
+    commandPaletteProjectPathSuggestionItems,
+    commandPaletteQuery,
+  ]);
   const changedSettingLabels = [
     ...(appSettings.theme !== DEFAULT_APP_THEME ? ["Theme"] : []),
     ...(tuiThemeId !== DEFAULT_TUI_THEME_ID ? ["Theme preset"] : []),
@@ -6469,6 +6504,32 @@ export function App({
       clearTimeout(timer);
     };
   }, [paths.userHomeDir, projectPathDraft, projectPathPromptOpen]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const rawQuery = commandPaletteQuery.trim();
+
+    if (overlayMenu !== "command-palette" || !isCommandPaletteProjectPathQuery(rawQuery)) {
+      setCommandPalettePathSuggestions([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const timer = setTimeout(() => {
+      void (async () => {
+        const suggestions = await listDirectorySuggestions(rawQuery, paths.userHomeDir);
+        if (!cancelled) {
+          setCommandPalettePathSuggestions(suggestions);
+        }
+      })();
+    }, 80);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [commandPaletteQuery, overlayMenu, paths.userHomeDir]);
 
   useEffect(() => {
     if (!projectPathPromptOpen) return;
@@ -9529,9 +9590,10 @@ export function App({
 
     try {
       const projectId = await createProject(rawWorkspaceRoot);
-      openProjectChat(projectId);
+      openDraftThread(projectId);
       setOverlayMenu(null);
       setCommandPaletteQuery("");
+      setCommandPalettePathSuggestions([]);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to add project from that path.";
@@ -9549,7 +9611,7 @@ export function App({
 
     try {
       const projectId = await createProject(rawWorkspaceRoot);
-      openProjectChat(projectId);
+      openDraftThread(projectId);
       closeProjectPathPrompt();
     } catch (error) {
       const message =
@@ -10476,11 +10538,13 @@ export function App({
       if (next === "command-palette") {
         setOverlayAnchor(null);
         setCommandPaletteQuery("");
+        setCommandPalettePathSuggestions([]);
         setCommandPaletteIndex(0);
         setProjectPathError(null);
         setFocusArea("settings");
       } else {
         setCommandPaletteQuery("");
+        setCommandPalettePathSuggestions([]);
         setProjectPathError(null);
         setFocusArea("composer");
       }
@@ -10495,8 +10559,13 @@ export function App({
       await submitCommandPaletteProjectPath(commandPaletteQuery);
       return;
     }
+    if (item.id.startsWith("project:path-suggestion:") && item.workspaceRoot) {
+      await submitCommandPaletteProjectPath(item.workspaceRoot);
+      return;
+    }
     setOverlayMenu(null);
     setCommandPaletteQuery("");
+    setCommandPalettePathSuggestions([]);
     if (item.id === "thread:new") {
       if (activeProjectId) {
         openDraftThread(activeProjectId);
@@ -12174,14 +12243,6 @@ export function App({
                             paddingBottom: 0,
                           }}
                         >
-                          <ToolbarButton
-                            icon="󰍉"
-                            label={responsiveLayout.showComposerModeLabels ? "Palette" : undefined}
-                            compact={!responsiveLayout.showComposerModeLabels}
-                            active={overlayMenu === "command-palette"}
-                            onPress={toggleCommandPalette}
-                          />
-                          {responsiveLayout.showComposerDividers ? <FooterDivider /> : null}
                           <text content="No threads yet" style={{ fg: PALETTE.subtle }} />
                         </box>
                       )}
@@ -16428,6 +16489,7 @@ export function App({
           onMouseDown={() => {
             setOverlayMenu(null);
             setCommandPaletteQuery("");
+            setCommandPalettePathSuggestions([]);
             setProjectPathError(null);
           }}
         >
@@ -16476,6 +16538,7 @@ export function App({
                     key.preventDefault();
                     setOverlayMenu(null);
                     setCommandPaletteQuery("");
+                    setCommandPalettePathSuggestions([]);
                     setProjectPathError(null);
                   }
                 }}
