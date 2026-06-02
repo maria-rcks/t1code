@@ -98,6 +98,7 @@ import {
   type SidebarThreadSortOrder,
   type TimestampFormat,
   createTransportNativeApi,
+  deriveActivePlanState,
   deriveLatestContextWindowSnapshot,
   derivePendingApprovals,
   derivePendingUserInputProgress,
@@ -113,12 +114,16 @@ import {
   newProjectId,
   newThreadId,
   parseSlashCommandInput,
+  proposedPlanTitle,
   resolvePlanFollowUpSubmission,
   resolveProjectStatusIndicator,
   resolveQuickAction,
   resolveThreadStatusPill,
+  stripDisplayedPlanMarkdown,
+  type ActivePlanState,
   type ChatAttachment,
   type GitActionMenuItem,
+  type LatestProposedPlanState,
   type ThreadStatusPill,
   type TimelineEntry,
   WsTransport,
@@ -3433,6 +3438,187 @@ function ArchivedThreadsPanel(props: {
   );
 }
 
+function planStepIcon(status: ActivePlanState["steps"][number]["status"]): string {
+  if (status === "completed") return "✓";
+  if (status === "inProgress") return "↻";
+  return "·";
+}
+
+function planStepColor(status: ActivePlanState["steps"][number]["status"]): TuiColor {
+  if (status === "completed") return PALETTE.success;
+  if (status === "inProgress") return PALETTE.info;
+  return PALETTE.subtle;
+}
+
+function PlanDetailsPanel(props: {
+  activePlan: ActivePlanState | null;
+  activeProposedPlan: LatestProposedPlanState | null;
+  timestampFormat: TimestampFormat;
+  width: number;
+  onClose: () => void;
+  onCopyCodeBlock: (value: string) => void;
+}) {
+  const planMarkdown = props.activeProposedPlan?.planMarkdown ?? null;
+  const displayedPlanMarkdown = planMarkdown ? stripDisplayedPlanMarkdown(planMarkdown) : null;
+  const planTitle = planMarkdown ? (proposedPlanTitle(planMarkdown) ?? "Full Plan") : null;
+  const hasPlanContent = Boolean(props.activePlan || displayedPlanMarkdown);
+
+  return (
+    <box
+      style={{
+        width: props.width,
+        flexShrink: 0,
+        border: ["left"],
+        borderColor: PALETTE.divider,
+        backgroundColor: PALETTE.main,
+        flexDirection: "column",
+        minHeight: 0,
+      }}
+    >
+      <box
+        style={{
+          height: 3,
+          border: ["bottom"],
+          borderColor: PALETTE.divider,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingLeft: 1,
+          paddingRight: 1,
+        }}
+      >
+        <box
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            flexGrow: 1,
+            flexShrink: 1,
+            overflow: "hidden",
+          }}
+        >
+          <text content="PLAN" style={{ fg: PALETTE.info, marginRight: 1 }} />
+          {props.activePlan ? (
+            <text
+              content={formatMessageTimestamp(props.activePlan.createdAt, props.timestampFormat)}
+              style={{ fg: PALETTE.subtle }}
+            />
+          ) : null}
+        </box>
+        <ToolbarButton icon="✕" compact chrome="bare" width={3} onPress={props.onClose} />
+      </box>
+
+      <scrollbox
+        style={{
+          flexGrow: 1,
+          flexShrink: 1,
+          minHeight: 0,
+          ...themedScrollboxStyle(PALETTE.main),
+          paddingTop: 1,
+          paddingLeft: 1,
+          paddingRight: 1,
+        }}
+      >
+        <box style={{ flexDirection: "column", minHeight: 0 }}>
+          {props.activePlan?.explanation ? (
+            <box
+              style={{
+                backgroundColor: PALETTE.surfacePlan,
+                paddingLeft: 1,
+                paddingRight: 1,
+                paddingTop: 1,
+                paddingBottom: 1,
+                marginBottom: 1,
+              }}
+            >
+              <MessageMarkdown
+                content={props.activePlan.explanation}
+                color={PALETTE.muted}
+                onCopyCodeBlock={props.onCopyCodeBlock}
+              />
+            </box>
+          ) : null}
+
+          {props.activePlan && props.activePlan.steps.length > 0 ? (
+            <box style={{ flexDirection: "column", marginBottom: 1 }}>
+              <text content="STEPS" style={{ fg: PALETTE.subtle, marginBottom: 1 }} />
+              {props.activePlan.steps.map((step) => (
+                <box
+                  key={`plan-step:${step.status}:${step.step}`}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    backgroundColor:
+                      step.status === "inProgress"
+                        ? PALETTE.surfaceInfo
+                        : step.status === "completed"
+                          ? PALETTE.controlInset
+                          : "transparent",
+                    paddingLeft: 1,
+                    paddingRight: 1,
+                    paddingTop: 0,
+                    paddingBottom: 0,
+                    marginBottom: 1,
+                  }}
+                >
+                  <text
+                    content={planStepIcon(step.status)}
+                    style={{ fg: planStepColor(step.status), marginRight: 1 }}
+                  />
+                  <text
+                    content={step.step}
+                    style={{
+                      fg: step.status === "completed" ? PALETTE.muted : PALETTE.text,
+                      flexShrink: 1,
+                    }}
+                  />
+                </box>
+              ))}
+            </box>
+          ) : null}
+
+          {displayedPlanMarkdown ? (
+            <box style={{ flexDirection: "column", marginBottom: 1 }}>
+              <text
+                content={planTitle ? planTitle.toUpperCase() : "FULL PLAN"}
+                style={{ fg: PALETTE.subtle, marginBottom: 1 }}
+              />
+              <box
+                style={{
+                  backgroundColor: PALETTE.surfaceAlt,
+                  paddingLeft: 1,
+                  paddingRight: 1,
+                  paddingTop: 1,
+                  paddingBottom: 1,
+                }}
+              >
+                <MessageMarkdown
+                  content={displayedPlanMarkdown}
+                  onCopyCodeBlock={props.onCopyCodeBlock}
+                />
+              </box>
+            </box>
+          ) : null}
+
+          {!hasPlanContent ? (
+            <box
+              style={{
+                paddingTop: 2,
+                paddingLeft: 1,
+                paddingRight: 1,
+                flexDirection: "column",
+                alignItems: "center",
+              }}
+            >
+              <text content="No active plan yet." style={{ fg: PALETTE.muted }} />
+              <text content="Switch to Plan mode to draft tasks." style={{ fg: PALETTE.subtle }} />
+            </box>
+          ) : null}
+        </box>
+      </scrollbox>
+    </box>
+  );
+}
+
 function SelectionCopyToast(props: { message: string }) {
   return (
     <box
@@ -3613,6 +3799,7 @@ export function App({
   const [draftInteractionMode, setDraftInteractionMode] = useState<"default" | "plan">("default");
   const [focusArea, setFocusArea] = useState<FocusArea>("composer");
   const [diffOpen, setDiffOpen] = useState(false);
+  const [planPanelOpen, setPlanPanelOpen] = useState(false);
   const [sidebarCollapsedPreference, setSidebarCollapsedPreference] = useState(false);
   const [sidebarOverlayOpen, setSidebarOverlayOpen] = useState(false);
   const [diffView, setDiffView] = useState<"unified" | "split">("unified");
@@ -4560,6 +4747,16 @@ export function App({
   const workEntries = activeThread
     ? deriveWorkLogEntries(activeThread.activities, activeThread.latestTurn?.turnId ?? undefined)
     : [];
+  const activePlan = useMemo(
+    () =>
+      activeThread
+        ? deriveActivePlanState(
+            activeThread.activities,
+            activeThread.latestTurn?.turnId ?? undefined,
+          )
+        : null,
+    [activeThread],
+  );
   const activeContextWindow = useMemo(
     () => (activeThread ? deriveLatestContextWindowSnapshot(activeThread.activities) : null),
     [activeThread],
@@ -4623,6 +4820,7 @@ export function App({
   const latestProposedPlan = activeThread
     ? findLatestProposedPlan(activeThread.proposedPlans, activeThread.latestTurn?.turnId ?? null)
     : null;
+  const hasPlanPanelContent = Boolean(activePlan || latestProposedPlan);
   const latestTurnSettled = Boolean(
     activeThread?.latestTurn?.startedAt &&
     activeThread.latestTurn.completedAt &&
@@ -4643,8 +4841,13 @@ export function App({
   const showFullDiffView = mainView === "thread" && diffOpen;
   const mainPanelColumns =
     totalColumns - responsiveLayout.sidebarWidth - (responsiveLayout.showSidebar ? 1 : 0);
+  const planPanelWidth = Math.max(30, Math.min(42, Math.floor(mainPanelColumns * 0.34)));
+  const showPlanPanel = mainView === "thread" && planPanelOpen;
+  const conversationPanelColumns = showPlanPanel
+    ? Math.max(48, mainPanelColumns - planPanelWidth)
+    : mainPanelColumns;
   const diffFiles = useMemo(() => parseDiffFiles(diffText), [diffText]);
-  const userMessageBubbleWidth = resolveUserMessageBubbleWidth(mainPanelColumns);
+  const userMessageBubbleWidth = resolveUserMessageBubbleWidth(conversationPanelColumns);
   const customModelsByProvider = useMemo(
     () => ({
       codex:
@@ -5568,6 +5771,10 @@ export function App({
 
   useEffect(() => {
     setLocallyUnreadThreadIds((current) => clearLocallyUnreadThread(current, activeThreadId));
+  }, [activeThreadId]);
+
+  useEffect(() => {
+    setPlanPanelOpen(false);
   }, [activeThreadId]);
 
   useEffect(() => {
@@ -7547,6 +7754,12 @@ export function App({
       return;
     }
     openDiffView();
+  }
+
+  function togglePlanPanel() {
+    logger.log("controls.planPanelToggle", { next: !planPanelOpen });
+    setPlanPanelOpen((current) => !current);
+    setStatus(planPanelOpen ? "Plan panel hidden" : "Plan panel shown");
   }
 
   function toggleDiffFile(key: string) {
@@ -11035,9 +11248,30 @@ export function App({
                   iconColor={PALETTE.muted}
                   onPress={toggleDiffView}
                 />
+                <ToolbarButton
+                  icon="󰨖"
+                  active={planPanelOpen}
+                  chrome="bare"
+                  width={4}
+                  justifyContent="flex-start"
+                  iconColor={hasPlanPanelContent ? PALETTE.info : PALETTE.muted}
+                  onPress={togglePlanPanel}
+                />
               </>
             )}
           </box>
+          {showPlanPanel ? (
+            <PlanDetailsPanel
+              activePlan={activePlan}
+              activeProposedPlan={latestProposedPlan}
+              timestampFormat={appSettings.timestampFormat}
+              width={planPanelWidth}
+              onClose={() => setPlanPanelOpen(false)}
+              onCopyCodeBlock={(value) => {
+                void copyToClipboard(value, "Code copied");
+              }}
+            />
+          ) : null}
         </box>
 
         <box style={{ flexDirection: "row", flexGrow: 1 }}>
