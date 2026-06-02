@@ -25,6 +25,7 @@ import {
   type ClaudeCodeEffort,
   type CodexReasoningEffort,
   DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL,
+  DEFAULT_TERMINAL_ID,
   DEFAULT_GIT_TEXT_GENERATION_MODEL,
   DEFAULT_MODEL_BY_PROVIDER,
   DEFAULT_SERVER_SETTINGS,
@@ -39,6 +40,8 @@ import {
   type GitStatusResult,
   type OrchestrationReadModel,
   type ProjectEntry,
+  type ProjectScript,
+  type ProjectScriptIcon,
   type ProviderApprovalDecision,
   type ProviderDriverKind,
   type ProviderInstanceConfig,
@@ -150,6 +153,12 @@ import {
   supportsClaudeThinkingToggle,
   supportsClaudeUltrathinkKeyword,
 } from "@t3tools/shared/model";
+import {
+  nextProjectScriptId,
+  primaryProjectScript,
+  projectScriptCwd,
+  projectScriptRuntimeEnv,
+} from "@t3tools/shared/projectScripts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useKeyboard } from "@opentui/react";
 import packageJson from "../package.json";
@@ -304,6 +313,7 @@ type MainView =
   | "keybindings"
   | "providers"
   | "source-control"
+  | "scripts"
   | "connections"
   | "diagnostics"
   | "archive";
@@ -354,6 +364,20 @@ const EMPTY_PROVIDER_ENVIRONMENT_DRAFT: ProviderEnvironmentDraft = {
 };
 const PROVIDER_ENVIRONMENT_VARIABLE_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const GIT_FETCH_INTERVAL_OPTIONS_SECONDS = [0, 30, 60, 120, 300, 600] as const;
+const PROJECT_SCRIPT_ICON_OPTIONS = [
+  { id: "play", icon: "󰐊", label: "Play" },
+  { id: "test", icon: "󰙨", label: "Test" },
+  { id: "lint", icon: "󰓛", label: "Lint" },
+  { id: "configure", icon: "󰒓", label: "Configure" },
+  { id: "build", icon: "󰆧", label: "Build" },
+  { id: "debug", icon: "󰃤", label: "Debug" },
+] as const satisfies ReadonlyArray<{
+  readonly id: ProjectScriptIcon;
+  readonly icon: string;
+  readonly label: string;
+}>;
+const SCRIPT_TERMINAL_COLS = 120;
+const SCRIPT_TERMINAL_ROWS = 30;
 type T1Api = ReturnType<typeof createTransportNativeApi>["api"];
 type ThreadReadModel = OrchestrationReadModel["threads"][number];
 type ProjectReadModel = OrchestrationReadModel["projects"][number];
@@ -432,6 +456,7 @@ const MAIN_VIEW_TITLES: Record<MainViewNavigationTarget, string> = {
   keybindings: "Keybindings",
   providers: "Providers",
   "source-control": "Source Control",
+  scripts: "Scripts",
   connections: "Connections",
   diagnostics: "Diagnostics",
   archive: "Archive",
@@ -442,6 +467,7 @@ const SETTINGS_NAV_ITEMS = [
   { view: "keybindings", icon: "󰌌", label: "Keybindings" },
   { view: "providers", icon: "󱚣", label: "Providers" },
   { view: "source-control", icon: "", label: "Source Control" },
+  { view: "scripts", icon: "󰯃", label: "Scripts" },
   { view: "connections", icon: "󰌘", label: "Connections" },
   { view: "diagnostics", icon: "󰒡", label: "Diagnostics" },
   { view: "archive", icon: "󰉖", label: "Archive" },
@@ -603,6 +629,15 @@ type ConfirmDialogState = {
 type RenameThreadDialogState = {
   threadId: string;
   value: string;
+};
+type ProjectScriptDraft = {
+  scriptId: string | null;
+  name: string;
+  command: string;
+  icon: ProjectScriptIcon;
+  runOnWorktreeCreate: boolean;
+  error: string | null;
+  busy: boolean;
 };
 type TraitsMenuItem = {
   id: string;
@@ -1122,6 +1157,77 @@ function formatEnvironmentCapabilities(environment: ServerConfig["environment"])
   return environment.capabilities.repositoryIdentity
     ? "Repository identity supported"
     : "Repository identity unavailable";
+}
+
+function projectScriptIcon(icon: ProjectScriptIcon): string {
+  return PROJECT_SCRIPT_ICON_OPTIONS.find((option) => option.id === icon)?.icon ?? "󰐊";
+}
+
+function projectScriptIconLabel(icon: ProjectScriptIcon): string {
+  return PROJECT_SCRIPT_ICON_OPTIONS.find((option) => option.id === icon)?.label ?? "Play";
+}
+
+function createEmptyProjectScriptDraft(): ProjectScriptDraft {
+  return {
+    scriptId: null,
+    name: "",
+    command: "",
+    icon: "play",
+    runOnWorktreeCreate: false,
+    error: null,
+    busy: false,
+  };
+}
+
+function createProjectScriptEditDraft(script: ProjectScript): ProjectScriptDraft {
+  return {
+    scriptId: script.id,
+    name: script.name,
+    command: script.command,
+    icon: script.icon,
+    runOnWorktreeCreate: script.runOnWorktreeCreate,
+    error: null,
+    busy: false,
+  };
+}
+
+function updateProjectScriptsForSave(input: {
+  scripts: readonly ProjectScript[];
+  draft: ProjectScriptDraft;
+}): readonly ProjectScript[] {
+  const trimmedName = input.draft.name.trim();
+  const trimmedCommand = input.draft.command.trim();
+  const nextScript: ProjectScript = {
+    id:
+      input.draft.scriptId ??
+      nextProjectScriptId(
+        trimmedName,
+        input.scripts.map((script) => script.id),
+      ),
+    name: trimmedName,
+    command: trimmedCommand,
+    icon: input.draft.icon,
+    runOnWorktreeCreate: input.draft.runOnWorktreeCreate,
+  };
+
+  if (!input.draft.scriptId) {
+    return input.draft.runOnWorktreeCreate
+      ? [
+          ...input.scripts.map((script) =>
+            script.runOnWorktreeCreate ? { ...script, runOnWorktreeCreate: false } : script,
+          ),
+          nextScript,
+        ]
+      : [...input.scripts, nextScript];
+  }
+
+  return input.scripts.map((script) =>
+    script.id === input.draft.scriptId
+      ? nextScript
+      : input.draft.runOnWorktreeCreate
+        ? { ...script, runOnWorktreeCreate: false }
+        : script,
+  );
 }
 
 function isProviderUpdateActive(provider: ServerProvider | null | undefined): boolean {
@@ -3638,6 +3744,205 @@ function PlanDetailsPanel(props: {
   );
 }
 
+function ProjectScriptsPanel(props: {
+  project: ProjectReadModel | null;
+  draft: ProjectScriptDraft | null;
+  terminalBusy: boolean;
+  onAdd: () => void;
+  onEdit: (script: ProjectScript) => void;
+  onDelete: (script: ProjectScript) => void;
+  onRun: (script: ProjectScript) => void;
+  onDraftChange: (patch: Partial<ProjectScriptDraft>) => void;
+  onDraftCancel: () => void;
+  onDraftSubmit: () => void;
+}) {
+  const scripts = props.project?.scripts ?? [];
+  const primaryScript = primaryProjectScript(scripts);
+  const isEditing = props.draft !== null;
+
+  if (!props.project) {
+    return (
+      <SettingsSection title="Project actions">
+        <SettingsRow
+          title="No project selected"
+          description="Add or select a project before configuring scripts."
+          control={<text content="󰯃" style={{ fg: PALETTE.muted }} />}
+        />
+      </SettingsSection>
+    );
+  }
+
+  return (
+    <>
+      <SettingsSection title="Project actions">
+        <SettingsRow
+          title="Project scripts"
+          description="Create reusable shell commands for this project, matching t3code actions."
+          status={`${scripts.length} configured · ${primaryScript ? `Default: ${primaryScript.name}` : "No default script"}`}
+          control={
+            <ToolbarButton label="Add script" surface="inset" onPress={() => props.onAdd()} />
+          }
+        />
+        {scripts.length === 0 ? (
+          <SettingsRow
+            title="No scripts"
+            description="Add lint, test, build, or setup commands to run from the TUI."
+            control={<text content="󰐊" style={{ fg: PALETTE.muted }} />}
+          />
+        ) : (
+          scripts.map((script) => (
+            <SettingsRow
+              key={script.id}
+              title={script.name}
+              description={script.command}
+              status={`${projectScriptIconLabel(script.icon)} icon${script.runOnWorktreeCreate ? " · Runs when a worktree is created" : ""}`}
+              control={
+                <box style={{ flexDirection: "row", alignItems: "center", gap: 1 }}>
+                  <text content={projectScriptIcon(script.icon)} style={{ fg: PALETTE.info }} />
+                  <ToolbarButton
+                    label={props.terminalBusy ? "Running..." : "Run"}
+                    surface="inset"
+                    disabled={props.terminalBusy}
+                    onPress={() => props.onRun(script)}
+                  />
+                  <ToolbarButton
+                    label="Edit"
+                    surface="inset"
+                    onPress={() => props.onEdit(script)}
+                  />
+                  <ToolbarButton
+                    label="Delete"
+                    surface="inset"
+                    onPress={() => props.onDelete(script)}
+                  />
+                </box>
+              }
+            />
+          ))
+        )}
+      </SettingsSection>
+
+      {isEditing && props.draft ? (
+        <SettingsSection title={props.draft.scriptId ? "Edit script" : "New script"}>
+          <SettingsRow
+            title="Name"
+            description="Short label shown in the scripts panel."
+            status={
+              props.draft.error ? (
+                <text content={props.draft.error} style={{ fg: PALETTE.warning }} />
+              ) : null
+            }
+          >
+            <box
+              style={{
+                backgroundColor: PALETTE.input,
+                paddingLeft: 1,
+                paddingRight: 1,
+                height: 3,
+                justifyContent: "center",
+              }}
+            >
+              <input
+                value={props.draft.name}
+                onInput={(value) => props.onDraftChange({ name: value, error: null })}
+                placeholder="Test"
+                cursorColor={PALETTE.cursor}
+                style={{
+                  backgroundColor: PALETTE.input,
+                  focusedBackgroundColor: PALETTE.input,
+                  textColor: PALETTE.text,
+                  focusedTextColor: PALETTE.text,
+                  placeholderColor: PALETTE.subtle,
+                }}
+              />
+            </box>
+          </SettingsRow>
+          <SettingsRow
+            title="Command"
+            description="Shell command run in the active project/worktree."
+          >
+            <box
+              style={{
+                backgroundColor: PALETTE.input,
+                paddingLeft: 1,
+                paddingRight: 1,
+                height: 3,
+                justifyContent: "center",
+              }}
+            >
+              <input
+                value={props.draft.command}
+                onInput={(value) => props.onDraftChange({ command: value, error: null })}
+                placeholder="bun run test"
+                cursorColor={PALETTE.cursor}
+                style={{
+                  backgroundColor: PALETTE.input,
+                  focusedBackgroundColor: PALETTE.input,
+                  textColor: PALETTE.text,
+                  focusedTextColor: PALETTE.text,
+                  placeholderColor: PALETTE.subtle,
+                }}
+              />
+            </box>
+          </SettingsRow>
+          <SettingsRow
+            title="Icon"
+            description="Pick the semantic script icon used in t3code."
+            control={
+              <box style={{ flexDirection: "row", alignItems: "center", gap: 1 }}>
+                {PROJECT_SCRIPT_ICON_OPTIONS.map((option) => (
+                  <ToolbarButton
+                    key={option.id}
+                    icon={option.icon}
+                    label={option.label}
+                    active={props.draft?.icon === option.id}
+                    surface="inset"
+                    onPress={() => props.onDraftChange({ icon: option.id })}
+                  />
+                ))}
+              </box>
+            }
+          />
+          <SettingsRow
+            title="Run on worktree create"
+            description="Mark this as the setup script for new project worktrees."
+            status={props.draft.runOnWorktreeCreate ? "Enabled" : "Disabled"}
+            control={
+              <TogglePill
+                checked={props.draft.runOnWorktreeCreate}
+                onPress={() =>
+                  props.onDraftChange({
+                    runOnWorktreeCreate: !props.draft?.runOnWorktreeCreate,
+                  })
+                }
+              />
+            }
+          />
+          <SettingsRow
+            title="Save script"
+            description="Persist the script to this project's metadata."
+            control={
+              <box style={{ flexDirection: "row", gap: 1 }}>
+                <ToolbarButton
+                  label={props.draft.busy ? "Saving..." : "Save"}
+                  surface="inset"
+                  disabled={props.draft.busy}
+                  onPress={() => props.onDraftSubmit()}
+                />
+                <ToolbarButton
+                  label="Cancel"
+                  surface="inset"
+                  onPress={() => props.onDraftCancel()}
+                />
+              </box>
+            }
+          />
+        </SettingsSection>
+      ) : null}
+    </>
+  );
+}
+
 function SelectionCopyToast(props: { message: string }) {
   return (
     <box
@@ -3837,6 +4142,8 @@ export function App({
   const [renameThreadDialog, setRenameThreadDialog] = useState<RenameThreadDialogState | null>(
     null,
   );
+  const [projectScriptDraft, setProjectScriptDraft] = useState<ProjectScriptDraft | null>(null);
+  const [projectScriptRunBusy, setProjectScriptRunBusy] = useState(false);
   const [modelMenuInstanceId, setModelMenuInstanceId] =
     useState<ProviderInstanceId>(DEFAULT_CODEX_INSTANCE_ID);
   const [modelSubmenuOpen, setModelSubmenuOpen] = useState(false);
@@ -7760,6 +8067,106 @@ export function App({
     if (!api) return;
     logger.log("command.dispatch", { type: command.type });
     await api.orchestration.dispatchCommand(command);
+  }
+
+  async function persistProjectScripts(nextScripts: readonly ProjectScript[]): Promise<void> {
+    if (!activeProject) return;
+    await dispatch({
+      type: "project.meta.update",
+      commandId: newCommandId(),
+      projectId: activeProject.id,
+      scripts: [...nextScripts],
+    });
+    setStatus("Scripts saved");
+  }
+
+  async function saveProjectScriptDraft(): Promise<void> {
+    if (!projectScriptDraft || !activeProject) return;
+    const trimmedName = projectScriptDraft.name.trim();
+    const trimmedCommand = projectScriptDraft.command.trim();
+    if (trimmedName.length === 0) {
+      setProjectScriptDraft((current) =>
+        current ? { ...current, error: "Name is required." } : current,
+      );
+      return;
+    }
+    if (trimmedCommand.length === 0) {
+      setProjectScriptDraft((current) =>
+        current ? { ...current, error: "Command is required." } : current,
+      );
+      return;
+    }
+
+    setProjectScriptDraft((current) =>
+      current ? { ...current, busy: true, error: null } : current,
+    );
+    try {
+      const nextScripts = updateProjectScriptsForSave({
+        scripts: activeProject.scripts,
+        draft: projectScriptDraft,
+      });
+      await persistProjectScripts(nextScripts);
+      setProjectScriptDraft(null);
+    } catch (error) {
+      setProjectScriptDraft((current) =>
+        current
+          ? {
+              ...current,
+              busy: false,
+              error: error instanceof Error ? error.message : "Failed to save script.",
+            }
+          : current,
+      );
+      setStatus("Script save failed");
+    }
+  }
+
+  async function deleteProjectScript(script: ProjectScript): Promise<void> {
+    if (!activeProject) return;
+    await persistProjectScripts(
+      activeProject.scripts.filter((candidate) => candidate.id !== script.id),
+    );
+  }
+
+  async function runProjectScript(script: ProjectScript): Promise<void> {
+    if (!api || !activeProject || !activeThreadId) {
+      setStatus("Open a thread before running scripts");
+      return;
+    }
+
+    const projectCwd = activeProject.workspaceRoot;
+    const targetCwd = projectScriptCwd({
+      project: { cwd: projectCwd },
+      worktreePath: activeWorktreePath,
+    });
+    const runtimeEnv = projectScriptRuntimeEnv({
+      project: { cwd: projectCwd },
+      worktreePath: activeWorktreePath,
+    });
+
+    setProjectScriptRunBusy(true);
+    try {
+      await api.terminal.open({
+        threadId: activeThreadId,
+        terminalId: DEFAULT_TERMINAL_ID,
+        cwd: targetCwd,
+        env: runtimeEnv,
+        cols: SCRIPT_TERMINAL_COLS,
+        rows: SCRIPT_TERMINAL_ROWS,
+      });
+      await api.terminal.write({
+        threadId: activeThreadId,
+        terminalId: DEFAULT_TERMINAL_ID,
+        data: `${script.command}\r`,
+      });
+      setStatus(`Running ${script.name}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `Failed to run ${script.name}`;
+      logger.log("projectScript.runFailed", { scriptId: script.id, error: message });
+      setStatus(message);
+    } finally {
+      setProjectScriptRunBusy(false);
+    }
   }
 
   function openMainView(view: MainViewNavigationTarget) {
@@ -13064,6 +13471,38 @@ export function App({
                             ))}
                           </SettingsRow>
                         </SettingsSection>
+                      ) : null}
+
+                      {mainView === "scripts" ? (
+                        <ProjectScriptsPanel
+                          project={activeProject}
+                          draft={projectScriptDraft}
+                          terminalBusy={projectScriptRunBusy}
+                          onAdd={() => setProjectScriptDraft(createEmptyProjectScriptDraft())}
+                          onEdit={(script) =>
+                            setProjectScriptDraft(createProjectScriptEditDraft(script))
+                          }
+                          onDelete={(script) =>
+                            promptConfirm({
+                              title: `Delete ${script.name}?`,
+                              body: "This removes the project script from the current project.",
+                              confirmLabel: "Delete",
+                              onConfirm: () => deleteProjectScript(script),
+                            })
+                          }
+                          onRun={(script) => {
+                            void runProjectScript(script);
+                          }}
+                          onDraftChange={(patch) =>
+                            setProjectScriptDraft((current) =>
+                              current ? { ...current, ...patch } : current,
+                            )
+                          }
+                          onDraftCancel={() => setProjectScriptDraft(null)}
+                          onDraftSubmit={() => {
+                            void saveProjectScriptDraft();
+                          }}
+                        />
                       ) : null}
 
                       {mainView === "diagnostics" ? (
