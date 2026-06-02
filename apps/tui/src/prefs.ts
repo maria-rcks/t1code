@@ -57,6 +57,7 @@ export interface TuiPrefs {
     | "keybindings"
     | "providers"
     | "source-control"
+    | "scripts"
     | "connections"
     | "diagnostics"
     | "archive";
