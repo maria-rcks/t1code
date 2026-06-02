@@ -69,6 +69,7 @@ import {
   type VcsDiscoveryItem,
 } from "@t3tools/contracts";
 import {
+  DEFAULT_AUTO_OPEN_PLAN_SIDEBAR,
   DEFAULT_APP_SETTINGS,
   DEFAULT_APP_THEME,
   DEFAULT_DIFF_WORD_WRAP,
@@ -5371,6 +5372,9 @@ export function App({
       : []),
     ...(assistantStreamingEnabled !== DEFAULT_SERVER_SETTINGS.enableAssistantStreaming
       ? ["Assistant output"]
+      : []),
+    ...(appSettings.autoOpenPlanSidebar !== DEFAULT_AUTO_OPEN_PLAN_SIDEBAR
+      ? ["Auto-open task panel"]
       : []),
     ...(automaticGitFetchIntervalSeconds !== defaultAutomaticGitFetchIntervalSeconds
       ? ["Automatic Git fetch interval"]
@@ -11363,6 +11367,32 @@ export function App({
                                 checked={assistantStreamingEnabled}
                                 onPress={() =>
                                   updateAssistantStreamingSetting(!assistantStreamingEnabled)
+                                }
+                              />
+                            }
+                          />
+                          <SettingsRow
+                            title="Auto-open task panel"
+                            description="Open plan and task details automatically when steps appear."
+                            status={appSettings.autoOpenPlanSidebar ? "Enabled" : "Disabled"}
+                            resetAction={
+                              appSettings.autoOpenPlanSidebar !== DEFAULT_AUTO_OPEN_PLAN_SIDEBAR ? (
+                                <SettingResetButton
+                                  onPress={() =>
+                                    updateAppSettings({
+                                      autoOpenPlanSidebar: DEFAULT_AUTO_OPEN_PLAN_SIDEBAR,
+                                    })
+                                  }
+                                />
+                              ) : null
+                            }
+                            control={
+                              <TogglePill
+                                checked={appSettings.autoOpenPlanSidebar}
+                                onPress={() =>
+                                  updateAppSettings({
+                                    autoOpenPlanSidebar: !appSettings.autoOpenPlanSidebar,
+                                  })
                                 }
                               />
                             }
