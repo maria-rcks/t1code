@@ -254,6 +254,13 @@ import {
   type TerminalImageSupport,
 } from "./terminalImages";
 import {
+  TUI_TERMINAL_DEFAULT_ROWS,
+  applyTerminalEventToSession,
+  formatTerminalStatus,
+  terminalSessionFromSnapshot,
+  type TuiTerminalSession,
+} from "./terminalDrawer";
+import {
   DEFAULT_TUI_THEME,
   DEFAULT_TUI_THEME_ID,
   TUI_THEME_IDS,
@@ -305,6 +312,7 @@ type FocusArea =
   | "controls"
   | "composer"
   | "timeline"
+  | "terminal"
   | "diff"
   | "settings";
 type MainView =
@@ -451,7 +459,6 @@ type ImagePreviewState = {
   status: "loading" | "ready" | "error";
   error: string | null;
 };
-
 const SIDEBAR_PROJECT_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
   updated_at: "Last user message",
   created_at: "Created at",
@@ -4155,6 +4162,14 @@ export function App({
   const [sidebarOverlayOpen, setSidebarOverlayOpen] = useState(false);
   const [diffView, setDiffView] = useState<"unified" | "split">("unified");
   const [diffText, setDiffText] = useState("");
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalInput, setTerminalInput] = useState("");
+  const [terminalInputResetKey, setTerminalInputResetKey] = useState(0);
+  const [terminalStatus, setTerminalStatus] = useState<string | null>(null);
+  const [terminalSession, setTerminalSession] = useState<TuiTerminalSession | null>(null);
+  const terminalInputRef = useRef<InputRenderable | null>(null);
+  const terminalScrollRef = useRef<ScrollBoxRenderable | null>(null);
+  const terminalThreadRef = useRef<string | null>(null);
   const [collapsedDiffFileKeys, setCollapsedDiffFileKeys] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -4956,6 +4971,14 @@ export function App({
               : current,
           );
         });
+        const unsubscribeTerminalEvents = nativeApi.terminal.onEvent((event) => {
+          setTerminalSession((current) => {
+            if (terminalThreadRef.current !== event.threadId) {
+              return current;
+            }
+            return applyTerminalEventToSession(current ?? undefined, event);
+          });
+        });
 
         cleanup = () => {
           logger.log("app.cleanup");
@@ -4965,6 +4988,7 @@ export function App({
           unsubscribeWelcome();
           unsubscribe();
           unsubscribeServerConfig();
+          unsubscribeTerminalEvents();
           transport.dispose();
           server.stop();
         };
@@ -5158,6 +5182,16 @@ export function App({
   );
   const gitCwd = activeWorktreePath ?? activeProjectCwd ?? null;
   const composerSearchCwd = activeWorktreePath ?? activeProjectCwd ?? null;
+  const terminalOutputRows = useMemo(() => {
+    const output = terminalSession?.output ?? "";
+    const lines = output.split(/\r?\n/);
+    const visibleLines = lines.slice(-Math.max(TUI_TERMINAL_DEFAULT_ROWS * 4, 20));
+    const startLine = lines.length - visibleLines.length;
+    return (visibleLines.length > 0 ? visibleLines : [""]).map((line, lineIndex) => ({
+      id: `${startLine + lineIndex}:${line}`,
+      text: line,
+    }));
+  }, [terminalSession?.output]);
   const workEntries = activeThread
     ? deriveWorkLogEntries(activeThread.activities, activeThread.latestTurn?.turnId ?? undefined)
     : [];
@@ -6145,6 +6179,32 @@ export function App({
       setSelectedThreadId(threads[0]?.id);
     }
   }, [pendingCreatedThreadId, selectedThreadId, snapshot, threads]);
+
+  useEffect(() => {
+    if (!terminalOpen || terminalThreadRef.current === activeThreadId) {
+      return;
+    }
+    setTerminalOpen(false);
+    setTerminalSession(null);
+    setTerminalStatus(null);
+    if (focusArea === "terminal") {
+      setFocusArea("composer");
+    }
+  }, [activeThreadId, focusArea, terminalOpen]);
+
+  useEffect(() => {
+    if (!terminalOpen) {
+      return;
+    }
+    setTimeout(() => {
+      const scrollbox = terminalScrollRef.current;
+      if (!scrollbox) return;
+      scrollbox.scrollTo({
+        x: scrollbox.scrollLeft,
+        y: scrollbox.scrollHeight,
+      });
+    }, 0);
+  }, [terminalOpen, terminalSession?.output]);
 
   useEffect(() => {
     if (!pendingCreatedThreadId) return;
@@ -7623,8 +7683,8 @@ export function App({
       serverConfig?.keybindings ?? EMPTY_KEYBINDINGS,
       {
         context: {
-          terminalFocus: false,
-          terminalOpen: false,
+          terminalFocus: focusArea === "terminal",
+          terminalOpen,
           modelPickerOpen: overlayMenu === "model",
         },
       },
@@ -7787,6 +7847,42 @@ export function App({
       key.preventDefault();
       toggleModelMenu();
       return;
+    }
+    if (shortcutCommand === "terminal.toggle") {
+      key.preventDefault();
+      void toggleTerminalDrawer();
+      return;
+    }
+    if (shortcutCommand === "terminal.new") {
+      key.preventDefault();
+      void openTerminalDrawer({ restart: true });
+      return;
+    }
+    if (shortcutCommand === "terminal.close") {
+      key.preventDefault();
+      void closeTerminalDrawer({ closeSession: focusArea === "terminal" });
+      return;
+    }
+    if (shortcutCommand === "terminal.split") {
+      key.preventDefault();
+      if (!terminalOpen) {
+        void openTerminalDrawer();
+      }
+      setTerminalStatus("Terminal split panes are not available in the TUI yet.");
+      return;
+    }
+    if (focusArea === "terminal") {
+      if (key.name === "escape") {
+        key.preventDefault();
+        setFocusArea("composer");
+        setTimeout(() => {
+          composerRef.current?.focus();
+        }, 0);
+        return;
+      }
+      if (key.name === "up" || key.name === "down") {
+        return;
+      }
     }
     if (!hasDismissibleLayer && mainView === "thread") {
       const threadJumpIndex = threadJumpIndexFromCommand(shortcutCommand ?? "");
@@ -8204,8 +8300,22 @@ export function App({
               ? ["projects", "threads", "diff"]
               : ["diff"]
             : responsiveLayout.showSidebar
-              ? ["projects", "threads", "timeline", "controls", "composer", "diff"]
-              : ["timeline", "controls", "composer", "diff"];
+              ? [
+                  "projects",
+                  "threads",
+                  "timeline",
+                  ...(terminalOpen ? (["terminal"] as const) : []),
+                  "controls",
+                  "composer",
+                  "diff",
+                ]
+              : [
+                  "timeline",
+                  ...(terminalOpen ? (["terminal"] as const) : []),
+                  "controls",
+                  "composer",
+                  "diff",
+                ];
       const index = order.indexOf(focusArea);
       setFocusArea(
         order[(index + 1) % order.length] ??
@@ -8358,6 +8468,125 @@ export function App({
     setDiffOpen(false);
     setFocusArea(activeThreadId ? "timeline" : activeProjectId ? "threads" : "projects");
     setStatus(activeThreadId ? "Timeline" : activeProjectId ? "Threads" : "Projects");
+  }
+
+  async function openTerminalDrawer(options?: { restart?: boolean }) {
+    if (!api || !activeThreadId || !gitCwd) {
+      setTerminalStatus("Select a thread with a workspace before opening Terminal.");
+      return;
+    }
+    const terminalId = DEFAULT_TERMINAL_ID;
+    const cols = Math.max(20, Math.min(mainPanelColumns - 6, 200));
+    const rows = TUI_TERMINAL_DEFAULT_ROWS;
+    terminalThreadRef.current = activeThreadId;
+    closeSidebarContextMenu();
+    closeOverlayMenu();
+    setTerminalOpen(true);
+    setFocusArea("terminal");
+    setTerminalStatus(options?.restart ? "Restarting terminal..." : "Opening terminal...");
+    try {
+      const input = {
+        threadId: activeThreadId,
+        terminalId,
+        cwd: gitCwd,
+        cols,
+        rows,
+        env: {
+          T3CODE_PROJECT_ROOT: activeProjectCwd ?? gitCwd,
+        },
+      };
+      const snapshot = options?.restart
+        ? await api.terminal.restart(input)
+        : await api.terminal.open(input);
+      setTerminalSession(terminalSessionFromSnapshot(snapshot));
+      setTerminalStatus(null);
+      setTimeout(() => {
+        terminalInputRef.current?.focus();
+      }, 0);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Terminal unavailable.";
+      setTerminalStatus(message);
+      setTerminalSession((current) =>
+        current
+          ? {
+              ...current,
+              status: "error",
+              error: message,
+            }
+          : current,
+      );
+    }
+  }
+
+  async function toggleTerminalDrawer() {
+    if (terminalOpen) {
+      setTerminalOpen(false);
+      setFocusArea("composer");
+      setStatus("Terminal hidden");
+      setTimeout(() => {
+        composerRef.current?.focus();
+      }, 0);
+      return;
+    }
+    await openTerminalDrawer();
+  }
+
+  async function closeTerminalDrawer(options?: { closeSession?: boolean }) {
+    const threadId = terminalThreadRef.current ?? activeThreadId;
+    setTerminalOpen(false);
+    setFocusArea("composer");
+    setStatus(options?.closeSession ? "Closing terminal..." : "Terminal hidden");
+    setTimeout(() => {
+      composerRef.current?.focus();
+    }, 0);
+    if (!options?.closeSession || !api || !threadId) {
+      return;
+    }
+    try {
+      await api.terminal.close({ threadId, terminalId: DEFAULT_TERMINAL_ID });
+      setTerminalSession(null);
+      setTerminalStatus(null);
+    } catch (error) {
+      setTerminalStatus(error instanceof Error ? error.message : "Unable to close terminal.");
+    }
+  }
+
+  async function clearTerminalDrawer() {
+    const threadId = terminalThreadRef.current ?? activeThreadId;
+    if (!api || !threadId) return;
+    try {
+      await api.terminal.clear({ threadId, terminalId: DEFAULT_TERMINAL_ID });
+      setTerminalSession((current) => (current ? { ...current, output: "" } : current));
+      setTerminalStatus("Terminal cleared");
+    } catch (error) {
+      setTerminalStatus(error instanceof Error ? error.message : "Unable to clear terminal.");
+    }
+  }
+
+  async function submitTerminalInput() {
+    if (!api || !activeThreadId) return;
+    const value = terminalInputRef.current?.plainText ?? terminalInput;
+    if (value.length === 0) return;
+    const threadId = activeThreadId;
+    setTerminalInput("");
+    setTerminalInputResetKey((current) => current + 1);
+    try {
+      if (!terminalSession || terminalSession.status !== "running") {
+        await openTerminalDrawer();
+      }
+      await api.terminal.write({
+        threadId,
+        terminalId: DEFAULT_TERMINAL_ID,
+        data: `${value}\r`,
+      });
+      setTerminalStatus(null);
+    } catch (error) {
+      setTerminalStatus(error instanceof Error ? error.message : "Unable to write to terminal.");
+    } finally {
+      setTimeout(() => {
+        terminalInputRef.current?.focus();
+      }, 0);
+    }
   }
 
   function toggleSidebarVisibility() {
@@ -11983,6 +12212,18 @@ export function App({
                   iconColor={hasPlanPanelContent ? PALETTE.info : PALETTE.muted}
                   onPress={togglePlanPanel}
                 />
+                <ToolbarButton
+                  icon=""
+                  active={terminalOpen}
+                  disabled={!activeThreadId || !gitCwd}
+                  chrome="bare"
+                  width={4}
+                  justifyContent="flex-start"
+                  iconColor={terminalOpen ? PALETTE.text : PALETTE.muted}
+                  onPress={() => {
+                    void toggleTerminalDrawer();
+                  }}
+                />
               </>
             )}
           </box>
@@ -15149,6 +15390,157 @@ export function App({
                 ) : (
                   <box style={{ height: 1 }} />
                 )}
+
+                {terminalOpen ? (
+                  <box
+                    style={{
+                      flexDirection: "column",
+                      flexShrink: 0,
+                      minHeight: TUI_TERMINAL_DEFAULT_ROWS + 4,
+                      marginBottom: 1,
+                      backgroundColor: PALETTE.composerPanel,
+                      border: true,
+                      borderStyle: "rounded",
+                      borderColor:
+                        focusArea === "terminal" ? PALETTE.composerBorder : PALETTE.border,
+                      paddingLeft: 1,
+                      paddingRight: 1,
+                    }}
+                    onMouseDown={(event) => {
+                      event.stopPropagation?.();
+                      setFocusArea("terminal");
+                      setTimeout(() => {
+                        terminalInputRef.current?.focus();
+                      }, 0);
+                    }}
+                  >
+                    <box
+                      style={{
+                        height: 2,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <box
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          flexGrow: 1,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <text content=" Terminal" style={{ fg: PALETTE.text, marginRight: 1 }} />
+                        <text
+                          content={formatTerminalStatus(terminalSession ?? undefined)}
+                          style={{ fg: PALETTE.subtle, marginRight: 1 }}
+                        />
+                        {terminalSession?.cwd ? (
+                          <text
+                            content={truncateTitleForDisplay(terminalSession.cwd, 48)}
+                            style={{ fg: PALETTE.muted }}
+                          />
+                        ) : null}
+                      </box>
+                      <box style={{ flexDirection: "row", alignItems: "center" }}>
+                        <ToolbarButton
+                          label="New"
+                          compact
+                          surface="inset"
+                          onPress={() => {
+                            void openTerminalDrawer({ restart: true });
+                          }}
+                        />
+                        <ToolbarButton
+                          label="Clear"
+                          compact
+                          surface="inset"
+                          onPress={() => {
+                            void clearTerminalDrawer();
+                          }}
+                        />
+                        <ToolbarButton
+                          icon="✕"
+                          compact
+                          surface="inset"
+                          marginRight={0}
+                          onPress={() => {
+                            void closeTerminalDrawer();
+                          }}
+                        />
+                      </box>
+                    </box>
+                    {terminalStatus ? (
+                      <text content={terminalStatus} style={{ fg: PALETTE.warning }} />
+                    ) : null}
+                    <scrollbox
+                      ref={terminalScrollRef}
+                      focused={focusArea === "terminal"}
+                      style={{
+                        height: TUI_TERMINAL_DEFAULT_ROWS,
+                        minHeight: TUI_TERMINAL_DEFAULT_ROWS,
+                        paddingLeft: 1,
+                        paddingRight: 1,
+                        ...themedScrollboxStyle(PALETTE.input),
+                      }}
+                    >
+                      {terminalOutputRows.map((line) => (
+                        <text
+                          key={line.id}
+                          content={line.text.length > 0 ? line.text : " "}
+                          style={{ fg: PALETTE.text }}
+                        />
+                      ))}
+                    </scrollbox>
+                    <box
+                      style={{
+                        height: 3,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingTop: 1,
+                      }}
+                    >
+                      <text content="$" style={{ fg: PALETTE.success, marginRight: 1 }} />
+                      <box
+                        style={{
+                          flexGrow: 1,
+                          height: 1,
+                          backgroundColor: PALETTE.input,
+                          paddingLeft: 1,
+                          paddingRight: 1,
+                        }}
+                      >
+                        <input
+                          key={terminalInputResetKey}
+                          ref={terminalInputRef}
+                          focused={focusArea === "terminal"}
+                          value={terminalInput}
+                          onInput={setTerminalInput}
+                          onKeyDown={(key) => {
+                            if (
+                              key.name === "return" ||
+                              key.name === "enter" ||
+                              key.name === "kpenter" ||
+                              key.name === "linefeed"
+                            ) {
+                              key.preventDefault();
+                              void submitTerminalInput();
+                            }
+                          }}
+                          placeholder="Run a command in this project"
+                          cursorColor={PALETTE.cursor}
+                          style={{
+                            backgroundColor: PALETTE.input,
+                            focusedBackgroundColor: PALETTE.input,
+                            textColor: PALETTE.text,
+                            focusedTextColor: PALETTE.text,
+                            placeholderColor: PALETTE.subtle,
+                          }}
+                        />
+                      </box>
+                    </box>
+                  </box>
+                ) : null}
 
                 <box
                   onMouseDown={(event) => {
