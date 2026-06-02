@@ -41,6 +41,14 @@ const keybindings: ResolvedKeybindingsConfig = [
     shortcut: modShortcut("1"),
     whenAst: { type: "identifier", name: "modelPickerOpen" },
   },
+  {
+    command: "terminal.toggle",
+    shortcut: modShortcut("j"),
+  },
+  {
+    command: "commandPalette.toggle",
+    shortcut: modShortcut("k"),
+  },
 ];
 
 describe("resolveTuiShortcutCommand", () => {
@@ -88,6 +96,28 @@ describe("resolveTuiShortcutCommand", () => {
         context: { modelPickerOpen: true },
       }),
     ).toBe("modelPicker.jump.1");
+  });
+
+  it("uses the event key name for modified control sequences", () => {
+    expect(
+      resolveTuiShortcutCommand({ keyName: "k", ctrl: true, sequence: "\u000b" }, keybindings, {
+        platform: "linux",
+      }),
+    ).toBe("commandPalette.toggle");
+
+    expect(
+      resolveTuiShortcutCommand({ keyName: "j", ctrl: true, sequence: "\n" }, keybindings, {
+        platform: "linux",
+      }),
+    ).toBe("terminal.toggle");
+  });
+
+  it("infers ctrl letter shortcuts from raw control sequences", () => {
+    expect(
+      resolveTuiShortcutCommand({ keyName: "linefeed", ctrl: false, sequence: "\n" }, keybindings, {
+        platform: "linux",
+      }),
+    ).toBe("terminal.toggle");
   });
 });
 

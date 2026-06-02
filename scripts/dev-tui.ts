@@ -187,7 +187,6 @@ const logStream = fs.createWriteStream(logPath, {
 const server = spawn(
   "bun",
   [
-    "run",
     SERVER_ENTRY,
     "--mode",
     "tui",
