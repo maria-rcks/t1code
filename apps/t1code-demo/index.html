@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/fira_code.min.css"
+    />
+    <link rel="stylesheet" href="https://www.nerdfonts.com/assets/css/webfont.css" />
+    <title>T1Code Ratzilla Demo</title>
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+      }
+
+      body {
+        --glyph-accent: #e33f86;
+        --glyph-muted: #b49fb5;
+        --glyph-text: #f9f8fb;
+        --glyph-active-bg: #392538;
+        --glyph-send-active: #a3004c;
+        margin: 0;
+        overflow: hidden;
+        background: #1f151d;
+      }
+
+      body.theme-light {
+        --glyph-accent: #ca0277;
+        --glyph-muted: #7a3f7e;
+        --glyph-text: #501854;
+        --glyph-active-bg: #e6cce9;
+        --glyph-send-active: #e33f86;
+        background: #f2e1f4;
+      }
+
+      body.boring-on {
+        --glyph-accent: #ad5273;
+        --glyph-muted: #b0b0b0;
+        --glyph-text: #e6e6e6;
+        --glyph-active-bg: #2a2a2a;
+        --glyph-send-active: #763750;
+        background: #151515;
+      }
+
+      body.theme-light.boring-on {
+        --glyph-accent: #ad5273;
+        --glyph-muted: #565656;
+        --glyph-text: #171717;
+        --glyph-active-bg: #d4d4d4;
+        --glyph-send-active: #ad5273;
+        background: #ebebeb;
+      }
+
+      canvas {
+        display: block;
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100dvh;
+        max-width: 100%;
+        max-height: 100%;
+        z-index: 1;
+      }
+
+      canvas:focus {
+        outline: none;
+      }
+
+      pre {
+        font-family:
+          "NerdFontsSymbols Nerd Font", "Symbols Nerd Font Mono", "Symbols Nerd Font",
+          "FiraCode Nerd Font", "Fira Code", monospace;
+        font-size: 15px;
+        margin: 0;
+      }
+
+      .icon-layer {
+        color: var(--glyph-muted);
+        inset: 0;
+        pointer-events: none;
+        position: fixed;
+        z-index: 2;
+      }
+
+      .icon-defs {
+        display: none;
+      }
+
+      .demo-icon {
+        display: block;
+        fill: none;
+        height: 14px;
+        position: fixed;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 2;
+        width: 14px;
+      }
+
+      .source-glyph {
+        color: var(--glyph-muted);
+        display: block;
+        font-family: "NerdFontsSymbols Nerd Font", "Symbols Nerd Font", monospace;
+        font-size: 15px;
+        line-height: 15px;
+        pointer-events: none;
+        position: fixed;
+        z-index: 3;
+      }
+
+      .welcome-glyph,
+      .chat-settings-glyph {
+        display: none;
+      }
+
+      .welcome-only {
+        display: none;
+      }
+
+      body.is-welcome .welcome-only,
+      body.is-welcome .welcome-glyph {
+        display: block;
+      }
+
+      body.is-settings .composer-only {
+        display: none;
+      }
+
+      .composer-toolbar-dom {
+        align-items: center;
+        bottom: 37px;
+        color: var(--glyph-muted);
+        display: flex;
+        font-family: "Fira Code", "NerdFontsSymbols Nerd Font", "Symbols Nerd Font", monospace;
+        font-size: 15px;
+        height: 18px;
+        left: 321px;
+        line-height: 18px;
+        pointer-events: none;
+        position: fixed;
+        white-space: nowrap;
+        z-index: 4;
+      }
+
+      .composer-toolbar-control {
+        align-items: center;
+        display: flex;
+        height: 18px;
+        line-height: 18px;
+        padding: 0 8px 0 0;
+      }
+
+      .composer-toolbar-model {
+        width: 144px;
+      }
+
+      .composer-toolbar-traits {
+        width: 92px;
+      }
+
+      .composer-toolbar-icon {
+        display: inline-flex;
+        font-family: "NerdFontsSymbols Nerd Font", "Symbols Nerd Font", monospace;
+        font-size: 15px;
+        height: 18px;
+        line-height: 18px;
+        margin-right: 8px;
+      }
+
+      .composer-toolbar-divider {
+        color: var(--glyph-active-bg);
+        display: inline-flex;
+        justify-content: center;
+        margin-right: 18px;
+        width: 34px;
+      }
+
+      body.popover-model .composer-toolbar-model,
+      body.popover-thinking .composer-toolbar-traits {
+        background: var(--glyph-active-bg);
+        color: var(--glyph-text);
+      }
+
+      .composer-model-label,
+      .composer-model-icon,
+      .composer-traits-label {
+        display: none;
+      }
+
+      body.model-gpt54 .composer-model-gpt54,
+      body.model-gpt5m .composer-model-gpt5m,
+      body.model-claude .composer-model-claude,
+      body.thinking-low .composer-traits-low,
+      body.thinking-fast .composer-traits-fast {
+        display: inline;
+      }
+
+      body.popover-chat-settings .chat-settings-dom {
+        display: flex;
+      }
+
+      body.popover-model .model-provider-icons {
+        display: flex;
+      }
+
+      body.popover-thinking.thinking-low .thinking-check-low,
+      body.popover-thinking.thinking-low .thinking-check-off,
+      body.popover-thinking.thinking-fast .thinking-check-on {
+        display: block;
+      }
+
+      body.temporary-on .top-hourglass {
+        color: var(--glyph-accent);
+      }
+
+      body.is-welcome.temporary-on .temporary-status-glyph {
+        display: block;
+      }
+
+      body.theme-light .theme-light-glyph,
+      body.theme-system .theme-system-glyph,
+      body.theme-dark .theme-dark-glyph {
+        color: var(--glyph-text);
+      }
+
+      .chat-settings-dom {
+        color: var(--glyph-text);
+        display: none;
+        flex-direction: column;
+        font-family: "Fira Code", monospace;
+        font-size: 15px;
+        line-height: 18px;
+        pointer-events: none;
+        position: fixed;
+        right: 30px;
+        top: 69px;
+        width: 252px;
+        z-index: 4;
+      }
+
+      .model-provider-icons {
+        color: var(--glyph-muted);
+        display: none;
+        flex-direction: column;
+        font-family: "NerdFontsSymbols Nerd Font", "Symbols Nerd Font", monospace;
+        font-size: 15px;
+        left: 342px;
+        line-height: 18px;
+        pointer-events: none;
+        position: fixed;
+        top: calc(100dvh - 237px);
+        z-index: 4;
+      }
+
+      .model-provider-icons .claude-provider {
+        color: #d97757;
+      }
+
+      .thinking-check {
+        color: var(--glyph-text);
+        display: none;
+        font-family: "Fira Code", monospace;
+        font-size: 15px;
+        left: 551px;
+        line-height: 18px;
+        pointer-events: none;
+        position: fixed;
+        z-index: 4;
+      }
+
+      .thinking-check-low {
+        top: calc(100dvh - 223px);
+      }
+
+      .thinking-check-off {
+        top: calc(100dvh - 169px);
+      }
+
+      .thinking-check-on {
+        top: calc(100dvh - 151px);
+      }
+
+      .temporary-status-glyph {
+        color: var(--glyph-accent);
+        display: none;
+        left: 309px;
+        top: 149px;
+      }
+
+      .chat-settings-row {
+        align-items: center;
+        display: flex;
+        height: 20px;
+        white-space: nowrap;
+      }
+
+      .chat-settings-divider {
+        border-top: 1px solid color-mix(in srgb, var(--glyph-muted) 35%, transparent);
+        height: 10px;
+        margin: 1px 0 0;
+      }
+
+      .theme-label {
+        margin-right: 10px;
+      }
+
+      .theme-button {
+        align-items: center;
+        color: var(--glyph-muted);
+        display: inline-flex;
+        font-family: "NerdFontsSymbols Nerd Font", "Symbols Nerd Font", monospace;
+        height: 18px;
+        justify-content: center;
+        margin-right: 5px;
+        width: 28px;
+      }
+
+      body.theme-light .theme-button-light,
+      body.theme-system .theme-button-system,
+      body.theme-dark .theme-button-dark {
+        background: var(--glyph-active-bg);
+        color: var(--glyph-text);
+      }
+
+      .row-icon {
+        color: var(--glyph-muted);
+        display: inline-flex;
+        font-family: "NerdFontsSymbols Nerd Font", "Symbols Nerd Font", monospace;
+        justify-content: center;
+        margin-right: 8px;
+        width: 16px;
+      }
+
+      .boring-toggle {
+        color: var(--glyph-muted);
+        margin-left: auto;
+        padding-right: 4px;
+      }
+
+      body.boring-on .boring-toggle {
+        color: var(--glyph-accent);
+      }
+
+      body.boring-on .boring-dot-off,
+      body.boring-off .boring-dot-on {
+        display: none;
+      }
+
+      body.profile-create-open .profile-open-glyph {
+        display: block;
+      }
+
+      .profile-open-glyph,
+      body.profile-create-open .profile-closed-glyph,
+      body.profile-create-closed .profile-open-glyph {
+        display: none;
+      }
+
+      .search-icon {
+        height: 11px;
+        left: 9px;
+        top: 94px;
+        width: 11px;
+      }
+
+      .top-hourglass {
+        right: 51px;
+        top: 20px;
+      }
+
+      .top-settings {
+        right: 16px;
+        top: 20px;
+      }
+
+      .profile-active-glyph {
+        color: var(--glyph-text);
+        left: 118px;
+        top: calc(100dvh - 38px);
+      }
+
+      .profile-action-glyph {
+        left: 249px;
+        top: calc(100dvh - 38px);
+      }
+
+      .card-create-glyph {
+        left: 320px;
+        top: 202px;
+      }
+
+      .card-explore-glyph {
+        left: 448px;
+        top: 202px;
+      }
+
+      .card-code-glyph {
+        left: 579px;
+        top: 202px;
+      }
+
+      .card-learn-glyph {
+        left: 684px;
+        top: 202px;
+      }
+
+      .composer-send {
+        color: var(--glyph-muted);
+        bottom: 38px;
+        display: block;
+        height: 13px;
+        right: 59px;
+        top: auto;
+        width: 13px;
+      }
+
+      body.composer-filled .composer-send {
+        color: #fff;
+      }
+
+      @media (max-width: 700px) {
+        .welcome-card-icon,
+        .desktop-only {
+          display: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body class="is-welcome theme-system boring-off popover-none profile-create-closed">
+    <svg class="icon-defs" aria-hidden="true">
+      <symbol id="i-search" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8"></circle>
+        <path d="m21 21-4.3-4.3"></path>
+      </symbol>
+      <symbol id="i-hourglass" viewBox="0 0 24 24">
+        <path d="M5 22h14"></path>
+        <path d="M5 2h14"></path>
+        <path d="M17 22v-4.2a2 2 0 0 0-.6-1.4L12 12l-4.4 4.4A2 2 0 0 0 7 17.8V22"></path>
+        <path d="M7 2v4.2a2 2 0 0 0 .6 1.4L12 12l4.4-4.4A2 2 0 0 0 17 6.2V2"></path>
+      </symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path
+          d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.3a2 2 0 1 1-4 0V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.6-1H2.7a2 2 0 1 1 0-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1A2 2 0 1 1 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3V2.7a2 2 0 1 1 4 0V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.3a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1Z"
+        ></path>
+      </symbol>
+      <symbol id="i-message" viewBox="0 0 24 24">
+        <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path>
+      </symbol>
+      <symbol id="i-bot" viewBox="0 0 24 24">
+        <path d="M12 8V4"></path>
+        <circle cx="12" cy="3" r="1"></circle>
+        <rect x="4" y="8" width="16" height="12" rx="2"></rect>
+        <path d="M9 13h.01"></path>
+        <path d="M15 13h.01"></path>
+        <path d="M10 17h4"></path>
+      </symbol>
+      <symbol id="i-send-up" viewBox="0 0 24 24">
+        <path d="M12 19V5"></path>
+        <path d="m5 12 7-7 7 7"></path>
+      </symbol>
+      <symbol id="i-zap" viewBox="0 0 24 24">
+        <path d="M13 2 4 14h7l-1 8 9-12h-7z"></path>
+      </symbol>
+      <symbol id="i-explore" viewBox="0 0 24 24">
+        <rect x="4" y="5" width="16" height="14" rx="2"></rect>
+        <path d="M4 10h16"></path>
+        <path d="M8 14h4"></path>
+      </symbol>
+      <symbol id="i-code" viewBox="0 0 24 24">
+        <path d="m8 9-4 3 4 3"></path>
+        <path d="m16 9 4 3-4 3"></path>
+      </symbol>
+      <symbol id="i-learn" viewBox="0 0 24 24">
+        <path d="m22 10-10-5-10 5 10 5z"></path>
+        <path d="M6 12v5c3 2 9 2 12 0v-5"></path>
+      </symbol>
+    </svg>
+
+    <div class="icon-layer" aria-hidden="true">
+      <svg class="demo-icon search-icon"><use href="#i-search"></use></svg>
+      <svg class="demo-icon top-hourglass desktop-only"><use href="#i-hourglass"></use></svg>
+      <svg class="demo-icon top-settings desktop-only"><use href="#i-settings"></use></svg>
+      <div class="composer-toolbar-dom composer-only desktop-only" aria-hidden="true">
+        <span class="composer-toolbar-control composer-toolbar-model">
+          <span class="composer-toolbar-icon composer-model-icon composer-model-gpt54">󰚩</span>
+          <span class="composer-toolbar-icon composer-model-icon composer-model-gpt5m">󰚩</span>
+          <span class="composer-toolbar-icon composer-model-icon composer-model-claude">✱</span>
+          <span class="composer-model-label composer-model-gpt54">GPT-5.4</span>
+          <span class="composer-model-label composer-model-gpt5m">GPT-5m</span>
+          <span class="composer-model-label composer-model-claude">Claude</span>
+        </span>
+        <span class="composer-toolbar-divider">│</span>
+        <span class="composer-toolbar-control composer-toolbar-traits">
+          <span class="composer-toolbar-icon">󰔟</span>
+          <span class="composer-traits-label composer-traits-low">Low</span>
+          <span class="composer-traits-label composer-traits-fast">Fast</span>
+        </span>
+      </div>
+      <svg class="demo-icon composer-only composer-send desktop-only">
+        <use href="#i-send-up"></use>
+      </svg>
+
+      <span class="source-glyph welcome-glyph card-create-glyph">󰛕</span>
+      <span class="source-glyph welcome-glyph card-explore-glyph">󰎕</span>
+      <span class="source-glyph welcome-glyph card-code-glyph">󰅪</span>
+      <span class="source-glyph welcome-glyph card-learn-glyph">󰑴</span>
+
+      <span class="source-glyph profile-active-glyph">󰭹</span>
+      <span class="source-glyph profile-action-glyph profile-closed-glyph">󰙃</span>
+      <span class="source-glyph profile-action-glyph profile-open-glyph">✕</span>
+      <span class="source-glyph temporary-status-glyph">󰔟</span>
+
+      <div class="model-provider-icons" aria-hidden="true">
+        <span>󰚩</span>
+        <span class="claude-provider">✱</span>
+        <span>⌖</span>
+        <span>⌘</span>
+        <span>◇</span>
+      </div>
+
+      <span class="thinking-check thinking-check-low">✓</span>
+      <span class="thinking-check thinking-check-off">✓</span>
+      <span class="thinking-check thinking-check-on">✓</span>
+
+      <div class="chat-settings-dom" aria-hidden="true">
+        <div class="chat-settings-row">
+          <span class="theme-label">Theme</span>
+          <span class="theme-button theme-button-light">󰖙</span>
+          <span class="theme-button theme-button-system">󰍹</span>
+          <span class="theme-button theme-button-dark">󰖔</span>
+        </div>
+        <div class="chat-settings-row">
+          <span class="row-icon">󰏘</span>
+          <span>Boring Mode</span>
+          <span class="boring-toggle boring-dot-off">○</span>
+          <span class="boring-toggle boring-dot-on">●</span>
+        </div>
+        <div class="chat-settings-divider"></div>
+        <div class="chat-settings-row">
+          <span class="row-icon">󰒓</span>
+          <span>Settings</span>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

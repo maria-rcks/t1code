@@ -1,0 +1,64 @@
+name: Deploy T1 Chat demo
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/t1code-demo/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  pages: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/t1code-demo -> target
+
+      - name: Install Trunk
+        run: cargo install trunk --version 0.21.14 --locked
+
+      - name: Build demo
+        working-directory: apps/t1code-demo
+        run: trunk build --release --public-url "/${{ github.event.repository.name }}/"
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: apps/t1code-demo/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
