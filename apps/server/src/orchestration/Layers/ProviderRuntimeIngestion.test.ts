@@ -15,7 +15,9 @@ import {
   EventId,
   MessageId,
   ProjectId,
+  ProviderDriverKind,
   ProviderItemId,
+  RuntimeItemId,
   ThreadId,
   TurnId,
 } from "@t3tools/contracts";
@@ -674,14 +676,102 @@ describe("ProviderRuntimeIngestion", () => {
     const thread = await waitForThread(harness.engine, (entry) =>
       entry.messages.some(
         (message: ProviderRuntimeTestMessage) =>
-          message.id === "assistant:item-1" && !message.streaming,
+          message.id === "assistant:turn-2:item-1" && !message.streaming,
       ),
     );
     const message = thread.messages.find(
-      (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:item-1",
+      (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:turn-2:item-1",
     );
     expect(message?.text).toBe("hello world");
     expect(message?.streaming).toBe(false);
+  });
+
+  it("keeps assistant replies distinct when a resumed session reuses an item id", async () => {
+    const harness = await createHarness();
+    const firstTurnAt = "2026-07-01T21:06:10.000Z";
+    const secondTurnAt = "2026-07-02T01:44:30.000Z";
+    const reusedItemId = RuntimeItemId.make("assistant:session-1:segment:0");
+
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-resume-turn-1"),
+      provider: ProviderDriverKind.make("cursor"),
+      createdAt: firstTurnAt,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-1"),
+      itemId: reusedItemId,
+      payload: {
+        streamKind: "assistant_text",
+        delta: "first turn reply",
+      },
+    });
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-resume-turn-1-complete"),
+      provider: ProviderDriverKind.make("cursor"),
+      createdAt: firstTurnAt,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-1"),
+      itemId: reusedItemId,
+      payload: {
+        itemType: "assistant_message",
+        status: "completed",
+      },
+    });
+
+    await waitForThread(harness.engine, (thread) =>
+      thread.messages.some(
+        (message) =>
+          message.id === "assistant:turn-1:assistant:session-1:segment:0" &&
+          message.text === "first turn reply",
+      ),
+    );
+
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-resume-turn-2"),
+      provider: ProviderDriverKind.make("cursor"),
+      createdAt: secondTurnAt,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-2"),
+      itemId: reusedItemId,
+      payload: {
+        streamKind: "assistant_text",
+        delta: "second turn reply",
+      },
+    });
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-resume-turn-2-complete"),
+      provider: ProviderDriverKind.make("cursor"),
+      createdAt: secondTurnAt,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-2"),
+      itemId: reusedItemId,
+      payload: {
+        itemType: "assistant_message",
+        status: "completed",
+      },
+    });
+
+    const thread = await waitForThread(harness.engine, (entry) =>
+      entry.messages.some(
+        (message) =>
+          message.id === "assistant:turn-2:assistant:session-1:segment:0" &&
+          message.text === "second turn reply",
+      ),
+    );
+
+    expect(
+      thread.messages.find(
+        (message) => message.id === "assistant:turn-1:assistant:session-1:segment:0",
+      )?.text,
+    ).toBe("first turn reply");
+    expect(
+      thread.messages.find(
+        (message) => message.id === "assistant:turn-2:assistant:session-1:segment:0",
+      )?.text,
+    ).toBe("second turn reply");
   });
 
   it("uses assistant item completion detail when no assistant deltas were streamed", async () => {
@@ -706,11 +796,11 @@ describe("ProviderRuntimeIngestion", () => {
     const thread = await waitForThread(harness.engine, (entry) =>
       entry.messages.some(
         (message: ProviderRuntimeTestMessage) =>
-          message.id === "assistant:item-no-delta" && !message.streaming,
+          message.id === "assistant:turn-no-delta:item-no-delta" && !message.streaming,
       ),
     );
     const message = thread.messages.find(
-      (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:item-no-delta",
+      (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:turn-no-delta:item-no-delta",
     );
     expect(message?.text).toBe("assistant-only final text");
     expect(message?.streaming).toBe(false);
@@ -1339,7 +1429,8 @@ describe("ProviderRuntimeIngestion", () => {
     const midThread = midReadModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
     expect(
       midThread?.messages.some(
-        (message: ProviderRuntimeTestMessage) => message.id === "assistant:item-buffered",
+        (message: ProviderRuntimeTestMessage) =>
+          message.id === "assistant:turn-buffered:item-buffered",
       ),
     ).toBe(false);
 
@@ -1360,11 +1451,11 @@ describe("ProviderRuntimeIngestion", () => {
     const thread = await waitForThread(harness.engine, (entry) =>
       entry.messages.some(
         (message: ProviderRuntimeTestMessage) =>
-          message.id === "assistant:item-buffered" && !message.streaming,
+          message.id === "assistant:turn-buffered:item-buffered" && !message.streaming,
       ),
     );
     const message = thread.messages.find(
-      (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:item-buffered",
+      (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:turn-buffered:item-buffered",
     );
     expect(message?.text).toBe("buffer me");
     expect(message?.streaming).toBe(false);
@@ -1425,13 +1516,14 @@ describe("ProviderRuntimeIngestion", () => {
     const liveThread = await waitForThread(harness.engine, (entry) =>
       entry.messages.some(
         (message: ProviderRuntimeTestMessage) =>
-          message.id === "assistant:item-streaming-mode" &&
+          message.id === "assistant:turn-streaming-mode:item-streaming-mode" &&
           message.streaming &&
           message.text === "hello live",
       ),
     );
     const liveMessage = liveThread.messages.find(
-      (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:item-streaming-mode",
+      (entry: ProviderRuntimeTestMessage) =>
+        entry.id === "assistant:turn-streaming-mode:item-streaming-mode",
     );
     expect(liveMessage?.streaming).toBe(true);
 
@@ -1453,11 +1545,12 @@ describe("ProviderRuntimeIngestion", () => {
     const finalThread = await waitForThread(harness.engine, (entry) =>
       entry.messages.some(
         (message: ProviderRuntimeTestMessage) =>
-          message.id === "assistant:item-streaming-mode" && !message.streaming,
+          message.id === "assistant:turn-streaming-mode:item-streaming-mode" && !message.streaming,
       ),
     );
     const finalMessage = finalThread.messages.find(
-      (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:item-streaming-mode",
+      (entry: ProviderRuntimeTestMessage) =>
+        entry.id === "assistant:turn-streaming-mode:item-streaming-mode",
     );
     expect(finalMessage?.text).toBe("hello live");
     expect(finalMessage?.streaming).toBe(false);
@@ -1513,11 +1606,12 @@ describe("ProviderRuntimeIngestion", () => {
     const thread = await waitForThread(harness.engine, (entry) =>
       entry.messages.some(
         (message: ProviderRuntimeTestMessage) =>
-          message.id === "assistant:item-buffer-spill" && !message.streaming,
+          message.id === "assistant:turn-buffer-spill:item-buffer-spill" && !message.streaming,
       ),
     );
     const message = thread.messages.find(
-      (entry: ProviderRuntimeTestMessage) => entry.id === "assistant:item-buffer-spill",
+      (entry: ProviderRuntimeTestMessage) =>
+        entry.id === "assistant:turn-buffer-spill:item-buffer-spill",
     );
     expect(message?.text.length).toBe(oversizedText.length);
     expect(message?.text).toBe(oversizedText);
@@ -1589,7 +1683,8 @@ describe("ProviderRuntimeIngestion", () => {
         thread.session?.activeTurnId === null &&
         thread.messages.some(
           (message: ProviderRuntimeTestMessage) =>
-            message.id === "assistant:item-complete-dedup" && !message.streaming,
+            message.id === "assistant:turn-complete-dedup:item-complete-dedup" &&
+            !message.streaming,
         ),
     );
 
@@ -1603,7 +1698,7 @@ describe("ProviderRuntimeIngestion", () => {
         return false;
       }
       return (
-        event.payload.messageId === "assistant:item-complete-dedup" &&
+        event.payload.messageId === "assistant:turn-complete-dedup:item-complete-dedup" &&
         event.payload.streaming === false
       );
     });
@@ -1973,7 +2068,7 @@ describe("ProviderRuntimeIngestion", () => {
       (entry: ProviderRuntimeTestCheckpoint) => entry.turnId === "turn-p1",
     );
     expect(checkpoint?.status).toBe("missing");
-    expect(checkpoint?.assistantMessageId).toBe("assistant:item-p1-assistant");
+    expect(checkpoint?.assistantMessageId).toBe("assistant:turn-p1:item-p1-assistant");
     expect(checkpoint?.checkpointRef).toBe("provider-diff:evt-turn-diff-updated");
   });
 
